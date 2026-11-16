@@ -31,7 +31,7 @@ Limits apply per household unless stated otherwise. “Included” does not mean
 | Enabled automation rules | 2 simple rules | 20 with richer conditions | 100 with multi-step actions |
 | Templates | Manual authoring and starter set | Expanded curated library | Advanced reusable template sets |
 | Planner / ICS feeds when implemented | Basic planner and 1 revocable feed | More feeds/views | Advanced planning/export convenience |
-| Reflection/insights | Own basic history | Optional permitted trends | Advanced permitted summaries |
+| Reflection/insights | Own permitted basic history and habit charts | Optional permitted trends | Advanced permitted summaries |
 | Themes/layouts | Accessible standard themes | Extra themes and layouts | Advanced layout convenience |
 | API/integrations | Basic manual export | Selected integrations | Scoped API/webhooks and larger budgets |
 | Infrastructure backup and recovery baseline | Included | Included | Included |
@@ -68,3 +68,9 @@ See [#61](https://github.com/CoyWorks/Pactaris/issues/61) for subscription-to-in
 ## Delivery
 
 Foundation: [#53](https://github.com/CoyWorks/Pactaris/issues/53). Validate the matrix: [#54](https://github.com/CoyWorks/Pactaris/issues/54). Select/integrate billing: [#42](https://github.com/CoyWorks/Pactaris/issues/42). Synchronize plans to instances: [#61](https://github.com/CoyWorks/Pactaris/issues/61). Run free four-person and downgrade tests before selling upgrades.
+
+## Core reference additions
+
+Basic habit tracking (#63), reward/consequence catalog and redemption (#64), text chat/live updates (#65), private/shared notes (#66) and basic charts (#41) belong in the usable free feature set. Paid options expand capacity, richer automation/reporting, storage or convenience. Validate distinct habit/catalog/message usage budgets in #54 rather than silently applying task limits to every record type. Privacy, reporting/blocking and personal data rights are never premium-only.
+
+Initial interface language is English; translation and locale support (#44) is available to every plan. Future languages do not require an upgrade. User-authored content stays original.
