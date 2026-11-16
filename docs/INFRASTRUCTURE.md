@@ -130,3 +130,13 @@ Central CloudPanel is the public proxy for local main/identity services and priv
 ## Independent component releases
 
 An Identity update never implicitly migrates/restarts an Instance, or vice versa. Keep component artifacts, service identities, configuration, secret stores, data migrations, locks and rollback checkpoints independent. Validate supported OIDC/manager contract versions when selecting a release. Manager is an independently configured service endpoint with its own operations boundary; do not assume it lives in localhost or either application database. See #3/#55/#56/#58/#59/#62.
+
+## Configurable domains and future public-origin migration
+
+Initial public application domain is coyworks.nl. Every service origin/subdomain is configurable; pactaris.app is only an example future domain, not a confirmed destination or a claim of domain ownership. Individual services can also use unrelated parent domains. The earlier example proxy map is deployment data, not application constants.
+
+Keep base-domain convenience settings separate from explicit canonical Identity issuer/origin, manager origin, each Instance origin, callback/logout allowlists, private backend target and TLS server name. Use validated URL builders and exact allowlists; host-scoped sessions must not infer trust from sharing a domain suffix. Releases/installers preserve operator configuration.
+
+Moving a backend behind the same public origin differs from changing the public origin/issuer. For a domain change, prepare a tested runbook covering DNS and certificates, proxy routes, Google/Apple provider registrations, OIDC discovery/issuer/trust, stable account subjects, sessions/re-login and revocation, exact CORS/CSRF/callback/logout rules, PWA installations/service workers and push-device re-registration. Inventory pending invites, email links, secret calendar feeds and integrations; define which links redirect, expire or are reissued. Never place secrets into unsafe redirects or claim old browser state automatically moves to another origin.
+
+Preserve internal user, household and instance IDs/data during cutover. Rehearse old/new origins using synthetic test domains, include user communication and health checks, and define rollback limits once new-domain sessions/content have been created. This is future deployment capability, not authorization to change live DNS or repository visibility now. See #6/#23/#28/#56/#58/#62.
