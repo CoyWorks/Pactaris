@@ -28,7 +28,7 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
   });
   app.post('/internal/households/:householdId/commands/:action',express.raw({type:'application/json',limit:4096,inflate:false}),async(req,res)=>{
     const id=req.params.householdId,action=req.params.action,authorization=req.get('authorization');
-    if(!config.delegation||!households?.command||!uuid(id)||(action!=='create'&&action!=='leave')||req.originalUrl!==commandPath(id,action)||!authorization?.startsWith('Bearer ')||!Buffer.isBuffer(req.body)){
+    if(!config.delegation||!households?.command||!uuid(id)||(action!=='create'&&action!=='leave'&&action!=='receipt')||req.originalUrl!==commandPath(id,action)||!authorization?.startsWith('Bearer ')||!Buffer.isBuffer(req.body)){
       res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;
     }
     try{res.json(await households.command(authorization.slice(7),id,action,req.body));}

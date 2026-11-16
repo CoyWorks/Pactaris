@@ -80,6 +80,7 @@ export type GatewayConfig = Omit<InstanceConfig, 'instanceId' | 'oidc' | 'delega
   delegation: { issuer: string; keyId: string; privateKeyFile: string };
   trustedProxyAddresses: string[];
   session: { idleSeconds: number; absoluteSeconds: number };
+  onboarding: { maxOwnedHouseholds: number };
 };
 export function parseGatewayConfig(value: unknown, development = false): GatewayConfig {
   const c = object(value, 'root'), o = object(c.oidc,'oidc'), d = object(c.delegation,'delegation');
@@ -92,9 +93,10 @@ export function parseGatewayConfig(value: unknown, development = false): Gateway
   const session = object(c.session ?? {idleSeconds:1800,absoluteSeconds:28800},'session');
   const idleSeconds = integer(session.idleSeconds,'session.idleSeconds',60,86400);
   const absoluteSeconds = integer(session.absoluteSeconds,'session.absoluteSeconds',idleSeconds,604800);
+  const onboarding=object(c.onboarding??{maxOwnedHouseholds:1},'onboarding');
   return { ...shared, gatewayId: instanceId, oidc: { ...oidc, clientSecretFile: file(o.clientSecretFile,'oidc.clientSecretFile') },
     delegation: { issuer: base.publicOrigin, keyId, privateKeyFile: file(d.privateKeyFile,'delegation.privateKeyFile') },
-    trustedProxyAddresses: proxies, session: {idleSeconds,absoluteSeconds} };
+    trustedProxyAddresses: proxies, session: {idleSeconds,absoluteSeconds},onboarding:{maxOwnedHouseholds:integer(onboarding.maxOwnedHouseholds,'onboarding.maxOwnedHouseholds',1,20)} };
 }
 export function loadGatewayConfig(path: string, development = false): GatewayConfig {
   try { return parseGatewayConfig(JSON.parse(readFileSync(path,'utf8')),development); }

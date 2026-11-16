@@ -17,6 +17,7 @@ import { DelegationSigner } from '../packages/auth/delegation.js';
 import { PrivateHouseholdClient,PrivateCommandClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
+import { PgOnboardingStore,OnboardingService } from '../apps/gateway/onboarding.js';
 const adminUrl=process.env.TEST_DATABASE_URL;
 test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance household selection',{skip:!adminUrl,timeout:120000},async()=>{
  const root=new pg.Pool({connectionString:adminUrl,max:1}),folder=await mkdtemp(join(tmpdir(),'pactaris-postgres-'));
@@ -105,7 +106,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await assert.rejects(client.summary(account.id,{...placement,tlsServerName:'wrong.fixture.invalid'}));
   await assert.rejects(client.summary(account.id,{...placement,endpoint:'https://169.254.169.254/'}));
   await store.createSession('a'.repeat(43),account,'csrf',60,120);
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client);
+  const onboardingStore=new PgOnboardingStore(gatewayDb.pool,1),onboarding=new OnboardingService(onboardingStore,new PrivateCommandClient(signer));
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -186,6 +188,71 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.ok(audit.every(row=>Object.keys(row.parameters).join(',')==='operationId'));
   assert.equal((await a.owner.query('SELECT count(*)::int AS count FROM pactaris.consent_records WHERE household_id=$1',[created])).rows[0].count,0);
   assert.equal((await backupPool.query('SELECT count(*)::int AS count FROM pactaris.household_outbox WHERE household_id=$1',[created])).rows[0].count,5);
+  // Full public gateway -> private Instance -> central placement flow. No
+  // browser sees routing destinations or supplies account/Instance authority.
+  const api=async(path:string,method='GET',body?:unknown,session='r'.repeat(43),extra:Record<string,string>={})=>new Promise<{status:number;data:any;body:string}>((resolve,reject)=>{
+    const encoded=body===undefined?undefined:JSON.stringify(body);
+    const request=https.request({hostname:'127.0.0.1',port:gatewayAddress.port,path,method,servername:'backend.fixture.invalid',ca:readFileSyncFixture,
+      headers:{host:'pactaris.app',cookie:'__Host-pactaris-session='+session,origin:'https://pactaris.app','x-csrf-token':'registration-csrf',...(encoded?{'Content-Type':'application/json','Content-Length':Buffer.byteLength(encoded)}:{}),...extra}},r=>{
+      let text='';r.setEncoding('utf8');r.on('data',chunk=>{text+=chunk;});r.on('error',reject);r.on('end',()=>{try{resolve({status:r.statusCode!,data:JSON.parse(text),body:text});}catch(error){reject(error);}});
+    });request.on('error',reject);request.end(encoded);
+  });
+  const registrant=await store.account('https://idp.fixture.invalid/','registration-account','Registration fixture');
+  await store.createSession('r'.repeat(43),registrant,'registration-csrf',60,120);
+  const registrationId=randomUUID(),registrationName='Private registration fixture';
+  assert.equal((await api('/api/households','POST',{operationId:registrationId,name:registrationName},'x'.repeat(43))).status,401);
+  assert.equal((await api('/api/households','POST',{operationId:registrationId,name:registrationName},undefined,{origin:'https://wrong.fixture.invalid'})).status,403);
+  assert.equal((await api('/api/households','POST',{operationId:registrationId,name:registrationName,endpoint:'https://169.254.169.254/'})).status,400);
+  const registered=await api('/api/households','POST',{operationId:registrationId,name:registrationName});assert.equal(registered.status,201);
+  const registeredId=registered.data.householdId;
+  assert.equal(registered.data.status,'complete');assert.ok(!registered.body.includes('instance'));assert.ok(!registered.body.includes('127.0.0.1'));assert.ok(!registered.body.includes(registrationName));
+  assert.equal((await api('/api/households/'+registeredId)).data.name,registrationName);
+  assert.equal((await api('/api/households','POST',{operationId:registrationId,name:registrationName})).data.householdId,registeredId);
+  assert.equal((await api('/api/households','POST',{operationId:registrationId,name:'Changed name'})).status,409);
+  assert.equal((await api('/api/households','POST',{operationId:randomUUID(),name:'Beyond pilot budget'})).status,409);
+  const metadata=(await gatewayDb.owner.query('SELECT row_to_json(o) AS value FROM pactaris.onboarding_operations o WHERE account_id=$1',[registrant.id])).rows;
+  assert.equal(metadata.length,1);assert.ok(!JSON.stringify(metadata).includes(registrationName));
+  // A local leave can commit before its central acknowledgement. Stale hints
+  // cannot retain access; a newly started reconciler completes the receipt.
+  const leaving=await onboardingStore.reserveLeave(registrant.id,registeredId,randomUUID());
+  await commands.execute(registrant.id,leaving,'leave',leaving.operationId);
+  assert.ok(await store.placement(registrant.id,registeredId));
+  assert.equal((await api('/api/households/'+registeredId)).status,404);
+  await new OnboardingService(new PgOnboardingStore(gatewayDb.pool,1),commands).reconcile();
+  assert.equal(await store.placement(registrant.id,registeredId),undefined);
+  assert.equal((await api('/api/households/'+registeredId+'/leave','POST',{operationId:leaving.operationId})).status,200);
+  assert.equal((await api('/api/households')).data.households.length,0);
+  // The creation reservation is released by confirmed departure, not by a
+  // timeout. A new registration is now possible, even at the same pilot limit.
+  assert.equal((await api('/api/households','POST',{operationId:randomUUID(),name:'Next dynamic fixture'})).status,201);
+  // Separate concurrent creation IDs are budgeted under the same account lock.
+  const racer=await store.account('https://idp.fixture.invalid/','registration-racer','Racer fixture');await store.createSession('s'.repeat(43),racer,'registration-csrf',60,120);
+  const races=await Promise.all(Array.from({length:4},()=>api('/api/households','POST',{operationId:randomUUID(),name:'Race fixture'},'s'.repeat(43))));
+  assert.equal(races.filter(r=>r.status===201).length,1);assert.equal(races.filter(r=>r.status===409).length,3);
+  // Simulate losing both the first command response and immediate receipt
+  // connectivity after the Instance committed. No name needs to be stored in
+  // the gateway for a new worker to recover placement from the signed receipt.
+  const recovery=await store.account('https://idp.fixture.invalid/','registration-recovery','Recovery fixture'),recoveryId=randomUUID();
+  const unreliable=new OnboardingService(onboardingStore,{execute:async(...args)=>{
+    if(args[2]==='create')await commands.execute(...args);
+    throw Error('fixture response lost');
+  }});
+  const interrupted=await unreliable.create(recovery.id,recoveryId,'Recoverable private name');assert.equal(interrupted.status,'pending');
+  assert.equal(await store.placement(recovery.id,interrupted.householdId),undefined);
+  await assert.rejects(onboardingStore.reserveCreate(recovery.id,randomUUID(),'Duplicate after timeout'),{kind:'limit'});
+  const recoveredWorker=new OnboardingService(new PgOnboardingStore(gatewayDb.pool,1),commands);await recoveredWorker.reconcile();
+  assert.ok(await store.placement(recovery.id,interrupted.householdId));assert.equal((await onboardingStore.pending(recovery.id)).length,0);
+  const replayed=await onboarding.create(recovery.id,recoveryId,'Recoverable private name');assert.equal(replayed.householdId,interrupted.householdId);assert.equal(replayed.status,'complete');
+  // A crash before dispatch retains the reservation. Receipt inspection is not
+  // creation; the browser must explicitly retry the same UUID and same name.
+  const before=await store.account('https://idp.fixture.invalid/','registration-before-dispatch','Before fixture'),beforeId=randomUUID();
+  const held=await onboardingStore.reserveCreate(before.id,beforeId,'Undispatched private name');
+  await recoveredWorker.reconcile();assert.equal(await store.placement(before.id,held.householdId),undefined);
+  assert.equal((await onboardingStore.pending(before.id)).length,1);
+  assert.equal((await onboarding.create(before.id,beforeId,'Undispatched private name')).status,'complete');
+  await assert.rejects(onboardingStore.reserveCreate(other.id,beforeId,'Undispatched private name'),{kind:'conflict'});
+  await gatewayDb.owner.query("UPDATE pactaris.accounts SET status='suspended' WHERE id=$1",[before.id]);
+  await assert.rejects(onboardingStore.reserveCreate(before.id,randomUUID(),'Suspended request'),{kind:'denied'});
  }finally{
   for(const server of servers){server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
   await Promise.all(pools.map(p=>p.end()));

@@ -2,7 +2,7 @@ import type pg from 'pg';
 import type { InstanceConfig } from '../../packages/config/index.js';
 import { CommandVerifier,DelegationError,digest,type HouseholdAction } from '../../packages/auth/delegation.js';
 
-export type CommandResult={householdId:string;operationId:string;status:'created'|'left'};
+export type CommandResult={householdId:string;operationId:string;status:'created'|'left'|'missing'};
 export class CommandError extends Error {
   constructor(public code:'conflict'|'denied'|'invalid'){super('command.'+code);}
 }
@@ -31,7 +31,8 @@ export class InstanceCommands {
       // and installed configuration. Neither is accepted from the request body.
       const r=action==='create'
         ?await db.query('SELECT pactaris.create_household_command($1,$2,$3,$4,$5,$6) AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId,input.name,fingerprint])
-        :await db.query('SELECT pactaris.leave_household_command($1,$2,$3,$4,$5) AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId,fingerprint]);
+        :action==='leave'?await db.query('SELECT pactaris.leave_household_command($1,$2,$3,$4,$5) AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId,fingerprint])
+        :await db.query('SELECT pactaris.household_receipt_command($1,$2,$3,$4) AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId]);
       await db.query('COMMIT');return r.rows[0].result as CommandResult;
     }catch(error){
       await db.query('ROLLBACK');

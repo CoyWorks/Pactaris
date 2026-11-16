@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fetch main once, pin it, and update installed components using fresh tooling."""
 import argparse
+import contextlib
 import fcntl
 import os
 from pathlib import Path
@@ -109,8 +110,31 @@ def execute(args, source):
         elif not args.check:
             emit('cli.updateComponent', component=component, revision=revision)
             child(command + ['--apply'])
+    if not args.component:
+        register_local_instance(Path(args.root),args.check,{name for name,_state in components})
     emit('cli.updateChecked' if args.check else 'cli.updateComplete', revision=revision)
     return 0
+
+def register_local_instance(root, check, components):
+    if not {'gateway','instance'}.issubset(components):
+        return
+    with contextlib.ExitStack() as stack:
+        for name in ('instance','gateway'):
+            lock=stack.enter_context(open(root/name/'operation.lock','a'))
+            try: fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            except BlockingIOError: raise DeployError('cli.locked')
+        gateway=read_json(root/'gateway/config.json');instance=read_json(root/'instance/config.json')
+        gtls=gateway.get('listen',{}).get('tls');itls=instance.get('listen',{}).get('tls')
+        # Only the known co-located profile is attested from local root-owned
+        # configs. A split/independent-CA fleet still needs explicit enrollment.
+        if not gtls or not itls or not gateway.get('delegation') or not instance.get('delegation'):
+            return
+        if Path(gtls['caFile']).read_bytes()!=Path(itls['caFile']).read_bytes():
+            emit('cli.updateRegistrySeparate');return
+        emit('cli.updateRegistryPlan' if check else 'cli.updateRegistry')
+        if not check:
+            child(['env','APP_CONFIG='+str(root/'gateway/config.json'),'INSTANCE_CONFIG='+str(root/'instance/config.json'),
+                   'node',str(root/'gateway/current/dist/server/scripts/register-instance.js'),'--apply'])
 
 def main(argv=None):
     parser = Parser(add_help=False)

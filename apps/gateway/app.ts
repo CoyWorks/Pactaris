@@ -9,6 +9,7 @@ import { uuid } from '../../packages/auth/delegation.js';
 import { createTranslator,type MessageKey } from '../../packages/i18n/index.js';
 import { headers, frontend, errors } from '../../packages/http/index.js';
 import manifest from '../../package.json' with {type:'json'};
+import { OnboardingError,type OnboardingService } from './onboarding.js';
 const token=()=>randomBytes(32).toString('base64url');
 const LOGIN='__Host-pactaris-login',SESSION='__Host-pactaris-session';
 export function cookie(req:express.Request,name:string):string|undefined {
@@ -19,7 +20,7 @@ export function cookie(req:express.Request,name:string):string|undefined {
 function setCookie(res:express.Response,name:string,value:string,seconds:number) {
   res.append('Set-Cookie',`${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${seconds}`);
 }
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web')) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -63,12 +64,47 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     if(!session){res.status(401).json({code:'authentication_required',messageKey:'errors.authenticationRequired'});return;}
     return session;
   }
+  function csrfAllowed(req:express.Request,session:Session){const csrf=req.get('x-csrf-token');return req.get('origin')===config.publicOrigin&&!!csrf&&Buffer.byteLength(csrf)===Buffer.byteLength(session.csrfToken)&&timingSafeEqual(Buffer.from(csrf),Buffer.from(session.csrfToken));}
+  function onboardingFailure(res:express.Response,error:unknown){
+    if(error instanceof OnboardingError){
+      const status={conflict:409,limit:409,unavailable:503,denied:404}[error.kind];
+      const key:MessageKey=error.kind==='limit'?'onboarding.limit':error.kind==='unavailable'?'onboarding.noInstance':error.kind==='conflict'?'errors.commandConflict':'errors.notFound';
+      res.status(status).json({code:'onboarding_'+error.kind,messageKey:key});
+    }else res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});
+  }
   app.get('/api/session',async(req,res)=>{const session=await authenticate(req,res);if(session)res.json(session);});
   app.post('/auth/logout',async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;
-    const csrf=req.get('x-csrf-token');
-    if(req.get('origin')!==config.publicOrigin||!csrf||Buffer.byteLength(csrf)!==Buffer.byteLength(session.csrfToken)||!timingSafeEqual(Buffer.from(csrf),Buffer.from(session.csrfToken))){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
     await store.logout(cookie(req,SESSION)!);setCookie(res,SESSION,'',0);res.status(204).end();
+  });
+  app.use('/api/households',express.json({limit:4096,strict:true,inflate:false}));
+  app.get('/api/households/operations',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!onboarding){onboardingFailure(res,undefined);return;}
+    try{res.json({operations:await onboarding.pending(session.account.id)});}catch(error){onboardingFailure(res,error);}
+  });
+  app.post('/api/households',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    const input=req.body;
+    if(!input||Object.keys(input).sort().join(',')!=='name,operationId'||!uuid(input.operationId)||typeof input.name!=='string'||!input.name.trim()||input.name!==input.name.trim()||[...input.name].length>120||/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(input.name)){
+      res.status(400).json({code:'request_denied',messageKey:'errors.request'});return;
+    }
+    if(!onboarding){onboardingFailure(res,undefined);return;}
+    if(!await store.throttle('onboarding.create:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+    try{const operation=await onboarding.create(session.account.id,input.operationId,input.name);
+      if(operation.status==='released'){res.status(409).json({code:'operation_closed',messageKey:'onboarding.closed'});return;}
+      res.status(operation.status==='pending'?202:201).json(operation);
+    }catch(error){onboardingFailure(res,error);}
+  });
+  app.post('/api/households/:householdId/leave',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    const input=req.body,id=req.params.householdId;
+    if(!uuid(id)||!input||Object.keys(input).join(',')!=='operationId'||!uuid(input.operationId)){res.status(400).json({code:'request_denied',messageKey:'errors.request'});return;}
+    if(!onboarding){onboardingFailure(res,undefined);return;}
+    try{const operation=await onboarding.leave(session.account.id,id,input.operationId);res.status(operation.status==='pending'?202:200).json(operation);}catch(error){onboardingFailure(res,error);}
   });
   app.get('/api/households',async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;

@@ -4,7 +4,7 @@ import { importPKCS8, importSPKI, jwtVerify, SignJWT, type CryptoKey } from 'jos
 import type { GatewayConfig, InstanceConfig } from '../config/index.js';
 export const summaryPath=(id:string)=>`/internal/households/${id}/summary`;
 export const audience=(instanceId:string)=>`urn:pactaris:instance:${instanceId}`;
-export type HouseholdAction='create'|'leave';
+export type HouseholdAction='create'|'leave'|'receipt';
 export const commandPath=(id:string,action:HouseholdAction)=>`/internal/households/${id}/commands/${action}`;
 export const digest=(body:string|Buffer)=>createHash('sha256').update(body).digest('hex');
 export const uuid=(value:unknown):value is string=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
@@ -21,7 +21,7 @@ export class DelegationSigner {
       .setIssuer(this.config.delegation.issuer).setSubject(accountId).setAudience(audience(instanceId)).setJti(randomUUID()).setIssuedAt().setExpirationTime('30s').sign(await this.ready());
   }
   async signCommand(accountId:string,householdId:string,instanceId:string,action:HouseholdAction,operationId:string,body:string) {
-    if(!uuid(accountId)||!uuid(householdId)||!uuid(instanceId)||!uuid(operationId)||!['create','leave'].includes(action))throw new DelegationError('command.scope');
+    if(!uuid(accountId)||!uuid(householdId)||!uuid(instanceId)||!uuid(operationId)||!['create','leave','receipt'].includes(action))throw new DelegationError('command.scope');
     return new SignJWT({household_id:householdId,purpose:'household.command.'+action,method:'POST',path:commandPath(householdId,action),operation_id:operationId,body_sha256:digest(body)})
       .setProtectedHeader({alg:'EdDSA',typ:'pactaris-command+jwt',kid:this.config.delegation.keyId})
       .setIssuer(this.config.delegation.issuer).setSubject(accountId).setAudience(audience(instanceId)).setJti(randomUUID()).setIssuedAt().setExpirationTime('30s').sign(await this.ready());
@@ -32,7 +32,7 @@ export class CommandVerifier {
   private keys=new Map<string,Promise<CryptoKey>>();
   constructor(private config:InstanceConfig) {}
   async verify(token:string,householdId:string,action:HouseholdAction,body:Buffer) {
-    if(!this.config.delegation||token.length>8192||body.length>4096||!uuid(householdId)||!['create','leave'].includes(action))throw new DelegationError('command.disabled');
+    if(!this.config.delegation||token.length>8192||body.length>4096||!uuid(householdId)||!['create','leave','receipt'].includes(action))throw new DelegationError('command.disabled');
     try {
       const {payload}=await jwtVerify(token,async header=>{
         if(header.alg!=='EdDSA'||header.typ!=='pactaris-command+jwt'||!header.kid)throw Error('command.header');

@@ -6,6 +6,7 @@ import { createGatewayApp } from '../apps/gateway/app.js';
 import { parseGatewayConfig } from '../packages/config/index.js';
 import { hash,type Account,type GatewayStore,type LoginAttempt,type Placement,type Session } from '../apps/gateway/store.js';
 import type { OidcLogin } from '../packages/auth/oidc.js';
+import type { OnboardingService } from '../apps/gateway/onboarding.js';
 const accountA='10000000-0000-4000-8000-000000000001',accountB='10000000-0000-4000-8000-000000000002';
 const householdA='20000000-0000-4000-8000-000000000001',householdB='20000000-0000-4000-8000-000000000002';
 class FixtureStore implements GatewayStore {
@@ -24,10 +25,10 @@ class FixtureStore implements GatewayStore {
 }
 const config=()=>parseGatewayConfig(JSON.parse(readFileSync('config/gateway.example.json','utf8')));
 const headers={host:'pactaris.app'};
-function fixture(){
+function fixture(onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>){
   const store=new FixtureStore();let finish=0,summary=0,unavailable=false,revoked=false;
   const oidc:OidcLogin={start:async a=>'https://identity.example.invalid/authorize?state='+a.state,finish:async()=>{finish++;return {issuer:'https://identity.example.invalid/',subject:'subject',name:'Fixture user'};}};
-  const app=createGatewayApp(config(),store,oidc,{summary:async(account,p)=>{summary++;if(unavailable)throw Error('https://secret:password@private-node.invalid');if(revoked)return;return {id:p.householdId,name:'Fixture dynamic'};}});
+  const app=createGatewayApp(config(),store,oidc,{summary:async(account,p)=>{summary++;if(unavailable)throw Error('https://secret:password@private-node.invalid');if(revoked)return;return {id:p.householdId,name:'Fixture dynamic'};}},undefined,onboarding);
   return {app,store,get finish(){return finish;},get summaries(){return summary;},setUnavailable(){unavailable=true;},setRevoked(){revoked=true;}};
 }
 const cookies=(response:{headers:Record<string,unknown>})=>(Array.isArray(response.headers['set-cookie'])?response.headers['set-cookie']:[response.headers['set-cookie']] as string[]).map(v=>v.split(';')[0]!).filter(v=>!v.endsWith('='));
@@ -50,6 +51,26 @@ test('browser-bound one-time login rotates sessions and ignores forged identity 
   const wrongBrowser=await inject(f.app,{url:'/auth/oidc/callback?code=x&state='+state,headers});assert.equal(wrongBrowser.statusCode,400);
   assert.match(String(first.headers['set-cookie']),/Secure; HttpOnly; SameSite=Lax/);
   assert.ok(![...f.store.sessions.keys()].includes(cookie.split('=')[1]!));
+});
+test('public create/leave bind the account to its session, require CSRF and reject routing/role injection',async()=>{
+  const operation='40000000-0000-4000-8000-000000000001';let creates=0,leaves=0;
+  const f=fixture({
+    create:async(account,id,name)=>{assert.equal(account,accountA);assert.equal(name,'Fixture dynamic');creates++;return {operationId:id,householdId:householdA,action:'create',status:'complete'};},
+    leave:async(account,household,id)=>{assert.equal(account,accountA);assert.equal(household,householdA);leaves++;return {operationId:id,householdId:household,action:'leave',status:'complete'};},
+    pending:async account=>{assert.equal(account,accountA);return [];}
+  });
+  const {cookie}=await login(f),session=(await inject(f.app,{url:'/api/session',headers:{...headers,cookie}})).json();
+  const trusted={...headers,cookie,origin:'https://pactaris.app','x-csrf-token':session.csrfToken,'content-type':'application/json'};
+  const payload={operationId:operation,name:'Fixture dynamic'};
+  for(const broken of [{...trusted,origin:'https://attacker.invalid'},{...trusted,'x-csrf-token':''}])assert.equal((await inject(f.app,{method:'POST',url:'/api/households',headers:broken,payload:JSON.stringify(payload)})).statusCode,403);
+  for(const extra of [{accountId:accountB},{endpoint:'https://private-node.invalid'},{technicalRole:'owner'}])assert.equal((await inject(f.app,{method:'POST',url:'/api/households',headers:trusted,payload:JSON.stringify({...payload,...extra})})).statusCode,400);
+  assert.equal((await inject(f.app,{method:'POST',url:'/api/households',headers:trusted,payload:'x'.repeat(5000)})).statusCode,413);
+  assert.equal(creates,0);
+  assert.equal((await inject(f.app,{method:'POST',url:'/api/households',headers:trusted,payload:JSON.stringify(payload)})).statusCode,201);
+  f.store.limited=true; // Creation throttling must not prevent a safe departure.
+  assert.equal((await inject(f.app,{method:'POST',url:`/api/households/${householdA}/leave`,headers:trusted,payload:JSON.stringify({operationId:operation})})).statusCode,200);
+  assert.equal(leaves,1);assert.equal(creates,1);
+  const pending=await inject(f.app,{url:'/api/households/operations?accountId='+accountB,headers:trusted});assert.equal(pending.statusCode,200);assert.deepEqual(pending.json(),{operations:[]});
 });
 test('wrong state and ambiguous cookies are denied before OIDC exchange',async()=>{
   const f=fixture(),first=await inject(f.app,{url:'/auth/login',headers}),cookie=cookies(first).join('; ');

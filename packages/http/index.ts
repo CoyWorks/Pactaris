@@ -12,5 +12,8 @@ export function frontend(app:express.Express,webRoot:string,paths:string[]) {
 }
 export function errors(app:express.Express) {
   app.use((_req,res)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});});
-  app.use((_error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});});
+  app.use((_error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
+    if(_error&&typeof _error==='object'&&'status' in _error&&[400,413,415].includes(Number(_error.status))){res.status(Number(_error.status)).json({code:'request_denied',messageKey:'errors.request'});return;}
+    res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});
+  });
 }

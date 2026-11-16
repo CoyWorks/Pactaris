@@ -60,7 +60,8 @@ export class PrivateCommandClient {
       if(response.status===409)throw new CommandDeliveryError('conflict');
       if(response.status===400)throw new CommandDeliveryError('invalid');
       const result=response.data as Partial<CommandResult>|null;
-      if(response.status!==200||!result||result.householdId!==placement.householdId||result.operationId!==operationId||result.status!==(action==='create'?'created':'left'))throw Error('routing.response');
+      if(response.status!==200||!result||result.householdId!==placement.householdId||result.operationId!==operationId||
+        !result.status||!(action==='receipt'?['created','left','missing']:action==='create'?['created']:['left']).includes(result.status))throw Error('routing.response');
       return {householdId:result.householdId,operationId:result.operationId,status:result.status};
     }catch(error){if(error instanceof CommandDeliveryError)throw error;throw new CommandDeliveryError('unavailable');}
   }

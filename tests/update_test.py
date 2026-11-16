@@ -185,5 +185,27 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn('applying is now the default', result.stdout)
 
+    def test_local_registration_uses_shared_ca_preserves_config_and_check_is_read_only(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            for name in ('gateway','instance'):
+                (root/name).mkdir()
+                (root/name/'ca.crt').write_text('fixture-ca')
+                (root/name/'config.json').write_text(json.dumps({'listen':{'tls':{'caFile':str(root/name/'ca.crt')}},'delegation':{'fixture':True}}))
+            before={name:(root/name/'config.json').read_bytes() for name in ('gateway','instance')}
+            with patch.object(update,'child') as child,patch('sys.stdout',new_callable=io.StringIO):
+                update.register_local_instance(root,True,{'gateway','instance','identity'})
+                child.assert_not_called()
+                update.register_local_instance(root,False,{'gateway','instance','identity'})
+                self.assertEqual(child.call_count,1)
+                command=child.call_args.args[0]
+                self.assertIn('--apply',command)
+                self.assertIn('INSTANCE_CONFIG='+str(root/'instance/config.json'),command)
+                self.assertFalse(any('identity' in value for value in command))
+                (root/'instance/ca.crt').write_text('separate-ca')
+                update.register_local_instance(root,False,{'gateway','instance'})
+                self.assertEqual(child.call_count,1)
+            self.assertEqual(before,{name:(root/name/'config.json').read_bytes() for name in ('gateway','instance')})
+
 if __name__ == '__main__':
     unittest.main()

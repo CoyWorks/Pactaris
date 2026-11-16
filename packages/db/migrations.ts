@@ -44,12 +44,19 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
     if (component==='gateway') {
       await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.accounts,pactaris.login_attempts,pactaris.sessions,pactaris.auth_limits TO ${role}`);
       await connection.query(`GRANT SELECT ON pactaris.instances,pactaris.placements,pactaris.account_households TO ${role}`);
+      if(entries.some(m=>m.id==='0003_onboarding')) {
+        await connection.query(`GRANT SELECT,INSERT,UPDATE ON pactaris.onboarding_operations TO ${role}`);
+        await connection.query(`GRANT SELECT,INSERT ON pactaris.onboarding_events TO ${role}`);
+        await connection.query(`GRANT INSERT ON pactaris.placements,pactaris.account_households TO ${role}`);
+        await connection.query(`GRANT DELETE ON pactaris.account_households TO ${role}`);
+      }
     } else {
       await connection.query(`GRANT SELECT ON pactaris.households,pactaris.memberships,pactaris.household_entitlements TO ${role}`);
       await connection.query(`GRANT SELECT,INSERT,DELETE ON pactaris.delegation_uses TO ${role}`);
       if(entries.some(m=>m.id==='0002_commands')) {
         await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.create_household_command(uuid,uuid,uuid,uuid,text,text),pactaris.leave_household_command(uuid,uuid,uuid,uuid,text) TO ${role}`);
       }
+      if(entries.some(m=>m.id==='0003_receipt'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.household_receipt_command(uuid,uuid,uuid,uuid) TO ${role}`);
     }
     await connection.query(`GRANT USAGE ON SCHEMA pactaris,pactaris_meta TO "${backupRole}"`);
     await connection.query(`GRANT SELECT ON ALL TABLES IN SCHEMA pactaris,pactaris_meta TO "${backupRole}"`);

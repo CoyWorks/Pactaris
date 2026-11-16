@@ -1,5 +1,5 @@
 {
-  "version": "0.2.3-alpha.1",
+  "version": "0.3.0-alpha.1",
   "protocol": 2,
   "migrations": [
     {
@@ -28,6 +28,20 @@
       "id": "0002_commands",
       "path": "migrations/instance/0002_commands.sql",
       "sha256": "38c0509a67c2f551f8e5ffb1522ba30735765282d803153cfd0be0c0eb35676f",
+      "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0003_onboarding",
+      "path": "migrations/gateway/0003_onboarding.sql",
+      "sha256": "015b3830e95a3b62c5d59d70d367e236d2445caed0467df043dd6e5f0fe91e0b",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0003_receipt",
+      "path": "migrations/instance/0003_receipt.sql",
+      "sha256": "70927da9077397e1d8a6721b8258441690ec598dc10157d6b3c7f52e0f4ad32d",
       "backwardCompatible": true
     }
   ]
