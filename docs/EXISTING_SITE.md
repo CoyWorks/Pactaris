@@ -44,3 +44,7 @@ The existing Site is a useful feature and visual reference. It is not evidence t
 ## Data cutover
 
 First decide whether the existing Site contains data that should be transferred. Do not assume a clean demo or migrate data without mapping verified account ownership and tenant boundaries. If migration is needed, specify versioned export/import, file transfer, dry-run reconciliation, read-only cutover window and rollback in [#2](https://github.com/CoyWorks/Pactaris/issues/2) and [#34](https://github.com/CoyWorks/Pactaris/issues/34).
+
+## Current target requirements
+
+The inspected source is a historical baseline. The target is explicitly BDSM/SM/kink-first, with multiple contextual roles in M0 (#35), negotiated sessions/aftercare (#52), entitlement hooks (#53) and manager/independent-instance boundaries (#55–#62). The existing Site must not be assumed to provide these contracts already. Read [DOMAIN_MODEL.md](DOMAIN_MODEL.md), [PLANS.md](PLANS.md) and [INFRASTRUCTURE.md](INFRASTRUCTURE.md).
