@@ -1,5 +1,7 @@
 # Verified recipient identity foundation
 
+Update: 0.4.0-alpha.1 now implements [session-bound recipient assertions and explicit participant invitations](INVITATIONS.md). The 0.3.1 foundation and its original non-authorization boundary are described below; the earlier statement that sessions have no recipient proof applies to releases before 0.4.0. New sessions snapshot the actual callback's assertion, require a five-minute bound and an exact current account assertion match. Cached account email alone still cannot authorize joining.
+
 Implemented in 0.3.1-alpha.1 for [#69](https://github.com/CoyWorks/Pactaris/issues/69), part of #6 and a prerequisite of #8. This is identity metadata, not an invitation or account-linking endpoint.
 
 ## Trust and storage

@@ -1,10 +1,10 @@
 import React,{useEffect,useState} from 'react';
-import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
+import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 type Session={account:{id:string;displayName:string};csrfToken:string};
 type Invite={invitationId:string;status:string;role:string;expiresAt:string};
 const errorKey=(key:unknown):MessageKey=>(['invitations.invalid','invitations.denied','invitations.conflict','invitations.capacity','invitations.proof','invitations.unavailable','errors.rateLimited','errors.request'] as unknown[]).includes(key)?key as MessageKey:'invitations.unavailable';
 function secret(){const data=crypto.getRandomValues(new Uint8Array(32));return btoa(String.fromCharCode(...data)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');}
-export function InvitationManager({householdId,session,language}:{householdId:string;session:Session;language:string}){
+export function InvitationManager({householdId,session,language,format,timeZone}:{householdId:string;session:Session;language:string;format:string;timeZone:string}){
  const t=createTranslator(language),[items,setItems]=useState<Invite[]>(),[allowed,setAllowed]=useState(false),[email,setEmail]=useState(''),[draft,setDraft]=useState<{id:string;token:string}>(),[link,setLink]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[refresh,setRefresh]=useState(0),[copied,setCopied]=useState(false),[revokeIds,setRevokeIds]=useState<Record<string,string>>({});
  useEffect(()=>{
   const controller=new AbortController();let gone=false;
@@ -42,12 +42,12 @@ export function InvitationManager({householdId,session,language}:{householdId:st
   {link&&<div role="status"><p>{t('invitations.shareDescription')}</p><label htmlFor="invite-link">{t('invitations.link')}</label><input id="invite-link" readOnly value={link} onFocus={e=>e.target.select()}/>
    <button type="button" onClick={()=>{void (async()=>{try{if(!navigator.clipboard)throw Error('clipboard');await navigator.clipboard.writeText(link);setCopied(true);}catch{setError('invitations.copyManual');}})();}}>{t('invitations.copy')}</button>{copied&&<p>{t('invitations.copied')}</p>}
   </div>}
-  {!!items?.length&&<ul>{items.map(i=><li key={i.invitationId}><code>{i.invitationId}</code><p>{t(stateKey(i.status))}</p><p>{t('invitations.expires')} <time dateTime={i.expiresAt}>{new Intl.DateTimeFormat(language,{dateStyle:'medium',timeStyle:'short'}).format(new Date(i.expiresAt))}</time></p>
+  {!!items?.length&&<ul>{items.map(i=><li key={i.invitationId}><code>{i.invitationId}</code><p>{t(stateKey(i.status))}</p><p>{t('invitations.expires')} <time dateTime={i.expiresAt} title={timeZone}>{formatTime(new Date(i.expiresAt),format,timeZone)}</time></p>
    {i.status==='pending'&&<button type="button" disabled={busy} onClick={()=>{void revoke(i.invitationId);}}>{t('invitations.revoke')}</button>}
   </li>)}</ul>}
  </section>;
 }
-export function InvitationJoin({session,loading,language}:{session?:Session;loading:boolean;language:string}){
+export function InvitationJoin({session,loading,language,format,timeZone}:{session?:Session;loading:boolean;language:string;format:string;timeZone:string}){
  const t=createTranslator(language);
  const [claim]=useState(()=>{const match=/^#([a-f0-9-]{36})\.([A-Za-z0-9_-]{43})$/i.exec(window.location.hash);return match?{invitationId:match[1]!,token:match[2]!}:undefined;});
  const [preview,setPreview]=useState<{name:string;role:string;termsVersion:string;expiresAt:string;accountId:string}>(),[error,setError]=useState<MessageKey>(),[busy,setBusy]=useState(false),[decision,setDecision]=useState<{action:'accept'|'decline';id:string}>(),[pending,setPending]=useState(false),[declined,setDeclined]=useState(false);
@@ -75,7 +75,7 @@ export function InvitationJoin({session,loading,language}:{session?:Session;load
   {loading?<p role="status">{t('portal.loading')}</p>:!claim?<p role="alert">{t('invitations.invalidLink')}</p>:!session?<section><p>{t('invitations.signInThenReopen')}</p><a className="button" href="/auth/login">{t('portal.signIn')}</a></section>:<>
    {error&&<p role="alert">{t(error)}</p>}
    {(!preview||preview.accountId!==session.account.id)&&!declined&&<button type="button" disabled={busy} onClick={()=>{void review();}}>{t('invitations.review')}</button>}
-   {preview&&preview.accountId===session.account.id&&!declined&&<section><h2>{preview.name}</h2><p>{t('invitations.participant')}</p><p>{t('invitations.noConsent')}</p><p>{t('invitations.expires')} <time dateTime={preview.expiresAt}>{new Intl.DateTimeFormat(language,{dateStyle:'medium',timeStyle:'short'}).format(new Date(preview.expiresAt))}</time></p>
+   {preview&&preview.accountId===session.account.id&&!declined&&<section><h2>{preview.name}</h2><p>{t('invitations.participant')}</p><p>{t('invitations.noConsent')}</p><p>{t('invitations.expires')} <time dateTime={preview.expiresAt} title={timeZone}>{formatTime(new Date(preview.expiresAt),format,timeZone)}</time></p>
     {pending?<div role="status"><p>{t('invitations.pending')}</p><button type="button" disabled={busy} onClick={()=>{void respond(decision?.action??'accept');}}>{t('onboarding.retry')}</button></div>:<>
      <button type="button" disabled={busy} onClick={()=>{void respond('accept');}}>{t('invitations.accept')}</button><button type="button" disabled={busy} onClick={()=>{void respond('decline');}}>{t('invitations.decline')}</button>
     </>}

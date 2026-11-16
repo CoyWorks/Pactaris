@@ -8,7 +8,7 @@ The alpha goal is sign in, create a private dynamic, invite a partner, explicitl
 | --- | --- | --- | --- |
 | 1 | #70 | Membership identity/history; delayed command, receipt and hint fencing | Implemented in 0.3.2-alpha.1; CI and rollout evidence recorded in #70 |
 | 2 | #8, #53 | Explicit invitation create/preview/accept/decline/revoke; verified recipient and atomic member reservations | Participant invitation workflow implemented in 0.4.0-alpha.1; real IdP/mobile acceptance remains |
-| 3 | #26 | Immediate departure/removal, voluntary ownership transfer and lifecycle/privacy cleanup | Self-leave exists; remaining scope queued after invitations |
+| 3 | #26 | Immediate departure/removal, voluntary ownership transfer and lifecycle/privacy cleanup | Self-leave exists; member removal/voluntary owner transfer and privacy cleanup are the next block |
 | 4 | #35, #9 | Explicit accepted relationship graph and contextual roles; resource authorization separate from labels | Schema/permission foundations exist; APIs/UI queued |
 | 5 | #10, #11 | Exact-version individual consent, limits, revocation and authoritative pause/stop | Queued; required before protected task/protocol execution |
 | 6 | #6, #7, #24 | Verified registration/recovery, MFA/session controls and transactional delivery; real Google/Apple/local acceptance | OIDC/session/email assertion foundations exist; provider/operational acceptance remains |

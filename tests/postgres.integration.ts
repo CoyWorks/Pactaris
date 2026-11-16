@@ -400,6 +400,9 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await api(responsePath+'/accept','POST',acceptBody,receiverSession)).data.status,'accepted');
   assert.equal((await api('/api/households/'+inviteHousehold.householdId,'GET',undefined,receiverSession)).data.name,'Invitation fixture');
   assert.equal((await api(baseInvite,'GET',undefined,receiverSession)).status,404);
+  const publicSession=await api('/api/session','GET',undefined,receiverSession);
+  assert.ok(!publicSession.body.includes(first.email));assert.ok(!publicSession.body.includes('recipient_email'));
+  assert.ok(!JSON.stringify(preview.data).includes('127.0.0.1'));assert.ok(!JSON.stringify(preview.data).includes(invitePlacement.instanceId));
   const acceptedMember=(await client.summary(receiver.id,invitePlacement))!.membershipId!;
   assert.equal((await inviteDb.owner.query('SELECT technical_role FROM pactaris.memberships WHERE household_id=$1 AND id=$2',[inviteHousehold.householdId,acceptedMember])).rows[0].technical_role,'participant');
   assert.equal((await inviteDb.owner.query('SELECT count(*)::int AS n FROM pactaris.consent_records WHERE household_id=$1',[inviteHousehold.householdId])).rows[0].n,0);

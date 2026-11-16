@@ -5,7 +5,7 @@ type Session={account:{id:string;displayName:string};csrfToken:string};
 type Summary={id:string;name:string};
 type Listing={households:Summary[];partial:boolean;nextCursor:string|null};
 type Operation={operationId:string;householdId:string;action:'create'|'leave';status:'pending'|'complete'|'released'};
-export function Portal({language}:{language:string}) {
+export function Portal({language,format,timeZone}:{language:string;format:string;timeZone:string}) {
   const t=createTranslator(language);
   const [session,setSession]=useState<Session>(),[loading,setLoading]=useState(true),[error,setError]=useState<MessageKey>(),[listing,setListing]=useState<Listing>(),[selected,setSelected]=useState<Summary>(),[busy,setBusy]=useState(false);
   const [name,setName]=useState(''),[createId,setCreateId]=useState<string>(),[createPending,setCreatePending]=useState(false),[leaveId,setLeaveId]=useState<string>(),[confirmLeave,setConfirmLeave]=useState(false),[leavePending,setLeavePending]=useState(false),[refresh,setRefresh]=useState(0);
@@ -77,14 +77,14 @@ export function Portal({language}:{language:string}) {
       setListing({...next,partial:listing.partial||next.partial,households:[...listing.households,...next.households]});
     }catch{setError('errors.unavailable');}finally{setBusy(false);}
   }
-  if(window.location.pathname==='/join')return <InvitationJoin session={session} loading={loading} language={language}/>;
+  if(window.location.pathname==='/join')return <InvitationJoin session={session} loading={loading} language={language} format={format} timeZone={timeZone}/>;
   return <main><header><span className="eyebrow">{t('app.title')}</span>{session&&<button type="button" disabled={busy} onClick={()=>{void logout();}}>{t('portal.logout')}</button>}</header>
     <h1>{t(selectedId?'portal.dynamicTitle':'portal.title')}</h1>
     <p>{t('app.description')}</p>
     {loading?<p role="status">{t('portal.loading')}</p>:!session?<section><h2>{t('portal.signInTitle')}</h2><p>{t('portal.signInDescription')}</p><a className="button" href="/auth/login">{t('portal.signIn')}</a></section>:<>
       <p>{session.account.displayName||t('portal.account')}</p>
       {error&&<p role="alert">{t(error)}</p>}
-      {selectedId?<section>{selected&&<><h2>{selected.name}</h2><p>{t('portal.workspacePending')}</p><InvitationManager key={session.account.id+':'+selectedId} householdId={selectedId} session={session} language={language}/>
+      {selectedId?<section>{selected&&<><h2>{selected.name}</h2><p>{t('portal.workspacePending')}</p><InvitationManager key={session.account.id+':'+selectedId} householdId={selectedId} session={session} language={language} format={format} timeZone={timeZone}/>
         <button type="button" onClick={()=>setConfirmLeave(true)} disabled={busy}>{t('onboarding.leave')}</button>
         {confirmLeave&&<div className="notice"><p>{t('onboarding.leaveConfirm')}</p><button type="button" onClick={()=>{void leave();}} disabled={busy}>{t('onboarding.leaveConfirmButton')}</button><button type="button" onClick={()=>setConfirmLeave(false)} disabled={busy}>{t('onboarding.cancel')}</button></div>}
       </>}{leavePending&&<div role="status"><p>{t('onboarding.leavePending')}</p><button type="button" onClick={()=>{void leave();}} disabled={busy}>{t('onboarding.retry')}</button></div>}<p><a href="/">{t('portal.back')}</a></p></section>:<>{listing&&<section aria-live="polite">
