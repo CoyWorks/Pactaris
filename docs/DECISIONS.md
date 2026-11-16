@@ -44,4 +44,10 @@ Identity and Instance are separately installable/updatable applications, not one
 
 ## Domain decision
 
-All domains/subdomains and per-service origins are configurable. Start on coyworks.nl; a future unrelated domain such as pactaris.app is possible but not selected/verified. No code assumes a fixed suffix or shared parent domain. Public-origin/issuer migration, unlike backend relocation, requires a tested identity/session/PWA/push/link cutover plan; see docs/INFRASTRUCTURE.md and #58/#62. No live domain/DNS changes are performed during planning.
+All domains/subdomains and per-service origins are configurable. The current deployment starts on coyworks.nl. Use pactaris.app as the future default product-domain example, still configurable and not an assertion of verified ownership or a live migration. No code assumes a fixed suffix or shared parent domain. Public-origin/issuer migration, unlike backend relocation, requires a tested identity/session/PWA/push/link cutover plan; see docs/INFRASTRUCTURE.md and #58/#62. No live domain/DNS changes are performed during planning.
+
+## Minimal-input installation and public household entry
+
+The desired fresh installer asks only which components (Identity, Instance or both) and the hostname in the normal trusted/provisioned-fleet path. Runtime/database/TLS/OIDC/proxy provisioning, secrets, enrollment, renewal and recovery should be automated. External provider/DNS/SMTP credentials are one-time central provisioning prerequisites, not recurring per-Instance prompts.
+
+Users remain on one configured public Pactaris origin and choose authorized households, never Instance hostnames. A private gateway/placement and session-delegation contract replaces the earlier browser redirects to public Instance origins. Existing direct-instance callbacks are a technical alpha setup, to be migrated explicitly rather than changed by an update. See [INSTALLER_EXPERIENCE.md](INSTALLER_EXPERIENCE.md), #56/#58/#62.

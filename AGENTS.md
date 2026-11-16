@@ -61,6 +61,11 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 
 ## Public domain configuration
 
-- All domains/subdomains and per-service public origins are validated config. coyworks.nl is the initial deployment domain; pactaris.app is an illustrative future domain only. Never embed these in application behavior or assume a common parent domain.
+- All domains/subdomains and per-service public origins are validated config. coyworks.nl is the initial deployment domain; pactaris.app is the future default product-domain example, still configurable and not verified domain ownership. Never embed these in application behavior or assume a common parent domain.
 - Use central URL-building helpers, exact issuer/origin/callback trust and host-scoped cookies. Internal subject/household/instance IDs survive domain changes.
 - A public-domain change is a rehearsed migration, not a transparent backend address swap: review identity/provider registrations, sessions, PWA/push origins, old invite/feed/email links, DNS/TLS/proxy settings and rollback. Update scripts preserve configured domains.
+
+## Minimal-input installer and private Instance routing
+
+- Follow docs/INSTALLER_EXPERIENCE.md and #56/#58/#62. The target normal installer asks only Identity/Instance/both and hostname; consume trusted fleet configuration/enrollment and central one-time external credentials rather than inventing access or silently weakening security. This workflow is not implemented by the current alpha.
+- Browser users select authorized households at the configured canonical product origin. Instance endpoints are private infrastructure; public callbacks, API/file links and redirects must not expose them. Earlier direct-instance OIDC setup is transitional and needs an explicit migration. Design gateway sessions/delegation before implementation; every Instance retains local tenant authorization.

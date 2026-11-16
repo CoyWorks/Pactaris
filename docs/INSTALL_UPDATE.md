@@ -1,6 +1,6 @@
 # First-slice install and update contract
 
-Status: required implementation scope, not available scripts. Issue #56 is M0; advanced fleet rollout stays #59. Start with empty production databases and no legacy accounts/content.
+Status: target contract; experimental component scripts exist, but the minimal-input workflow is not implemented. See [INSTALLER_EXPERIENCE.md](INSTALLER_EXPERIENCE.md) for the latest requirements. Issue #56 is M0; advanced fleet rollout stays #59. Start with empty production databases and no legacy accounts/content.
 
 ## Entry points
 
@@ -44,7 +44,7 @@ Failure must preserve the prior healthy application when schema compatibility pe
 
 ## First working version acceptance
 
-A fresh synthetic deployment can log in, register/select an instance, create/join a dynamic, accept scoped consent, complete a task, stop and export/leave. Demonstrate initial install, repeat installer run, restart/reboot recovery and update to a second pinned GitHub version preserving data. Exercise failed update and private-source-access failure before claiming the tool complete.
+An operator can register an instance; a fresh synthetic user deployment can log in at the canonical public origin, select an authorized household without seeing instance names, create/join a dynamic, accept scoped consent, complete a task, stop and export/leave. Demonstrate initial install, repeat installer run, restart/reboot recovery and update to a second pinned GitHub version preserving data. Exercise failed update and private-source-access failure before claiming the tool complete.
 
 Full production backup/security gates remain #28/#29/#31. Manager automation later uses the same allowlisted pinned update contract (#59), rather than adding arbitrary remote commands.
 

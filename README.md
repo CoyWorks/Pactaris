@@ -1,6 +1,8 @@
 # Pactaris
 
-Fresh-server installation commands, including apt dependencies: [FRESH_SERVER.md](docs/FRESH_SERVER.md).
+Target automated installation and one public household entry: [INSTALLER_EXPERIENCE.md](docs/INSTALLER_EXPERIENCE.md).
+
+Current alpha fresh-server installation commands, including apt dependencies: [FRESH_SERVER.md](docs/FRESH_SERVER.md).
 
 A mobile-first platform for consenting-adult BDSM, SM and kink: Dom/sub and play-partner relationships, protocols, tasks, rituals, negotiated sessions, rewards/consequences and aftercare.
 
