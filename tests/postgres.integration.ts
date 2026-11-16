@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomUUID,randomBytes } from 'node:crypto';
 import { mkdtemp,readFile,writeFile,rm,mkdir,cp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,9 +14,11 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient } from '../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
+import { GatewayInvitations } from '../apps/gateway/invitations.js';
+import { hash } from '../apps/gateway/store.js';
 import { PgOnboardingStore,OnboardingService } from '../apps/gateway/onboarding.js';
 const adminUrl=process.env.TEST_DATABASE_URL;
 test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance household selection',{skip:!adminUrl,timeout:120000},async()=>{
@@ -170,7 +172,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await assert.rejects(client.summary(account.id,{...placement,endpoint:'https://169.254.169.254/'}));
   await store.createSession('a'.repeat(43),account,'csrf',60,120);
   const onboardingStore=new PgOnboardingStore(gatewayDb.pool,1,client),onboarding=new OnboardingService(onboardingStore,new PrivateCommandClient(signer));
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding);
+  const inviteClient=new PrivateInvitationClient(signer),invites=new GatewayInvitations(gatewayDb.pool,store,client,inviteClient);
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -341,6 +344,101 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const closedReceipt=await commands.execute(fenceActor.id,late,'receipt',late.operationId);
   assert.equal(closedReceipt.status,'left');assert.equal((await onboardingStore.finish(late,closedReceipt)).status,'released');
   assert.equal((await gatewayDb.pool.query('SELECT membership_id FROM pactaris.account_households WHERE account_id=$1 AND household_id=$2',[fenceActor.id,late.householdId])).rows[0].membership_id,latestMember);
+
+  // End-to-end invitations through the public origin and private Instance.
+  const inviteOwner=await store.account('https://idp.fixture.invalid/','invite-owner','Invitation owner');
+  const ownerSession='o'.repeat(43);await store.createSession(ownerSession,inviteOwner,'registration-csrf',60,120);
+  const inviteHousehold=await onboarding.create(inviteOwner.id,randomUUID(),'Invitation fixture');
+  const invitePlacement=(await store.placement(inviteOwner.id,inviteHousehold.householdId))!,inviteDb=invitePlacement.instanceId===ids[0]?a:b;
+  const baseInvite='/api/households/'+inviteHousehold.householdId+'/invitations';
+  const makeInvite=async(email:string)=>{
+   const token=randomBytes(32).toString('base64url'),operationId=randomUUID();
+   const response=await api(baseInvite,'POST',{email,token,operationId},ownerSession);
+   return {email,token,operationId,response,id:response.data.invitationId as string};
+  };
+  const first=await makeInvite('first@example.invalid');assert.equal(first.response.status,201);
+  assert.equal((await api(baseInvite,'POST',{email:first.email,token:first.token,operationId:first.operationId},ownerSession)).data.invitationId,first.id);
+  assert.equal((await api(baseInvite,'POST',{email:'changed@example.invalid',token:first.token,operationId:first.operationId},ownerSession)).status,409);
+  const reservationRace=await Promise.all(['second','third','fourth'].map(n=>makeInvite(n+'@example.invalid')));
+  assert.equal(reservationRace.filter(r=>r.response.status===201).length,2);assert.equal(reservationRace.filter(r=>r.response.status===409).length,1);
+  assert.equal((await makeInvite('overflow@example.invalid')).response.status,409);
+  assert.equal((await api(baseInvite,'GET',undefined,ownerSession)).data.invitations.length,3);
+  const receiver=await store.account('https://idp.fixture.invalid/','invite-first','Invited fixture',first.email);
+  const receiverSession='i'.repeat(43);await store.createSession(receiverSession,receiver,'registration-csrf',60,120,first.email);
+  const withoutProof='j'.repeat(43);await store.createSession(withoutProof,receiver,'registration-csrf',60,120);
+  const responsePath='/api/invitations/'+first.id;
+  assert.equal((await api(responsePath+'/preview','GET',undefined,receiverSession)).status,404);
+  assert.equal((await api(responsePath+'/preview','POST',{token:first.token},withoutProof,{'x-email-verified':'true'})).status,403);
+  const wrong=await store.account('https://idp.fixture.invalid/','invite-wrong','Wrong fixture','wrong@example.invalid');
+  await store.createSession('w'.repeat(43),wrong,'registration-csrf',60,120,'wrong@example.invalid');
+  assert.equal((await api(responsePath+'/preview','POST',{token:first.token},'w'.repeat(43))).status,404);
+  await gatewayDb.owner.query("UPDATE pactaris.sessions SET recipient_asserted_at=now()-interval '6 minutes' WHERE token_hash=$1",[hash(receiverSession)]);
+  await store.createSession('k'.repeat(43),receiver,'registration-csrf',60,120,first.email);
+  // A fresh assertion in another session must not revive this stale session.
+  assert.equal((await api(responsePath+'/preview','POST',{token:first.token},receiverSession)).status,403);
+  await gatewayDb.owner.query('UPDATE pactaris.sessions SET recipient_asserted_at=now() WHERE token_hash=$1',[hash(receiverSession)]);
+  const preview=await api(responsePath+'/preview','POST',{token:first.token},receiverSession);assert.equal(preview.status,200);assert.equal(preview.data.role,'participant');
+  assert.equal((await inviteDb.owner.query("SELECT count(*)::int AS n FROM pactaris.memberships WHERE household_id=$1 AND status='active'",[inviteHousehold.householdId])).rows[0].n,1);
+  assert.equal((await api(responsePath+'/accept','POST',{token:first.token,operationId:randomUUID(),termsVersion:preview.data.termsVersion,accountId:wrong.id},receiverSession)).status,400);
+  const acceptId=randomUUID(),acceptBody={token:first.token,operationId:acceptId,termsVersion:preview.data.termsVersion};
+  assert.equal((await api(responsePath+'/accept','POST',acceptBody,receiverSession, {origin:'https://attacker.invalid'})).status,403);
+  const accepted=await api(responsePath+'/accept','POST',acceptBody,receiverSession);assert.equal(accepted.status,200);assert.equal(accepted.data.status,'accepted');
+  assert.equal((await api(responsePath+'/accept','POST',acceptBody,receiverSession)).data.status,'accepted');
+  assert.equal((await api('/api/households/'+inviteHousehold.householdId,'GET',undefined,receiverSession)).data.name,'Invitation fixture');
+  assert.equal((await api(baseInvite,'GET',undefined,receiverSession)).status,404);
+  const acceptedMember=(await client.summary(receiver.id,invitePlacement))!.membershipId!;
+  assert.equal((await inviteDb.owner.query('SELECT technical_role FROM pactaris.memberships WHERE household_id=$1 AND id=$2',[inviteHousehold.householdId,acceptedMember])).rows[0].technical_role,'participant');
+  assert.equal((await inviteDb.owner.query('SELECT count(*)::int AS n FROM pactaris.consent_records WHERE household_id=$1',[inviteHousehold.householdId])).rows[0].n,0);
+  const revoke=reservationRace.find(r=>r.response.status===201)!;
+  assert.equal((await api(baseInvite+'/'+revoke.id+'/revoke','POST',{operationId:randomUUID()},ownerSession)).data.status,'revoked');
+  const declinedInvite=await makeInvite('decliner@example.invalid');assert.equal(declinedInvite.response.status,201);
+  const decliner=await store.account('https://idp.fixture.invalid/','invite-decliner','Decliner fixture',declinedInvite.email);
+  await store.createSession('d'.repeat(43),decliner,'registration-csrf',60,120,declinedInvite.email);
+  assert.equal((await api('/api/invitations/'+declinedInvite.id+'/decline','POST',{token:declinedInvite.token,operationId:randomUUID()},'d'.repeat(43))).data.status,'declined');
+  const expired=await makeInvite('decliner@example.invalid');assert.equal(expired.response.status,201);
+  await inviteDb.owner.query("UPDATE pactaris.invitations SET expires_at=now()-interval '1 second' WHERE id=$1",[expired.id]);
+  assert.equal((await api('/api/invitations/'+expired.id+'/preview','POST',{token:expired.token},'d'.repeat(43))).status,409);
+  // Over-quota plan changes never remove existing members or prevent exit.
+  await inviteDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"members.active.max\":1}'::jsonb WHERE household_id=$1",[inviteHousehold.householdId]);
+  assert.equal((await makeInvite('blocked@example.invalid')).response.status,409);
+  assert.equal((await api('/api/households/'+inviteHousehold.householdId,'GET',undefined,receiverSession)).status,200);
+  assert.equal((await api('/api/households/'+inviteHousehold.householdId+'/leave','POST',{operationId:randomUUID()},receiverSession)).status,200);
+  await inviteDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"members.active.max\":4}'::jsonb WHERE household_id=$1",[inviteHousehold.householdId]);
+  const rejoin=await makeInvite(first.email);assert.equal(rejoin.response.status,201);
+  const rejoinPreview=await api('/api/invitations/'+rejoin.id+'/preview','POST',{token:rejoin.token},receiverSession);
+  assert.equal((await api('/api/invitations/'+rejoin.id+'/accept','POST',{token:rejoin.token,operationId:randomUUID(),termsVersion:rejoinPreview.data.termsVersion},receiverSession)).data.status,'accepted');
+  const newAcceptedMember=(await client.summary(receiver.id,invitePlacement))!.membershipId!;assert.notEqual(newAcceptedMember,acceptedMember);
+  assert.equal((await api(responsePath+'/accept','POST',acceptBody,receiverSession)).data.status,'left');
+  assert.equal((await client.summary(receiver.id,invitePlacement))!.membershipId,newAcceptedMember);
+  assert.equal((await gatewayDb.pool.query('SELECT membership_id FROM pactaris.account_households WHERE account_id=$1 AND household_id=$2',[receiver.id,inviteHousehold.householdId])).rows[0].membership_id,newAcceptedMember);
+  // Lost command acknowledgement is recovered by a new worker from the exact receipt.
+  const lost=await makeInvite('lost@example.invalid');assert.equal(lost.response.status,201);
+  const lostAccount=await store.account('https://idp.fixture.invalid/','invite-lost','Lost response fixture',lost.email),lostSession='l'.repeat(43);
+  await store.createSession(lostSession,lostAccount,'registration-csrf',60,120,lost.email);
+  const lostPreview=await invites.respond(lostAccount.id,lostSession,lost.id,'invitePreview',lost.token,randomUUID());
+  const unreliableInvites=new GatewayInvitations(gatewayDb.pool,store,client,{execute:async(...args)=>{
+   if(args[2]==='inviteAccept')await inviteClient.execute(...args);throw Error('fixture response lost');
+  }});
+  const lostResult=await unreliableInvites.respond(lostAccount.id,lostSession,lost.id,'inviteAccept',lost.token,randomUUID(),lostPreview.termsVersion);
+  assert.equal(lostResult.status,'pending');assert.equal(await store.placement(lostAccount.id,inviteHousehold.householdId),undefined);
+  await new GatewayInvitations(gatewayDb.pool,store,client,inviteClient).reconcile();
+  assert.ok(await store.placement(lostAccount.id,inviteHousehold.householdId));
+  // Competing explicit acceptance and revocation are serialized by the same household lock.
+  const duel=await makeInvite('duel@example.invalid');assert.equal(duel.response.status,201);
+  const duelAccount=await store.account('https://idp.fixture.invalid/','invite-duel','Duel fixture',duel.email);
+  await store.createSession('u'.repeat(43),duelAccount,'registration-csrf',60,120,duel.email);
+  const duelPreview=await api('/api/invitations/'+duel.id+'/preview','POST',{token:duel.token},'u'.repeat(43));
+  const duelResults=await Promise.all([
+   api('/api/invitations/'+duel.id+'/accept','POST',{token:duel.token,operationId:randomUUID(),termsVersion:duelPreview.data.termsVersion},'u'.repeat(43)),
+   api(baseInvite+'/'+duel.id+'/revoke','POST',{operationId:randomUUID()},ownerSession)
+  ]);
+  assert.equal(duelResults.filter(r=>r.status===200).length,1);assert.equal(duelResults.filter(r=>r.status===409).length,1);
+  const routeMetadata=(await gatewayDb.owner.query('SELECT row_to_json(r) AS value FROM pactaris.invitation_routes r')).rows;
+  assert.ok(!JSON.stringify(routeMetadata).includes(first.email));assert.ok(!JSON.stringify(routeMetadata).includes(first.token));
+  const localMetadata=(await inviteDb.owner.query('SELECT row_to_json(i) AS value FROM pactaris.invitations i WHERE household_id=$1',[inviteHousehold.householdId])).rows;
+  assert.ok(!JSON.stringify(localMetadata).includes(first.token));assert.ok(!JSON.stringify(localMetadata).includes(first.email));
+  assert.equal((await inviteDb.pool.query('SELECT * FROM pactaris.invitations')).rowCount,0);
+  await assert.rejects(inviteDb.pool.query('DELETE FROM pactaris.invitations'));
   // Separate concurrent creation IDs are budgeted under the same account lock.
   const racer=await store.account('https://idp.fixture.invalid/','registration-racer','Racer fixture');await store.createSession('s'.repeat(43),racer,'registration-csrf',60,120);
   const races=await Promise.all(Array.from({length:4},()=>api('/api/households','POST',{operationId:randomUUID(),name:'Race fixture'},'s'.repeat(43))));

@@ -76,7 +76,7 @@
       "component": "instance",
       "id": "0005_invitations",
       "path": "migrations/instance/0005_invitations.sql",
-      "sha256": "ad6cc6448ad0ab21343883f2295eb02ac509c123c0a1c7cf4cf257a45315400a",
+      "sha256": "8f594d181c252c99d9decdf97761954c99f482fb1432a234dfd28ea95f899cef",
       "backwardCompatible": true
     }
   ]

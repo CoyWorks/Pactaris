@@ -31,7 +31,7 @@ CREATE POLICY invitation_receipts_command ON pactaris.invitation_receipts FOR AL
 CREATE POLICY invitation_outbox_command ON pactaris.invitation_outbox FOR ALL USING(pactaris.command_executor()) WITH CHECK(pactaris.command_executor());
 -- Operational four-member alpha cap, not finalized commercial pricing. Existing
 -- non-free/custom snapshots are never replaced; absent/invalid caps fail closed.
-UPDATE pactaris.household_entitlements SET capabilities=capabilities||'{"members.active.max":4}'::jsonb
+UPDATE pactaris.household_entitlements SET version=version+1,updated_at=now(),capabilities=capabilities||'{"members.active.max":4}'::jsonb
  WHERE capabilities->>'plan.key'='free' AND NOT capabilities?'members.active.max';
 
 CREATE FUNCTION pactaris.invitation_command(target uuid,instance uuid,actor uuid,operation uuid,action text,body jsonb,fingerprint text)
@@ -79,6 +79,10 @@ BEGIN
    IF receipt.account_id<>actor OR receipt.invitation_id<>invitation OR receipt.action<>action OR receipt.request_hash<>fingerprint THEN
      RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='invite.conflict';
    END IF;
+   IF action='inviteCreate' AND NOT EXISTS(SELECT 1 FROM pactaris.invitations WHERE id=invitation AND household_id=target
+     AND status='pending' AND expires_at>now() AND terms_version=h.safety_version) THEN
+     RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='invite.conflict';
+   END IF;
    -- Accepted receipts never authorize a newly rejoined membership.
    IF action='inviteAccept' AND NOT EXISTS(SELECT 1 FROM pactaris.memberships WHERE household_id=target
       AND id=(receipt.result->>'membershipId')::uuid AND account_id=actor AND status='active') THEN
@@ -120,9 +124,13 @@ BEGIN
    UPDATE pactaris.invitations SET status='revoked' WHERE id=invitation;
    answer='{"status":"revoked"}'::jsonb;
  ELSE
-   IF action='inviteAccept' AND inv.status='accepted' AND inv.accepted_account_id=actor THEN
+   IF action IN ('inviteAccept','invitePreview') AND inv.status='accepted' AND inv.accepted_account_id=actor THEN
      IF NOT EXISTS(SELECT 1 FROM pactaris.memberships WHERE household_id=target AND id=inv.accepted_membership_id AND account_id=actor AND status='active') THEN
        RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='invite.denied'; END IF;
+     IF action='invitePreview' THEN
+       RETURN jsonb_build_object('householdId',target,'operationId',operation,'invitationId',invitation,'status','preview',
+         'name',h.display_name,'role','participant','termsVersion',inv.terms_version::text,'expiresAt',inv.expires_at);
+     END IF;
      answer=jsonb_build_object('status','accepted','membershipId',inv.accepted_membership_id);
    ELSE
      IF inv.status<>'pending' OR inv.expires_at<=now() OR h.status<>'active' OR inv.terms_version<>h.safety_version OR

@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
+import {InvitationManager,InvitationJoin} from './invitations.js';
 type Session={account:{id:string;displayName:string};csrfToken:string};
 type Summary={id:string;name:string};
 type Listing={households:Summary[];partial:boolean;nextCursor:string|null};
@@ -76,13 +77,14 @@ export function Portal({language}:{language:string}) {
       setListing({...next,partial:listing.partial||next.partial,households:[...listing.households,...next.households]});
     }catch{setError('errors.unavailable');}finally{setBusy(false);}
   }
+  if(window.location.pathname==='/join')return <InvitationJoin session={session} loading={loading} language={language}/>;
   return <main><header><span className="eyebrow">{t('app.title')}</span>{session&&<button type="button" disabled={busy} onClick={()=>{void logout();}}>{t('portal.logout')}</button>}</header>
     <h1>{t(selectedId?'portal.dynamicTitle':'portal.title')}</h1>
     <p>{t('app.description')}</p>
     {loading?<p role="status">{t('portal.loading')}</p>:!session?<section><h2>{t('portal.signInTitle')}</h2><p>{t('portal.signInDescription')}</p><a className="button" href="/auth/login">{t('portal.signIn')}</a></section>:<>
       <p>{session.account.displayName||t('portal.account')}</p>
       {error&&<p role="alert">{t(error)}</p>}
-      {selectedId?<section>{selected&&<><h2>{selected.name}</h2><p>{t('portal.workspacePending')}</p>
+      {selectedId?<section>{selected&&<><h2>{selected.name}</h2><p>{t('portal.workspacePending')}</p><InvitationManager key={session.account.id+':'+selectedId} householdId={selectedId} session={session} language={language}/>
         <button type="button" onClick={()=>setConfirmLeave(true)} disabled={busy}>{t('onboarding.leave')}</button>
         {confirmLeave&&<div className="notice"><p>{t('onboarding.leaveConfirm')}</p><button type="button" onClick={()=>{void leave();}} disabled={busy}>{t('onboarding.leaveConfirmButton')}</button><button type="button" onClick={()=>setConfirmLeave(false)} disabled={busy}>{t('onboarding.cancel')}</button></div>}
       </>}{leavePending&&<div role="status"><p>{t('onboarding.leavePending')}</p><button type="button" onClick={()=>{void leave();}} disabled={busy}>{t('onboarding.retry')}</button></div>}<p><a href="/">{t('portal.back')}</a></p></section>:<>{listing&&<section aria-live="polite">
