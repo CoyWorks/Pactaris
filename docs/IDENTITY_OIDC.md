@@ -2,6 +2,10 @@
 
 This prepares authentik 2026.8.5 for the first Instance. It creates/configures an application, confidential OIDC provider and minimal profile scope mapping. It does not implement the Pactaris callback/session handlers. The deployed foundation still reports `authentication: not_enabled` and returns HTTP 401 from `/api/session`.
 
+The direct-Instance callback below is an alpha/test registration. The newer [public gateway decision](INSTALLER_EXPERIENCE.md) supersedes it for the final user flow; migrate it explicitly when the gateway/session contract is implemented. Do not change the current live registration merely by reimporting a future default.
+
+For the first deployment incidents, credential rotation and observed TLS acceptance, read [FIRST_INSTALL_NOTES.md](FIRST_INSTALL_NOTES.md).
+
 ## Settings
 
 Source: [pactaris-instance1.yaml](../apps/identity/blueprints/pactaris-instance1.yaml).
