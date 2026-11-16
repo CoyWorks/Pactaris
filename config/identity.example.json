@@ -1,0 +1,5 @@
+{
+  "publicOrigin": "https://identity.example.invalid",
+  "listen": { "address": "127.0.0.1", "port": 9443 },
+  "locale": { "language": "en" }
+}

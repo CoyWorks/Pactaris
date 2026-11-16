@@ -2,7 +2,9 @@
 
 A mobile-first platform for consenting-adult BDSM, SM and kink: Dom/sub and play-partner relationships, protocols, tasks, rituals, negotiated sessions, rewards/consequences and aftercare.
 
-**Status: planning.** This repository contains requirements and implementation issues, not a runnable application. Pactaris is the repository identifier; the product name remains provisional.
+**Status: foundation implementation, 0.1.0-alpha.1.** The repository now contains an executable Instance status runtime, an independently deployable Identity candidate definition, and experimental install/update/status tooling. The connected alpha is not complete and is not ready for public onboarding. Pactaris is the repository identifier; the product name remains provisional.
+
+Start with [Milestone 1](docs/MILESTONE_1.md) and [development/install instructions](docs/DEVELOPMENT.md). Sign-in, household workflows and real host/provider acceptance remain pending; this foundation does not expose household data.
 
 Obedience is the functional reference for core habits, rewards/consequences, points redemption, partner updates/chat and progress charts. See [the baseline mapping](docs/OBEDIENCE_BASELINE.md); implement original code and presentation.
 
@@ -79,4 +81,4 @@ No covert tracking, blackmail, forced participation, punitive withdrawal or devi
 
 [The app](https://consent-households.coyseinri.chatgpt.site), version 4, is a reference only. This is a new product with empty production databases; no legacy users, accounts or household content will be migrated. This documentation update does not change that Site or deploy OCI services. See the source assessment for verified behavior and gaps.
 
-Installer/updater scripts are planned but do not exist yet. Build them with the first slice, along with domain, instance, identity and entitlement contracts. Google/Apple provider setup and rights/provenance review remain implementation tasks; the proprietary licensing direction and clean start are decided.
+Installer/updater/status entry points now exist with a read-only plan default; host application remains experimental and unverified. See docs/DEVELOPMENT.md for prerequisites, refusal/recovery behavior and limitations. Google/Apple/provider login, tenant schema, full updater acceptance and complete rights review remain open. The proprietary licensing direction and clean start are decided.

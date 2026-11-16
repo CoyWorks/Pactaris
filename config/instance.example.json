@@ -1,0 +1,8 @@
+{
+  "instanceId": "00000000-0000-4000-8000-000000000001",
+  "publicOrigin": "https://instance.example.invalid",
+  "listen": { "address": "127.0.0.1", "port": 9444, "tls": { "certFile": "/etc/the-app/instance/tls.crt", "keyFile": "/etc/the-app/instance/tls.key", "caFile": "/etc/the-app/instance/ca.crt", "serverName": "instance.example.invalid" } },
+  "database": { "url": "postgresql://instance_runtime:REPLACE@127.0.0.1:5432/instance", "maxConnections": 4 },
+  "locale": { "language": "en", "format": "en-GB", "timeZone": "UTC" },
+  "worker": { "heartbeatFile": "/opt/the-app/instance/data/worker.json", "intervalSeconds": 30 }
+}

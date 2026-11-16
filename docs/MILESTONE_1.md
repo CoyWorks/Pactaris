@@ -57,3 +57,4 @@ Authentik is the initial implementation candidate, not a claimed validated produ
 Update this section and relevant issues after each checkpoint with commits, commands/results and unverified dependencies. Never record secrets, tokens or real household records.
 
 - 2026-11-16: milestone recorded; repository inspected; implementation starting. No application services deployed.
+- 2026-11-16: checkpoint A started: Node/Express Instance health/readiness/status and React status UI; English keyed messages/locale validation; independent authentik candidate Compose definition; component install/update/status planning and experimental host activation. Type checks, build, six TypeScript config/HTTP-handler tests and six Python operational tests pass locally. No real Docker/PostgreSQL/systemd/CloudPanel or provider login tests completed. Read DEVELOPMENT.md before any host application. No parent issue is marked complete.

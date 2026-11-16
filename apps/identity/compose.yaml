@@ -1,0 +1,49 @@
+# Adapted deployment shape from authentik's official Compose documentation.
+# Provider versions are pinned independently of the app's own version.
+services:
+  postgresql:
+    image: postgres:16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: ${PG_PASS:?}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik -d authentik"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  server:
+    image: ghcr.io/goauthentik/server:2026.8.5@sha256:602227a86455d6772e3d16b7d852713c4f864f40df5df894abd1285bb53979a5
+    command: server
+    restart: unless-stopped
+    environment: &provider
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?}
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS:?}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    ports:
+      - "${BIND_ADDRESS:?}:${HTTPS_PORT:?}:9443"
+    volumes:
+      - media:/data
+  worker:
+    image: ghcr.io/goauthentik/server:2026.8.5@sha256:602227a86455d6772e3d16b7d852713c4f864f40df5df894abd1285bb53979a5
+    command: worker
+    restart: unless-stopped
+    environment: *provider
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    volumes:
+      - media:/data
+# No Docker socket mount; this app does not require automatic outpost deployment.
+volumes:
+  database:
+  media:
