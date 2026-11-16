@@ -2,6 +2,27 @@
 
 Status: architecture proposal, 16 November 2026. Requirements: independent app instances, each with its own hosting, database, files, worker and lifecycle; multiple isolated households per instance. This is infrastructure for the public hosted product, not a return to public self-hosted editions.
 
+## Identity and Instance are separate applications
+
+Identity and Instance must each be installable, deployable, updatable and movable without installing the other application or CloudPanel. A shared repository/library is allowed; mandatory shared runtime, config files, database, migration lock or release pointer is not. Keep identity data and tenant data separate, and use OIDC over verified network contracts.
+
+Initial example, not a live configuration:
+
+| Public origin (HTTPS 443) | Backend as resolved from the proxy | Purpose |
+| --- | --- | --- |
+| panel.coyseinri.nl | https://127.0.0.1:8443 | Existing CloudPanel admin |
+| identity.coyworks.nl | https://127.0.0.1:9443 | Identity application |
+| instance1.coyworks.nl | https://127.0.0.1:9444 | Local Instance application |
+| instance2.coyworks.nl | https://instance2.coyworks.nl:9444, with internal DNS resolving to the remote private host | Remote Instance application |
+
+9443 and 9444 are configurable default HTTPS ingress ports, checked for conflicts. Every instance uses the same application/default port on its own host. Multiple instances on one host need distinct endpoints/paths. 8443 belongs to existing CloudPanel administration and is not reused by Identity/Instance.
+
+The instance2 upstream hostname must resolve from the proxy to the actual private backend, not back to the public proxy. Use split DNS or a distinct internal backend name/private IP. Keep public origin, backend target, listen interface/port and verified TLS server name as separate settings.
+
+Verify backend TLS against the configured trusted identity. A hostname certificate does not automatically cover 127.0.0.1: configure an explicit trusted TLS name/SNI or a certificate with the correct IP SAN. Do not disable backend certificate validation. No ports, domains or private addresses are hardcoded into feature logic.
+
+Adding another proxy or moving Identity/Instance to separate hosts must work through configuration while preserving the public origins/issuer. Changing the public OIDC issuer itself requires controlled trust/session migration, not just swapping an internal address. CloudPanel is external ingress; neither application requires it locally.
+
 ## Control and data planes
 
 ```mermaid
@@ -31,7 +52,7 @@ The manager may host identity/billing modules initially, but keep their privileg
 
 Record a stable instance ID, authenticated endpoint, region, supported CPU/OS/runtime, installed application/schema version, protocol compatibility, capacity/usage, health, backup freshness and lifecycle state. Give each instance separate runtime/database/storage/agent credentials and backup ownership.
 
-A server is initially one instance; preserve IDs/interfaces so separate physical/virtual hosts can be added. Co-locating manager and first instance is possible with separate services, secrets and databases, but gives no hardware or root-compromise isolation. Do not claim HA from multiple tenant databases or backup jobs.
+A server may initially host Identity and the main Instance as separate installations; each Instance has its own stable ID and lifecycle. Preserve IDs/interfaces when moving components to separate physical/virtual hosts. Co-locating manager and first instance is possible with separate services, secrets and databases, but gives no hardware or root-compromise isolation. Do not claim HA from multiple tenant databases or backup jobs.
 
 Use existing OCI/CloudPanel infrastructure first. Each instance has a defined application origin/hosting boundary and its own database/storage. CloudPanel can terminate TLS and proxy to its app; database ports stay private. If proxy and app are on different hosts, use authenticated/protected private connectivity instead of assuming loopback. Do not install a second public listener over CloudPanel's ports.
 
@@ -105,3 +126,7 @@ The initial central identity service must support Google, Apple and local verifi
 Central CloudPanel is the public proxy for local main/identity services and private-LAN instances. Internal servers need no CloudPanel. Use systemd and isolated databases/credentials; verified TLS and restricted proxy sources on the LAN. Public proxy failure and manager failure are distinct operational conditions.
 
 #56 is M0: ship GitHub-based install.sh/update.sh/status.sh with the first working slice, including a minimum registered-instance/status path. See [INSTALL_UPDATE.md](INSTALL_UPDATE.md). Preserve a second pinned-version update in the initial acceptance demo. Advanced manager-driven canary/drain/retirement (#59) follows the same safe updater contract. Support read-only source access after the repository becomes private. No script exists yet in this planning-only repository.
+
+## Independent component releases
+
+An Identity update never implicitly migrates/restarts an Instance, or vice versa. Keep component artifacts, service identities, configuration, secret stores, data migrations, locks and rollback checkpoints independent. Validate supported OIDC/manager contract versions when selecting a release. Manager is an independently configured service endpoint with its own operations boundary; do not assume it lives in localhost or either application database. See #3/#55/#56/#58/#59/#62.
