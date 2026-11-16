@@ -1,0 +1,32 @@
+# First six P0 delivery blocks
+
+Approved execution order for a closed alpha with a small invited test group. Tracking: #68. This plan does not declare the broader parent issues complete.
+
+The alpha goal is sign in, create a private dynamic, invite a partner, explicitly agree on relationships/scope, perform a task, pause/stop and leave. These six P0 blocks establish participation, permission and safety before task execution. Tasks/dashboard/PWA and the release operations/privacy gates remain separate required alpha work.
+
+| Order | Issues | Deliverable | Current state |
+| --- | --- | --- | --- |
+| 1 | #70 | Membership identity/history; delayed command, receipt and hint fencing | Implemented in 0.3.2-alpha.1; CI and rollout evidence recorded in #70 |
+| 2 | #8, #53 | Explicit invitation create/preview/accept/decline/revoke; verified recipient and atomic member reservations | Next implementation block |
+| 3 | #26 | Immediate departure/removal, voluntary ownership transfer and lifecycle/privacy cleanup | Self-leave exists; remaining scope queued after invitations |
+| 4 | #35, #9 | Explicit accepted relationship graph and contextual roles; resource authorization separate from labels | Schema/permission foundations exist; APIs/UI queued |
+| 5 | #10, #11 | Exact-version individual consent, limits, revocation and authoritative pause/stop | Queued; required before protected task/protocol execution |
+| 6 | #6, #7, #24 | Verified registration/recovery, MFA/session controls and transactional delivery; real Google/Apple/local acceptance | OIDC/session/email assertion foundations exist; provider/operational acceptance remains |
+
+## Small delivery steps
+
+Each block is split into reviewed migrations/domain operations, public API/mobile forms and failure/authorization acceptance. Publish working checkpoints with evidence; do not close a broad issue because a schema or a fixture exists. New system prose goes through English catalogs; user-authored names remain database content.
+
+For invitation work, start with recipient proof tied to the accepting session. The cached verified-email account column from #69 alone must never authorize joining. Requesting an email scope or hardcoding a verification claim is not verification. Then add participant invitations and capacity reservations in the Instance transaction, strict private command purposes, explicit preview/accept/decline/revoke, and durable central hint recovery. No GET/login autoacceptance, hidden Instance URL, inherited relationship consent or implicit technical ownership. Invite delivery must use configured transactional infrastructure, not a developer's personal email connection.
+
+For ownership, use an explicit recipient offer/acceptance rather than silently assigning another member the owner role. The last owner can still leave; ownerless groups pause and final departure closes the dynamic. Removal and departure must fence pending invitations, jobs, grants and future notifications.
+
+For relationships and consent, exercise a pair, a four-person Dom/Dom/sub/sub group and someone who is Dom to one member and sub/bottom to another. Consent is individual and version-bound. Neither payment, technical administration nor a role label supplies consent.
+
+The account block retains the maintained IdP as credential/MFA/recovery handler. Changes must preserve the current issuer, client, flows, Brand/web certificate and accounts. Actual Google/Apple developer registrations, mail delivery and real-device MFA/recovery need configured provider access and live acceptance; signed fixtures are not that evidence.
+
+## Release gates and scope limits
+
+Across all blocks: #5/#12/#13/#31/#62 authorization/isolation/concurrency and outage tests; #44 translations; #28/#29/#30/#56 preserving deployment, encrypted off-host backups, isolated restore and alerts; #32/#33/#50 minimum privacy/incident/rights review. The complete minimal-input installer and remote fleet enrollment remain independent tracked work, not silently claimed by a passing update.
+
+Invite-only pilot acceptance is #34. Real operator/mobile/provider evidence must be distinguished from repository CI. A source update does not deploy the server, send mail, enroll a remote host or accept consent.

@@ -64,3 +64,8 @@ This does not enable invitation acceptance. [#70](https://github.com/CoyWorks/Pa
 Real PostgreSQL checks must cover two independent stores, pair/four-person membership, wrong account/household/Instance, changed/expired/revoked invitations, simultaneous accept/revoke, crash after local commit, stale hints, owner transfer/closure and immediate leave. Browser checks must show one public app origin, truthful offline/error states and no private endpoint disclosure. Real IdP branding/MFA/recovery and operator rollout remain separate acceptance evidence.
 
 Billing, task execution, uploads, public onboarding, automatic remote fleet enrollment and the complete minimal-input installer are not implied by this milestone. Broad parent issues stay open until their full acceptance criteria pass.
+
+
+## Membership identity checkpoint — 0.3.2-alpha.1
+
+#70 now binds command receipts, private self-leave and central operation/hint finalization to the exact membership UUID. Historical records are retained; reactivation is rejected and only one current membership is allowed. Tests use synthetic rejoin to prove old roles/consent and delayed commands cannot affect the new membership. Public invitation/rejoin is still the next #8/#53 block. See [MEMBERSHIP_LIFECYCLE.md](MEMBERSHIP_LIFECYCLE.md) and the approved [first six P0 blocks](ALPHA_P0.md).

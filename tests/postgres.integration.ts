@@ -204,6 +204,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await a.owner.query("SELECT count(*)::int AS count FROM pactaris.memberships WHERE household_id=$1 AND account_id=$2 AND status='active' AND technical_role='owner'",[created,account.id])).rows[0].count,1);
   assert.equal((await a.pool.query('SELECT pactaris.command_executor() AS privileged')).rows[0].privileged,false);
   await assert.rejects(backupPool.query('SELECT pactaris.create_household_command($1,$2,$3,$4,$5,$6)',[randomUUID(),ids[0],account.id,randomUUID(),'Forbidden backup write','a'.repeat(64)]));
+  await assert.rejects(backupPool.query('SELECT pactaris.leave_household_command($1,$2,$3,$4,$5,$6)',[created,ids[0],account.id,randomUUID(),'a'.repeat(64),replies[0]!.membershipId]));
   for(const table of ['household_command_receipts','household_outbox','audit_events'])await assert.rejects(a.pool.query(`DELETE FROM pactaris.${table}`));
   await assert.rejects(commands.execute(account.id,destination,'create',operation,'Changed request'),{kind:'conflict'});
   await assert.rejects(commands.execute(other.id,destination,'create',operation,name),{kind:'conflict'});
@@ -325,6 +326,21 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const newLeave=await onboardingStore.reserveLeave(fenceActor.id,fenceCreate.householdId,randomUUID());assert.equal(newLeave.membershipId,newMember);
   await assert.rejects(commands.execute(fenceActor.id,fencePlacement,'leave',oldLeave.operationId,undefined,newMember),{kind:'conflict'});
   assert.equal((await onboarding.leave(fenceActor.id,fenceCreate.householdId,newLeave.operationId)).status,'complete');
+  // Response loss before the very first central creation acknowledgement:
+  // an old successful response cannot overwrite a newer published hint.
+  const late=await onboardingStore.reserveCreate(fenceActor.id,randomUUID(),'Late creation fixture');
+  const oldAck=await commands.execute(fenceActor.id,late,'create',late.operationId,'Late creation fixture');
+  const lateDb=late.instanceId===ids[0]?a:b;
+  await lateDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role) VALUES($1,$2,$3,'active','owner')",[late.householdId,randomUUID(),other.id]);
+  await commands.execute(fenceActor.id,late,'leave',randomUUID(),undefined,oldAck.membershipId);
+  const latestMember=randomUUID();
+  await lateDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[late.householdId,latestMember,fenceActor.id]);
+  await gatewayDb.owner.query('INSERT INTO pactaris.placements(household_id,instance_id,version) VALUES($1,$2,$3)',[late.householdId,late.instanceId,late.version]);
+  await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[fenceActor.id,late.householdId,latestMember]);
+  await assert.rejects(onboardingStore.finish(late,oldAck),{kind:'conflict'});
+  const closedReceipt=await commands.execute(fenceActor.id,late,'receipt',late.operationId);
+  assert.equal(closedReceipt.status,'left');assert.equal((await onboardingStore.finish(late,closedReceipt)).status,'released');
+  assert.equal((await gatewayDb.pool.query('SELECT membership_id FROM pactaris.account_households WHERE account_id=$1 AND household_id=$2',[fenceActor.id,late.householdId])).rows[0].membership_id,latestMember);
   // Separate concurrent creation IDs are budgeted under the same account lock.
   const racer=await store.account('https://idp.fixture.invalid/','registration-racer','Racer fixture');await store.createSession('s'.repeat(43),racer,'registration-csrf',60,120);
   const races=await Promise.all(Array.from({length:4},()=>api('/api/households','POST',{operationId:randomUUID(),name:'Race fixture'},'s'.repeat(43))));
