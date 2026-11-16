@@ -41,3 +41,7 @@ Read [DOMAIN_MODEL.md](DOMAIN_MODEL.md), [INTERNATIONALIZATION.md](INTERNATIONAL
 ## Explicit deployment contract
 
 Identity and Instance are separately installable/updatable applications, not one central bundle. CloudPanel/proxy, Identity, manager and Instance may be hosted separately later without code changes. Defaults: CloudPanel administration 8443 (existing), Identity HTTPS 9443, every Instance HTTPS 9444. Ports, listen address, public origin and backend/TLS identity are configuration. Remote instance2 upstream resolution must use the private backend, not public proxy IP. See [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for the user's example map and verification requirements. These are planning defaults, not configured services.
+
+## Domain decision
+
+All domains/subdomains and per-service origins are configurable. Start on coyworks.nl; a future unrelated domain such as pactaris.app is possible but not selected/verified. No code assumes a fixed suffix or shared parent domain. Public-origin/issuer migration, unlike backend relocation, requires a tested identity/session/PWA/push/link cutover plan; see docs/INFRASTRUCTURE.md and #58/#62. No live domain/DNS changes are performed during planning.
