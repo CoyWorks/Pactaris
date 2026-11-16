@@ -11,6 +11,7 @@ export class InstanceCommands {
   private verifier:CommandVerifier;
   constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new CommandVerifier(config);}
   async execute(token:string,householdId:string,action:HouseholdAction,body:Buffer):Promise<CommandResult> {
+    if(!['create','leave','receipt'].includes(action))throw new CommandError('invalid');
     const verified=await this.verifier.verify(token,householdId,action,body);
     let input:Record<string,unknown>;
     try {

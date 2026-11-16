@@ -9,6 +9,10 @@ import { uuid } from '../../packages/auth/delegation.js';
 import { createTranslator,type MessageKey } from '../../packages/i18n/index.js';
 import { headers, frontend, errors } from '../../packages/http/index.js';
 import manifest from '../../package.json' with {type:'json'};
+import { InvitationError } from '../instance/invitations.js';
+import type { GatewayInvitations } from './invitations.js';
+import { randomUUID } from 'node:crypto';
+import { normalizeEmail } from '../../packages/auth/email.js';
 import { OnboardingError,type OnboardingService } from './onboarding.js';
 const token=()=>randomBytes(32).toString('base64url');
 const LOGIN='__Host-pactaris-login',SESSION='__Host-pactaris-session';
@@ -20,7 +24,7 @@ export function cookie(req:express.Request,name:string):string|undefined {
 function setCookie(res:express.Response,name:string,value:string,seconds:number) {
   res.append('Set-Cookie',`${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${seconds}`);
 }
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -55,7 +59,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     try {
       const identity=await oidc.finish(url,attempt),account=await store.account(identity.issuer,identity.subject,identity.name,identity.verifiedEmail);
       const previous=cookie(req,SESSION);if(previous)await store.logout(previous);
-      const sessionToken=token();await store.createSession(sessionToken,account,token(),config.session.idleSeconds,config.session.absoluteSeconds);
+      const sessionToken=token();await store.createSession(sessionToken,account,token(),config.session.idleSeconds,config.session.absoluteSeconds,identity.verifiedEmail);
       setCookie(res,SESSION,sessionToken,config.session.absoluteSeconds);res.redirect(303,'/');
     }catch{loginFailure(req,res,400,'login_failed','errors.loginFailed');}
   });
@@ -128,6 +132,46 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       res.json({id:summary.id,name:summary.name});
     }catch{res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});}
   });
+
+  function inviteFailure(res:express.Response,error:unknown){
+    const kind=error instanceof InvitationError?error.kind:'unavailable';
+    const statuses={invalid:400,denied:404,conflict:409,capacity:409,proof:403,unavailable:503};
+    res.status(statuses[kind]).json({code:'invite_'+kind,messageKey:('invitations.'+kind) as MessageKey});
+  }
+  app.use('/api/invitations',express.json({limit:4096,strict:true,inflate:false}));
+  app.get('/api/households/:householdId/invitations',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!uuid(req.params.householdId)){inviteFailure(res,new InvitationError('invalid'));return;}
+    try{if(!invitations)throw new InvitationError('unavailable');res.json(await invitations.list(session.account.id,req.params.householdId));}catch(error){inviteFailure(res,error);}
+  });
+  app.post('/api/households/:householdId/invitations',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    const body=req.body;
+    if(!uuid(req.params.householdId)||!body||Object.keys(body).sort().join(',')!=='email,operationId,token'||!uuid(body.operationId)||
+      typeof body.token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(body.token)||!normalizeEmail(body.email)){inviteFailure(res,new InvitationError('invalid'));return;}
+    if(!await store.throttle('invite:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+    try{if(!invitations)throw new InvitationError('unavailable');res.status(201).json(await invitations.create(session.account.id,req.params.householdId,body.operationId,body.token,body.email));}catch(error){inviteFailure(res,error);}
+  });
+  app.post('/api/households/:householdId/invitations/:invitationId/revoke',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    const body=req.body;
+    if(!uuid(req.params.householdId)||!uuid(req.params.invitationId)||!body||Object.keys(body).join(',')!=='operationId'||!uuid(body.operationId)){inviteFailure(res,new InvitationError('invalid'));return;}
+    try{if(!invitations)throw new InvitationError('unavailable');res.json(await invitations.revoke(session.account.id,req.params.householdId,req.params.invitationId,body.operationId));}catch(error){inviteFailure(res,error);}
+  });
+  app.post('/api/invitations/:invitationId/:action',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    const action=req.params.action,body=req.body,expected=action==='preview'?'token':action==='accept'?'operationId,termsVersion,token':'operationId,token';
+    if(!uuid(req.params.invitationId)||!['preview','accept','decline'].includes(action)||!body||Object.keys(body).sort().join(',')!==expected||
+      typeof body.token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(body.token)||(action!=='preview'&&!uuid(body.operationId))||
+      (action==='accept'&&(typeof body.termsVersion!=='string'||!/^[1-9][0-9]{0,15}$/.test(body.termsVersion)))){inviteFailure(res,new InvitationError('invalid'));return;}
+    if(!await store.throttle('invite:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+    try{if(!invitations)throw new InvitationError('unavailable');
+      res.json(await invitations.respond(session.account.id,cookie(req,SESSION)!,req.params.invitationId,action==='preview'?'invitePreview':action==='accept'?'inviteAccept':'inviteDecline',body.token,action==='preview'?randomUUID():body.operationId,body.termsVersion));
+    }catch(error){inviteFailure(res,error);}
+  });
   app.use('/api',(_req,res)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});});
-  frontend(app,webRoot,['/','/households/:householdId']);errors(app);return app;
+  frontend(app,webRoot,['/','/households/:householdId','/join']);errors(app);return app;
 }

@@ -34,7 +34,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    // runtimes must still read legacy accounts/sessions after this additive step.
    const previous=join(folder,'previous-gateway');await mkdir(join(previous,'deploy'),{recursive:true});
    const manifest=JSON.parse(await readFile('deploy/release.json','utf8'));
-   manifest.migrations=manifest.migrations.filter((m:{component:string;id:string})=>m.component!=='gateway'||!['0004_verified_email','0005_membership_fencing'].includes(m.id));
+   manifest.migrations=manifest.migrations.filter((m:{component:string;id:string})=>m.component!=='gateway'||m.id<'0004');
    await writeFile(join(previous,'deploy/release.json'),JSON.stringify(manifest));
    await cp('migrations',join(previous,'migrations'),{recursive:true});
    await migrate(migrator,previous,kind,runtime,backup);
@@ -44,7 +44,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   if(kind==='instance') {
    const previous=join(folder,'previous-'+name);await mkdir(join(previous,'deploy'),{recursive:true});
    const manifest=JSON.parse(await readFile('deploy/release.json','utf8'));
-   manifest.migrations=manifest.migrations.filter((m:{component:string;id:string})=>m.component!=='instance'||m.id!=='0004_membership_fencing');
+   manifest.migrations=manifest.migrations.filter((m:{component:string;id:string})=>m.component!=='instance'||m.id<'0004');
    await writeFile(join(previous,'deploy/release.json'),JSON.stringify(manifest));await cp('migrations',join(previous,'migrations'),{recursive:true});
    await migrate(migrator,previous,kind,runtime,backup);
    await pool.query('SELECT pactaris.create_household_command($1,$2,$3,$4,$5,$6)',[

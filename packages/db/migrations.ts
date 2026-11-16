@@ -51,6 +51,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
         await connection.query(`GRANT DELETE ON pactaris.account_households TO ${role}`);
       }
       if(entries.some(m=>m.id==='0005_membership_fencing'))await connection.query(`GRANT UPDATE(membership_id) ON pactaris.account_households TO ${role}`);
+      if(entries.some(m=>m.id==='0006_invitations'))await connection.query(`GRANT SELECT,INSERT,UPDATE ON pactaris.invitation_routes,pactaris.invitation_acceptances TO ${role}`);
     } else {
       await connection.query(`GRANT SELECT ON pactaris.households,pactaris.memberships,pactaris.household_entitlements TO ${role}`);
       await connection.query(`GRANT SELECT,INSERT,DELETE ON pactaris.delegation_uses TO ${role}`);
@@ -58,6 +59,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
         await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.create_household_command(uuid,uuid,uuid,uuid,text,text),pactaris.leave_household_command(uuid,uuid,uuid,uuid,text) TO ${role}`);
       }
       if(entries.some(m=>m.id==='0004_membership_fencing'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.leave_household_command(uuid,uuid,uuid,uuid,text,uuid) TO ${role}`);
+      if(entries.some(m=>m.id==='0005_invitations'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.invitation_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0003_receipt'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.household_receipt_command(uuid,uuid,uuid,uuid) TO ${role}`);
     }
     await connection.query(`GRANT USAGE ON SCHEMA pactaris,pactaris_meta TO "${backupRole}"`);

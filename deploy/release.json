@@ -1,5 +1,5 @@
 {
-  "version": "0.3.2-alpha.1",
+  "version": "0.4.0-alpha.1",
   "protocol": 2,
   "migrations": [
     {
@@ -63,6 +63,20 @@
       "id": "0004_membership_fencing",
       "path": "migrations/instance/0004_membership_fencing.sql",
       "sha256": "281a2cf6694b681689bfb52b92dfec0d665d38d7860375bcd94a96957aa00a37",
+      "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0006_invitations",
+      "path": "migrations/gateway/0006_invitations.sql",
+      "sha256": "f98f5f755fe139eab1ffb095b27b58791aaedfdd4d749699f530b94dd4a8d0bb",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0005_invitations",
+      "path": "migrations/instance/0005_invitations.sql",
+      "sha256": "ad6cc6448ad0ab21343883f2295eb02ac509c123c0a1c7cf4cf257a45315400a",
       "backwardCompatible": true
     }
   ]

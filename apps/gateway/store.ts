@@ -12,7 +12,7 @@ export interface GatewayStore {
   beginLogin(cookie:string, attempt:LoginAttempt):Promise<void>;
   consumeLogin(cookie:string,state:string):Promise<LoginAttempt|undefined>;
   account(issuer:string,subject:string,name:string,verifiedEmail?:string):Promise<Account>;
-  createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number):Promise<void>;
+  createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number,verifiedEmail?:string):Promise<void>;
   session(token:string,idle:number):Promise<Session|undefined>;
   logout(token:string):Promise<void>;
   placements(accountId:string,after?:string):Promise<Placement[]>;
@@ -44,9 +44,9 @@ export class PgGatewayStore implements GatewayStore {
     if(r.rows[0]?.status!=='active')throw Error('authentication.suspended');
     return {id:r.rows[0].id,displayName:r.rows[0].display_name};
   }
-  async createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number) {
-    await this.pool.query(`INSERT INTO pactaris.sessions(token_hash,account_id,csrf_token,expires_at,idle_expires_at)
-      VALUES($1,$2,$3,now()+$4*interval '1 second',now()+$5*interval '1 second')`,[hash(token),account.id,csrfToken,absolute,idle]);
+  async createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number,verifiedEmail?:string) {
+    await this.pool.query(`INSERT INTO pactaris.sessions(token_hash,account_id,csrf_token,expires_at,idle_expires_at,recipient_email,recipient_asserted_at)
+      VALUES($1,$2,$3,now()+$4*interval '1 second',now()+$5*interval '1 second',$6,CASE WHEN $6::text IS NULL THEN NULL ELSE statement_timestamp() END)`,[hash(token),account.id,csrfToken,absolute,idle,normalizeEmail(verifiedEmail)??null]);
   }
   async session(token:string,idle:number) {
     const r=await this.pool.query(`UPDATE pactaris.sessions s SET idle_expires_at=LEAST(s.expires_at,now()+$2*interval '1 second')

@@ -2,12 +2,13 @@ import express from 'express';
 import { join } from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 import type { InstanceConfig } from '../../packages/config/index.js';
-import { uuid, DelegationError,commandPath } from '../../packages/auth/delegation.js';
+import { uuid, DelegationError,commandPath,isHouseholdAction,type InvitationAction } from '../../packages/auth/delegation.js';
 import type { InstanceHouseholds } from './households.js';
+import { InvitationError } from './invitations.js';
 import { CommandError } from './commands.js';
 import manifest from '../../package.json' with { type: 'json' };
 
-export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web'), households?: Pick<InstanceHouseholds,'summary'> & Partial<Pick<InstanceHouseholds,'command'>>) {
+export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web'), households?: Pick<InstanceHouseholds,'summary'> & Partial<Pick<InstanceHouseholds,'command'|'invitation'>>) {
   const app = express();
   app.disable('x-powered-by');
   // Identity always comes from the future verified OIDC session, never proxy identity headers.
@@ -28,11 +29,15 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
   });
   app.post('/internal/households/:householdId/commands/:action',express.raw({type:'application/json',limit:4096,inflate:false}),async(req,res)=>{
     const id=req.params.householdId,action=req.params.action,authorization=req.get('authorization');
-    if(!config.delegation||!households?.command||!uuid(id)||(action!=='create'&&action!=='leave'&&action!=='receipt')||req.originalUrl!==commandPath(id,action)||!authorization?.startsWith('Bearer ')||!Buffer.isBuffer(req.body)){
+    if(!config.delegation||!households?.command||!uuid(id)||!isHouseholdAction(action)||req.originalUrl!==commandPath(id,action)||!authorization?.startsWith('Bearer ')||!Buffer.isBuffer(req.body)){
       res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;
     }
-    try{res.json(await households.command(authorization.slice(7),id,action,req.body));}
+    try{
+      if(action.startsWith('invite')){if(!households.invitation)throw new InvitationError('unavailable');res.json(await households.invitation(authorization.slice(7),id,action as InvitationAction,req.body));}
+      else res.json(await households.command(authorization.slice(7),id,action,req.body));
+    }
     catch(error){
+      if(error instanceof InvitationError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:409).json({code:'invite_'+error.kind,messageKey:'invitations.'+error.kind});return;}
       if(error instanceof DelegationError||(error instanceof CommandError&&error.code==='denied'))res.status(403).json({code:'request_denied',messageKey:'errors.request'});
       else if(error instanceof CommandError)res.status(error.code==='conflict'?409:400).json({code:'command_'+error.code,messageKey:error.code==='conflict'?'errors.commandConflict':'errors.request'});
       else res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});

@@ -12,7 +12,7 @@ export function privateAddress(address:string):boolean {
 }
 export type HouseholdSummary={id:string;name:string;membershipId?:string};
 export interface HouseholdClient { summary(accountId:string,placement:Placement):Promise<HouseholdSummary|undefined>; }
-async function privateResponse(placement:Placement,path:string,token:string,body?:string):Promise<{status:number;data:unknown}> {
+export async function privateResponse(placement:Placement,path:string,token:string,body?:string):Promise<{status:number;data:unknown}> {
   const endpoint=new URL(placement.endpoint);
   if(endpoint.protocol!=='https:'||endpoint.username||endpoint.password||endpoint.search||endpoint.hash||endpoint.pathname!=='/'||!placement.tlsServerName)throw Error('routing.endpoint');
   const host=endpoint.hostname.replace(/^\[|\]$/g,'');
@@ -68,4 +68,26 @@ export class PrivateCommandClient {
       return {householdId:result.householdId,operationId:result.operationId,status:result.status,...(result.membershipId?{membershipId:result.membershipId}:{})};
     }catch(error){if(error instanceof CommandDeliveryError)throw error;throw new CommandDeliveryError('unavailable');}
   }
+}
+
+export class PrivateInvitationClient {
+ constructor(private signer:DelegationSigner){}
+ async execute(accountId:string,placement:Placement,action:import('../auth/delegation.js').InvitationAction,input:Record<string,unknown>):Promise<import('../../apps/instance/invitations.js').InvitationResult>{
+  const {InvitationError}=await import('../../apps/instance/invitations.js');
+  try{
+   if(!uuid(input.operationId))throw new InvitationError('invalid');
+   const body=JSON.stringify(input),token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body);
+   const response=await privateResponse(placement,commandPath(placement.householdId,action),token,body);
+   if(response.status===403||response.status===404)throw new InvitationError('denied');
+   if(response.status===400)throw new InvitationError('invalid');
+   if(response.status===409){const code=(response.data as {code?:string})?.code;throw new InvitationError(code==='invite_capacity'?'capacity':'conflict');}
+   const result=response.data as import('../../apps/instance/invitations.js').InvitationResult;
+   if(response.status!==200||!result||result.householdId!==placement.householdId||result.operationId!==input.operationId||
+     !['pending','preview','accepted','declined','revoked','listed','missing','left'].includes(result.status)||
+     (result.membershipId!==undefined&&!uuid(result.membershipId))||
+     (result.invitationId!==undefined&&result.invitationId!==input.invitationId)||
+     (result.status==='accepted'&&!uuid(result.membershipId)))throw Error('routing.response');
+   return result;
+  }catch(error){if(error instanceof InvitationError)throw error;throw new InvitationError('unavailable');}
+ }
 }
