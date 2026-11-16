@@ -20,6 +20,6 @@ test('bad URLs, pool limits, locales and timezone fail without exposing secrets'
   }
 });
 test('English fallback catalog and locale formatting do not rewrite user content', () => {
-  assert.equal(t('app.title'), 'The app'); assert.match(t('errors.config', { field: 'listen.port' }), /listen.port/);
+  assert.equal(t('app.title'), 'Pactaris'); assert.match(t('errors.config', { field: 'listen.port' }), /listen.port/);
   assert.notEqual(formatTime(new Date('2026-11-16T08:00:00Z'), 'en-GB', 'UTC'), formatTime(new Date('2026-11-16T08:00:00Z'), 'en-GB', 'Europe/Amsterdam'));
 });

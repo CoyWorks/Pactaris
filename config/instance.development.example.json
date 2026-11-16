@@ -4,5 +4,5 @@
   "listen": { "address": "127.0.0.1", "port": 9444 },
   "database": { "url": "postgresql://instance_runtime:REPLACE@127.0.0.1:5432/instance", "maxConnections": 2 },
   "locale": { "language": "en", "format": "en-GB", "timeZone": "UTC" },
-  "worker": { "heartbeatFile": "/tmp/the-app-development/worker.json", "intervalSeconds": 30 }
+  "worker": { "heartbeatFile": "/tmp/pactaris-development/worker.json", "intervalSeconds": 30 }
 }

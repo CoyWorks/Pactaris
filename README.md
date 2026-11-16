@@ -1,4 +1,6 @@
-# The app
+# Pactaris
+
+Fresh-server installation commands, including apt dependencies: [FRESH_SERVER.md](docs/FRESH_SERVER.md).
 
 A mobile-first platform for consenting-adult BDSM, SM and kink: Dom/sub and play-partner relationships, protocols, tasks, rituals, negotiated sessions, rewards/consequences and aftercare.
 
@@ -79,6 +81,6 @@ No covert tracking, blackmail, forced participation, punitive withdrawal or devi
 
 ## Existing prototype and development
 
-[The app](https://consent-households.coyseinri.chatgpt.site), version 4, is a reference only. This is a new product with empty production databases; no legacy users, accounts or household content will be migrated. This documentation update does not change that Site or deploy OCI services. See the source assessment for verified behavior and gaps.
+[Pactaris](https://consent-households.coyseinri.chatgpt.site), version 4, is a reference only. This is a new product with empty production databases; no legacy users, accounts or household content will be migrated. This documentation update does not change that Site or deploy OCI services. See the source assessment for verified behavior and gaps.
 
 Installer/updater/status entry points now exist with a read-only plan default; host application remains experimental and unverified. See docs/DEVELOPMENT.md for prerequisites, refusal/recovery behavior and limitations. Google/Apple/provider login, tenant schema, full updater acceptance and complete rights review remain open. The proprietary licensing direction and clean start are decided.

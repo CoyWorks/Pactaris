@@ -1,6 +1,6 @@
 # Build order and release gates
 
-The app is BDSM/SM/kink-first. Use issue scopes and dependencies; phases describe roadmap groups, not existing GitHub milestone objects.
+Pactaris is BDSM/SM/kink-first. Use issue scopes and dependencies; phases describe roadmap groups, not existing GitHub milestone objects.
 
 ## M0 — Domain and hosting foundation
 

@@ -16,7 +16,7 @@ Keep the existing visual interaction patterns, not the Cloudflare hosting archit
 
 ## Required product and infrastructure boundary
 
-The app is BDSM/SM/kink-first. Multiple relationship-scoped Dom/sub/top/bottom/switch roles and overlapping romantic links belong in M0 (#35), not a later optional enhancement. See [DOMAIN_MODEL.md](DOMAIN_MODEL.md).
+Pactaris is BDSM/SM/kink-first. Multiple relationship-scoped Dom/sub/top/bottom/switch roles and overlapping romantic links belong in M0 (#35), not a later optional enhancement. See [DOMAIN_MODEL.md](DOMAIN_MODEL.md).
 
 One logical hosted product spans independent operator-managed instances. Each owns its hosting, PostgreSQL, files, workers and backups and hosts multiple isolated households. A separate manager owns minimal registry/placement/health/lifecycle metadata and integrates platform identity and versioned entitlements. It does not own a shared tenant-content database. See [INFRASTRUCTURE.md](INFRASTRUCTURE.md), #55 and #58.
 

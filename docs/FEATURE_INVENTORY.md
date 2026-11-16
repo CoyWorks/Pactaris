@@ -1,6 +1,6 @@
 # Feature inventory
 
-65 proposed work items plus [tracker #51](https://github.com/CoyWorks/Pactaris/issues/51); none is implied implemented. The app centers consenting-adult BDSM/SM/kink and overlapping relationships. Obedience is functional inspiration; see [baseline mapping](OBEDIENCE_BASELINE.md).
+65 proposed work items plus [tracker #51](https://github.com/CoyWorks/Pactaris/issues/51); none is implied implemented. Pactaris centers consenting-adult BDSM/SM/kink and overlapping relationships. Obedience is functional inspiration; see [baseline mapping](OBEDIENCE_BASELINE.md).
 
 | Phase | Count |
 | --- | ---: |

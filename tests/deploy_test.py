@@ -68,9 +68,9 @@ class DeploymentTests(unittest.TestCase):
             self.assertTrue(second.exists())
 
     def test_service_units_do_not_execute_a_shell_or_share_component_configuration(self):
-        unit = deploy.render_unit(Path('/opt/the-app/instance'), '/usr/bin/node')
-        worker = deploy.render_unit(Path('/opt/the-app/instance'), '/usr/bin/node', worker=True)
-        self.assertIn('User=cwa-instance-', unit)
+        unit = deploy.render_unit(Path('/opt/pactaris/instance'), '/usr/bin/node')
+        worker = deploy.render_unit(Path('/opt/pactaris/instance'), '/usr/bin/node', worker=True)
+        self.assertIn('User=pactaris-instance-', unit)
         self.assertIn('ProtectSystem=strict', unit)
         self.assertNotIn('/bin/sh', unit)
         self.assertIn('apps/instance/worker.js', worker)

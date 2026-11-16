@@ -35,11 +35,13 @@ The page is at the configured origin. Without PostgreSQL it remains live but rea
 Use a full operator-approved 40-character GitHub commit SHA, not a mutable branch. `REVISION` below must be set to the intended commit. Config examples are documentation data; replace example origins, credentials, IDs and TLS paths before application.
 
 ```bash
-bash install.sh --component identity --root /opt/the-app --config /secure/identity.json --revision "$REVISION"
-bash install.sh --component instance --root /opt/the-app --config /secure/instance.json --revision "$REVISION"
+bash install.sh --component identity --root /opt/pactaris --config /secure/identity.json --revision "$REVISION"
+bash install.sh --component instance --root /opt/pactaris --config /secure/instance.json --revision "$REVISION"
 ```
 
-Without `--apply`, these only validate basic configuration and print a redacted plan; they do not create directories or run service commands. Identity and Instance use separate `/opt/the-app/<component>` state. Paths used in systemd must contain only the supported simple absolute path characters; the apply root and ancestors must be root-owned and not group/world-writable or symlinked.
+Without `--apply`, these only validate basic configuration and print a redacted plan; they do not create directories or run service commands. Identity and Instance use separate `/opt/pactaris/<component>` state. Paths used in systemd must contain only the supported simple absolute path characters; the apply root and ancestors must be root-owned and not group/world-writable or symlinked.
+
+For fresh-server apt, runtime, database and TLS preparation, follow [FRESH_SERVER.md](FRESH_SERVER.md).
 
 ## Experimental host application
 
@@ -47,7 +49,7 @@ Host application is not yet verified on a real systemd/Docker/PostgreSQL host. U
 
 Applying requires root on a Linux systemd host, Git and the runtime dependencies already provisioned. The installer does not install OS packages, Node, PostgreSQL, Docker, CloudPanel or firewall rules.
 
-For Instance: provide Node 24 accessible to the unprivileged service account (not inside a private home directory), npm, runuser/useradd, pg_dump, an existing private test PostgreSQL database/runtime account and readable source TLS key/cert/CA files. The installer creates a root-path-specific `cwa-instance-<hash>` user, builds unprivileged and copies the initial TLS material into protected component storage. It places the worker heartbeat in the component data directory. Configure the private firewall/proxy separately. Runtime DB permission must be restricted; no tenant schema/RLS migrations exist in this checkpoint.
+For Instance: provide Node 24 accessible to the unprivileged service account (not inside a private home directory), npm, runuser/useradd, pg_dump, an existing private test PostgreSQL database/runtime account and readable source TLS key/cert/CA files. The installer creates a root-path-specific `pactaris-instance-<hash>` user, builds unprivileged and copies the initial TLS material into protected component storage. It places the worker heartbeat in the component data directory. Configure the private firewall/proxy separately. Runtime DB permission must be restricted; no tenant schema/RLS migrations exist in this checkpoint.
 
 For Identity: provide Docker Compose v2. The installer creates protected random secrets and starts a stable-project authentik/PostgreSQL stack with persistent named volumes and no published database/Docker socket. Authentik initial admin/brand/local enrollment/SMTP/OIDC clients/Google/Apple setup remains manual and unverified. Default provider TLS must be configured for a trusted backend identity before production proxy acceptance. The local container health check does not prove OIDC or external TLS works.
 
@@ -56,8 +58,8 @@ Only after reviewing those prerequisites, append `--apply` to the planned comman
 ## Updating and status
 
 ```bash
-bash update.sh --component instance --root /opt/the-app --revision "$REVISION"
-bash status.sh --component instance --root /opt/the-app
+bash update.sh --component instance --root /opt/pactaris --revision "$REVISION"
+bash status.sh --component instance --root /opt/pactaris
 ```
 
 Update without `--apply` only prints a plan. A repeated install of an installed component refuses changes; use status/update. Apply preserves the stored configuration and ignores replacement config inputs by rejecting them. Read-only SSH deploy keys can be used with `--repository git@github.com:CoyWorks/Pactaris.git`; provision them out of band and never put tokens in URLs or arguments.

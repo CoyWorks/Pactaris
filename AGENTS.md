@@ -1,6 +1,6 @@
 # Project instructions
 
-Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/sub/top/bottom/switch dynamics and play partners, with overlapping romantic relationships. Use “the app” or “the project” in product prose until the product name is confirmed. Pactaris is the repository identifier.
+Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/sub/top/bottom/switch dynamics and play partners, with overlapping romantic relationships. The confirmed product name is Pactaris. Use Pactaris in product prose, code identifiers, deployment paths, services and Docker project names; do not use the historical internal placeholder.
 
 ## Current scope
 

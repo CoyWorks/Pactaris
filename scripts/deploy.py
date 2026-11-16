@@ -113,7 +113,7 @@ def read_json(path):
         fail('config.file')
 
 def service_identity(base):
-    return 'cwa-' + base.name + '-' + hashlib.sha256(str(base).encode()).hexdigest()[:8]
+    return 'pactaris-' + base.name + '-' + hashlib.sha256(str(base).encode()).hexdigest()[:8]
 
 def unit_name(base, worker=False):
     suffix = '-worker' if worker else ''
@@ -124,6 +124,7 @@ def render_unit(base, node, worker=False):
     # Paths are constrained before interpolation into systemd syntax.
     user = service_identity(base)
     return f'''[Unit]
+Description=Pactaris {base.name}{' worker' if worker else ''}
 After=network-online.target
 Wants=network-online.target
 [Service]
@@ -148,7 +149,7 @@ WantedBy=multi-user.target
 '''
 
 def compose(base, release):
-    return ['docker', 'compose', '--project-name', 'cwa-' + hashlib.sha256(str(base).encode()).hexdigest()[:12],
+    return ['docker', 'compose', '--project-name', 'pactaris-' + base.name + '-' + hashlib.sha256(str(base).encode()).hexdigest()[:12],
             '--env-file', str(base / 'identity.env'), '-f', str(release / 'apps/identity/compose.yaml')]
 
 def ensure_user(base):

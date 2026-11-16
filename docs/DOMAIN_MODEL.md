@@ -4,7 +4,7 @@ Status: planning requirements, 16 November 2026. Implement the core graph in [#3
 
 ## Product focus
 
-The app is for consenting-adult BDSM, SM and kink dynamics: Dom/sub relationships, top/bottom/switch contexts, play partners, protocols, rituals, negotiated tasks, rewards/consequences, sessions and aftercare. Romantic relationships can overlap with BDSM relationships.
+Pactaris is for consenting-adult BDSM, SM and kink dynamics: Dom/sub relationships, top/bottom/switch contexts, play partners, protocols, rituals, negotiated tasks, rewards/consequences, sessions and aftercare. Romantic relationships can overlap with BDSM relationships.
 
 A household is a private dynamic space. It does not imply living together, marriage, family structure, exclusivity, a couple, one dominant or an all-to-all relationship. The UI should use dynamic/household in this context, not default to family chores.
 

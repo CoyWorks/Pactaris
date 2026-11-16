@@ -1,6 +1,6 @@
 # Existing Site assessment
 
-Inspected 16 November 2026. Product reference: [The app](https://consent-households.coyseinri.chatgpt.site), Site version 4. Source checkout HEAD: `23d17151bbc727b07ddc5ff6f3ce3fe81832d9ac`.
+Inspected 16 November 2026. Product reference: [Pactaris](https://consent-households.coyseinri.chatgpt.site), Site version 4. Source checkout HEAD: `23d17151bbc727b07ddc5ff6f3ce3fe81832d9ac`.
 
 This is a bounded source inspection, not a complete security audit or live functional verification. The source repository HEAD was inspected; correspondence with the deployed version must be verified during [#2](https://github.com/CoyWorks/Pactaris/issues/2). Live database rows were not read. Historical zip versions are not used as authoritative evidence.
 
