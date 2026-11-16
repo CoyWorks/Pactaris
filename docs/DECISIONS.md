@@ -6,9 +6,11 @@ Recorded 16 November 2026. These are reviewable planning decisions; unresolved c
 
 | Topic | Direction | Basis |
 | --- | --- | --- |
-| Product | Public centrally hosted multi-household service | Current project request |
-| Hosting | An OCI server behind CloudPanel | Current project request; exact server not selected here |
-| Identity | Independent user accounts; many memberships | Required isolation/account model |
+| Product | Consenting-adult BDSM/SM/kink, play partners and overlapping romance | Explicit project direction |
+| Hosting | Manager plus self-contained instances on OCI behind CloudPanel | Each owns hosting/database/storage/workers; hosts still to select |
+| Identity | Independent platform subject, local memberships across instances | Contract #58 |
+| Domain roles | Multiple relationship/session-scoped BDSM roles, separate from technical rights | M0 #35 |
+| Plans | Free/paid readiness in core; exact prices/limits undecided | M0 #53; proposal #54 |
 | Database | PostgreSQL from the foundation | Architecture recommendation for hosted tenancy |
 | Frontend/backend | React/Vite + Node.js/TypeScript | Proposed for existing source reuse; [#1](https://github.com/CoyWorks/Pactaris/issues/1) |
 | Product name | The app in product prose | Repository identifier remains Pactaris; name provisional |
@@ -40,3 +42,11 @@ Recorded 16 November 2026. These are reviewable planning decisions; unresolved c
 | Monetization | Free pilot first or launch subscriptions; billing owner and entitlements | [#42](https://github.com/CoyWorks/Pactaris/issues/42) |
 
 Keep safety, consent, personal export, leave and deletion independent of paid plans. Do not select a payment or notification provider until its operating/content policies fit the service.
+
+## Revised foundation
+
+Read [DOMAIN_MODEL.md](DOMAIN_MODEL.md), [PLANS.md](PLANS.md) and [INFRASTRUCTURE.md](INFRASTRUCTURE.md). These supersede generic-family framing and optional-later relationship modeling. Instance ownership of databases/files/workers and multiple contextual roles are requirements.
+
+Recommended choices awaiting detailed ADRs: household-sponsored subscriptions, central maintained identity, metadata-only manager registry, versioned entitlement snapshots and a pull-oriented scoped agent. Illustrative Free/Plus/Pro numbers are not approved pricing or limits.
+
+Before fleet rollout select manager placement, enrollment trust, domains, session/revocation bounds, capacity policy and recovery ownership. Before sales validate quotas/costs, sponsor changes, grace/downgrade and adult-content provider suitability. A free four-person dynamic must work.
