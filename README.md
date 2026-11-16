@@ -10,13 +10,13 @@ Historical 0.1 empty-server bootstrap, including apt dependencies (upgrade to 0.
 
 A mobile-first platform for consenting-adult BDSM, SM and kink: Dom/sub and play-partner relationships, protocols, tasks, rituals, negotiated sessions, rewards/consequences and aftercare.
 
-**Status: connected-alpha foundations, 0.2.3-alpha.1.** The repository contains independently deployable Identity/Instance components, a central OIDC/session gateway, authorized household selection, reviewed PostgreSQL migrations and one-command updates for prepared installations. [Private transactional create/self-leave commands](docs/PRIVATE_COMMANDS.md) now provide the Instance write boundary; public household creation/invitations remain pending central placement integration. The connected alpha is not complete and is not ready for public onboarding. The confirmed product name is Pactaris.
+**Status: connected alpha, 0.3.0-alpha.1.** Signed-in accounts can [create, select and explicitly leave a private dynamic](docs/HOUSEHOLD_ONBOARDING.md) through the public gateway, with durable placement/receipt recovery and independent Instance databases. Reviewed migrations and one-command updates preserve prepared installations. Invitations and the broader consent/task workflows remain unfinished; this is not ready for general public onboarding. The confirmed product name is Pactaris.
 
 Central-login rollout: [LOGIN_ROLLOUT.md](docs/LOGIN_ROLLOUT.md), with trust boundaries in [LOGIN_GATEWAY.md](docs/LOGIN_GATEWAY.md).
 
 Historical direct-Instance Identity provider/application import: [OIDC blueprint instructions](docs/IDENTITY_OIDC.md).
 
-Start with [Milestone 1](docs/MILESTONE_1.md) and [development/install instructions](docs/DEVELOPMENT.md). The operator has reported working central sign-in/local logout on the product domains. [Milestone 2](docs/MILESTONE_2.md) now covers explicit household onboarding; its first checkpoint adds [pilot Instance registration and technical permissions](docs/INSTANCE_REGISTRY.md). Household creation/invitation/leave workflows and IdP branding remain in progress or scoped, not completed.
+Start with [Milestone 1](docs/MILESTONE_1.md) and [development/install instructions](docs/DEVELOPMENT.md). The operator has reported working central sign-in/local logout on the product domains. [Milestone 2](docs/MILESTONE_2.md) covers household onboarding: pilot registration/permissions, private audited commands and the first public create/self-leave workflow. Invitations, owner recovery, full privacy/safety workflows and reproducible repository-managed IdP branding remain open.
 
 Obedience is the functional reference for core habits, rewards/consequences, points redemption, partner updates/chat and progress charts. See [the baseline mapping](docs/OBEDIENCE_BASELINE.md); implement original code and presentation.
 

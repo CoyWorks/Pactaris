@@ -40,7 +40,9 @@ This starts the domain-mutation part of #12/#8/#26. It does not expose a public 
 
 The operator has also reported successful one-command update of gateway/Instance to 0.2.2-alpha.1 and a second no-op health-only execution, with Identity left unchanged/healthy. This is live update-path evidence, not proof of every recovery/private-source/brand/onboarding scenario.
 
-## Household creation and invitation contract to implement next
+## Household creation and invitation contract
+
+Update: the create/placement/self-leave and receipt-recovery part below is now implemented in **0.3.0-alpha.1**; see [HOUSEHOLD_ONBOARDING.md](HOUSEHOLD_ONBOARDING.md). The gateway reserves one active registered Instance, enforces a configurable account creation budget (pending operations count), publishes placement/hints atomically after local proof and recovers lost acknowledgments through a bounded receipt worker. The mobile form uses explicit CSRF-protected actions and no plaintext name is stored centrally. Default all-component updates register the known co-located shared-CA Instance idempotently. Invitations, general outbox synchronization, member quotas, voluntary owner recovery and verified-recipient assertions remain open; the milestone is not complete.
 
 1. Authenticate the central account and require exact Origin plus session CSRF for each mutation. Rate-limit creation/invites and use a stable operation UUID.
 2. Reserve an active eligible Instance in a durable gateway operation. Pin placement/version; never accept a caller-supplied backend URL. Persist request identity so the same operation cannot be retried with different household parameters.

@@ -2,6 +2,8 @@
 
 Scoped implementation for #8/#12/#26 and the #68 onboarding milestone. This is the Instance-side write boundary. The public gateway create/invitation/leave workflow, durable placement reservation and cross-store reconciliation have not shipped. Never publish this route as a browser API or infer that a private write endpoint completes onboarding.
 
+The historical checkpoint above describes 0.2.3. In 0.3.0, [HOUSEHOLD_ONBOARDING.md](HOUSEHOLD_ONBOARDING.md) adds public create/self-leave, durable central reservation/placement and receipt recovery. The new `receipt` private action accepts `{operationId}` with its own write-token purpose and returns matching IDs plus `created`, `left` or `missing`, without returning a name or creating domain data. Full invitation/member synchronization and general outbox delivery are still pending.
+
 ## Request contract
 
 `POST /internal/households/{householdId}/commands/create` accepts `{operationId,name}`. `POST /internal/households/{householdId}/commands/leave` accepts `{operationId}`. A request may contain only these keys; it cannot specify the authenticated account, target Instance, technical role or entitlement. Bodies are uncompressed JSON of at most 4096 bytes. The path must match exactly, without an alternate action, query string or encoded alias.

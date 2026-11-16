@@ -2,6 +2,8 @@
 
 First implementation of #57/#58, not completion of remote fleet enrollment. This command trusts the operator's protected local Instance configuration as the identity attestation. TLS/readiness proves the endpoint is healthy and trusted, not a remote cryptographic Instance-ID challenge.
 
+From 0.3.0 the normal all-component updater performs this registration idempotently for the known co-located shared-CA profile after runtime updates. The explicit commands below remain available for diagnosis/manual pilot enrollment. The updater does not overwrite conflicts, re-enable disabled entries or enroll a remote Instance merely from a hostname.
+
 Requirements: installed gateway/Instance, migrations from 0.2.1-alpha.1 or later, root-owned canonical config paths, private literal bind addresses and the same internal CA. The gateway service's installed TLS CA copy is registered, because the gateway must be able to read it after the root command exits. Distinct-CA or split-host enrollment needs the later enrollment/trust workflow; do not broaden file permissions or disable verification.
 
 Select the reviewed full revision and use the existing updater before registration. The gateway update applies the additive registry-event migration and takes its normal mandatory backup. The Instance update integrates the common permission check. Neither update changes the Identity deployment.

@@ -35,6 +35,8 @@ Evidence is the operator's terminal output and confirmations from the first co-l
 
 ## Observed passing checks
 
+Later Brand/TLS regression: the operator reported a healthy gateway with login-unavailable while public Identity returned 502. Direct CA-verified TLS failed and openssl showed authentik's default self-signed DNS:* certificate, despite healthy Identity containers. Recovery backed up the Identity DB/config, selected the actual request-matched Brand, restored its existing Pactaris web-certificate association and restarted only the Identity server. The operator confirmed login worked afterward. Future branding/Brand selection must preserve the matching web certificate; container health alone cannot prove NGINX upstream TLS readiness. Do not infer that an application update changed the IdP merely from timing; preserve component logs and the distinction between Compose health and verified ingress. No CSS/logo/flow/account/issuer/client changes were required for this recovery.
+
 | Check | Operator-provided result |
 | --- | --- |
 | Identity container state | PostgreSQL, server and worker healthy |

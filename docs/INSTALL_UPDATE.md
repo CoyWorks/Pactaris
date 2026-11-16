@@ -40,7 +40,7 @@ Applying is now the default for update.sh; use `--check` or `--plan` for plannin
 
 The updater uses the host's existing Git read access (credential helper or scoped deploy key); no tokens in command-line URLs. An SSH source URL can be supplied with `--repository git@github.com:CoyWorks/Pactaris.git`; the same URL is passed to each component source fetch. No GitHub write permission is needed. Private-source acceptance remains to be rehearsed before changing repository visibility.
 
-The command assumes an already prepared 0.2 deployment with separate migration/backup credentials. It does not silently bootstrap an older 0.1 database, change domains, enroll remote servers, apply IdP branding or modify CloudPanel. See LOGIN_ROLLOUT.md for the original preparatory migration and INSTANCE_REGISTRY.md for pilot registry setup.
+The command assumes an already prepared 0.2 deployment with separate migration/backup credentials. It does not silently bootstrap an older 0.1 database, change domains, enroll remote servers, apply IdP branding or modify CloudPanel. From 0.3.0, a default all-component update also idempotently registers the known co-located shared-CA Instance after successful runtime health checks. Different-CA and component-only updates preserve independent enrollment. See LOGIN_ROLLOUT.md for the original preparatory migration and INSTANCE_REGISTRY.md for pilot registry setup.
 
 ## One-time updater bootstrap
 

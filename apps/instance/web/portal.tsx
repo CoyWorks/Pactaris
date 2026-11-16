@@ -44,9 +44,10 @@ export function Portal({language}:{language:string}) {
   }
   async function create(event:React.FormEvent){
     event.preventDefault();if(!session||busy)return;
+    const submittedName=name.trim();setName(submittedName);
     const operationId=createId??crypto.randomUUID();setCreateId(operationId);setBusy(true);setError(undefined);
     try{
-      const r=await fetch('/api/households',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({operationId,name})});
+      const r=await fetch('/api/households',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({operationId,name:submittedName})});
       const data=await r.json() as Operation&{messageKey?:string};
       if(!r.ok){setError(requestError(data));return;}
       if(data.status==='complete'){window.location.assign('/households/'+data.householdId);return;}
