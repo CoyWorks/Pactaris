@@ -62,7 +62,7 @@ Only after reviewing those prerequisites, append `--apply` to the planned comman
 ## Updating and status
 
 ```bash
-bash update.sh --component instance --root /opt/pactaris --revision "$REVISION"
+bash update.sh --component instance --root /opt/pactaris --revision "$REVISION" --check
 bash status.sh --component instance --root /opt/pactaris
 ```
 

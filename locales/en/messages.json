@@ -55,5 +55,19 @@
   "portal.more": "Show more",
   "cli.loginPlan": "Prepare the existing local Identity/Instance installation for the gateway at {publicOrigin}; no changes were applied.",
   "cli.loginPrepared": "Login preparation completed for {publicOrigin}. Gateway configuration: {path}. Install/update the runtimes and configure public ingress before testing sign-in.",
-  "portal.return": "Return to Pactaris"
+  "portal.return": "Return to Pactaris",
+  "cli.updateHelp": "Run update.sh as root to fetch main and update installed components. Options: --check (plan only), --root PATH, --component gateway|instance|identity, --revision FULL_SHA, --repository URL. --apply is accepted for compatibility; applying is now the default.",
+  "cli.updateRoot": "Run the updater as root so it can read protected deployment state and perform backups.",
+  "cli.updateFetching": "Fetching Pactaris source; installed configuration and data are preserved.",
+  "cli.updateSelected": "Selected source revision {revision}; all components use this exact revision.",
+  "cli.updateState": "Installed state for {component} is invalid or its release is missing; no automatic reset is performed.",
+  "cli.updateSource": "The requested source revision or staged updater could not be verified.",
+  "cli.updateIdentityReview": "The pinned Identity provider images changed. A reviewed provider-upgrade procedure is required; no component updates were started.",
+  "cli.updateStopped": "An update step failed ({code}); later components were not updated. Earlier successful component updates remain active.",
+  "cli.updateUnchanged": "No deployment change is needed for {component}.",
+  "cli.updateComponent": "Updating {component} to {revision}.",
+  "cli.updateChecked": "Update plan checked for {revision}; no services or application data were changed.",
+  "cli.updateComplete": "Installed components are healthy after the update to {revision}; unchanged Identity deployments retain their own revision.",
+  "cli.updateArchived": "An inactive staged update was preserved at {path}; retrying with a clean release directory.",
+  "cli.updatePrerequisite": "Protected migration/backup credentials are missing or unsafe for {component}. Complete the documented deployment preparation before updating; existing data was retained."
 }

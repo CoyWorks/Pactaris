@@ -361,6 +361,24 @@ def deployment_directory(path):
     path.mkdir(mode=0o755, parents=True, exist_ok=True)
     path.chmod(0o755)
 
+def archive_staged_update(base, release, existing):
+    # A failed update may have already applied additive migrations. Keep its
+    # source/diagnostics for inspection and retry with a clean build directory.
+    # Never move a directory referenced by the installed state/current link.
+    current = base / 'current'
+    if (release.is_symlink() or not release.is_dir() or
+        Path(existing['release']).resolve() == release.resolve() or
+        ((current.exists() or current.is_symlink()) and current.resolve() == release.resolve())):
+        fail('release_exists')
+    archive = base / 'failed-releases'
+    safe_root(str(archive))
+    archive.mkdir(mode=0o700, exist_ok=True)
+    destination = archive / (release.name + '-' + str(time.time_ns()))
+    os.rename(release, destination)
+    shutil.chown(destination, 0, 0)
+    destination.chmod(0o700)
+    emit('cli.updateArchived', path=str(destination))
+
 def deploy(args):
     if args.component not in COMPONENTS:
         fail('component')
@@ -419,8 +437,11 @@ def deploy(args):
         if existing and read_json(base / 'state.json') != existing:
             fail('state_changed')
         release = base / 'releases' / args.revision
-        if release.exists() and args.action != 'resume':
-            fail('release_exists')
+        if release.exists() or release.is_symlink():
+            if args.action == 'update':
+                archive_staged_update(base, release, existing)
+            elif args.action != 'resume':
+                fail('release_exists')
         deployment_directory(release.parent)
         try:
             if args.action == 'resume':

@@ -4,11 +4,13 @@ Operational lessons and regression requirements: [FIRST_INSTALL_NOTES.md](docs/F
 
 Target automated installation and one public household entry: [INSTALLER_EXPERIENCE.md](docs/INSTALLER_EXPERIENCE.md).
 
+Update an already prepared server as root with `bash /opt/pactaris-source/update.sh`. It fetches current main and updates installed components using preserved config/backups/migrations. Older checkouts need the [one-time updater bootstrap](docs/INSTALL_UPDATE.md#one-time-updater-bootstrap). Use `--check` for a plan; applying is the default.
+
 Historical 0.1 empty-server bootstrap, including apt dependencies (upgrade to 0.2 using LOGIN_ROLLOUT.md): [FRESH_SERVER.md](docs/FRESH_SERVER.md).
 
 A mobile-first platform for consenting-adult BDSM, SM and kink: Dom/sub and play-partner relationships, protocols, tasks, rituals, negotiated sessions, rewards/consequences and aftercare.
 
-**Status: central-login implementation, 0.2.0-alpha.1.** The repository contains independently deployable Identity/Instance components, a central OIDC/session gateway, authorized household selection, reviewed PostgreSQL migrations and experimental install/update/status tooling. The connected alpha is not complete and is not ready for public onboarding. The confirmed product name is Pactaris.
+**Status: connected-alpha foundations, 0.2.2-alpha.1.** The repository contains independently deployable Identity/Instance components, a central OIDC/session gateway, authorized household selection, reviewed PostgreSQL migrations and one-command updates for prepared installations. The connected alpha is not complete and is not ready for public onboarding. The confirmed product name is Pactaris.
 
 Central-login rollout: [LOGIN_ROLLOUT.md](docs/LOGIN_ROLLOUT.md), with trust boundaries in [LOGIN_GATEWAY.md](docs/LOGIN_GATEWAY.md).
 

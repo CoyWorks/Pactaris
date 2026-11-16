@@ -60,6 +60,10 @@ These prove the specific foundation paths observed. They do not prove complete d
 
 ## Editing rule
 
+### One-command update checkpoint
+
+The owner explicitly requested that update.sh fetch current main and update installed components without manually supplying SHAs/components. The new wrapper applies by default; --check is the explicit plan mode. It fetches one commit and hands off to that commit's updater/deployer without resetting the operator checkout. Existing mandatory backups, separate migration/backup credentials, health checks and per-component locks are retained. Unchanged Identity Compose deployments remain running; provider image changes require a separate reviewed upgrade. Retry preserves an inactive failed staging directory rather than deleting it or touching current/data/config. Tests cover component discovery, one-revision orchestration, no-op health checks, provider blocking, stop-on-failure, cancellation and staging preservation. Live root/systemd/Docker/private-source retry acceptance still requires operator observation.
+
 A future change must retain the protections above or document and test an intentional replacement. Link new regressions/fixes back to this record and the relevant issue. Preserve the distinction between locally tested code, operator-observed host behavior and planned automation. Never re-run destructive bootstrap or rewrite active deployment values merely because an example/default changed.
 
 See [RECOVERY.md](RECOVERY.md), [FRESH_SERVER.md](FRESH_SERVER.md), [IDENTITY_OIDC.md](IDENTITY_OIDC.md) and [INSTALLER_EXPERIENCE.md](INSTALLER_EXPERIENCE.md).

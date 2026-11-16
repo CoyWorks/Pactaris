@@ -55,7 +55,7 @@ Database backup roles have BYPASSRLS for full FORCE-RLS backups but only explici
 Run separately and stop on an error:
 
 ```bash
-bash update.sh --component instance --root /opt/pactaris --revision "$REVISION"
+bash update.sh --component instance --root /opt/pactaris --revision "$REVISION" --check
 bash update.sh --component instance --root /opt/pactaris --revision "$REVISION" --apply
 bash status.sh --component instance --root /opt/pactaris
 ```

@@ -1,6 +1,59 @@
 # First-slice install and update contract
 
-Status: target contract; experimental component scripts exist, but the minimal-input workflow is not implemented. See [INSTALLER_EXPERIENCE.md](INSTALLER_EXPERIENCE.md) for the latest requirements. Issue #56 is M0; advanced fleet rollout stays #59. Start with empty production databases and no legacy accounts/content.
+Status: the one-command updater below is implemented; the minimal-input fresh installer is still planned. See [INSTALLER_EXPERIENCE.md](INSTALLER_EXPERIENCE.md) for the broader requirements. Issue #56 is M0; advanced fleet rollout stays #59. Start with empty production databases and no legacy accounts/content.
+
+## Update an installed server
+
+After the one-time bootstrap to an updater-capable checkout, run as root:
+
+```bash
+bash /opt/pactaris-source/update.sh
+```
+
+This fetches the current `main`, resolves it once to a full commit SHA, and runs the freshly fetched updater/deployer. It does not reset, overwrite or require a clean operator source checkout. Every component in this invocation uses that one selected SHA even if main moves while updating. Main is the owner-authorized source channel; this does not imply the selected commit passed CI or is a signed release. A full reviewed SHA can be pinned with `--revision`.
+
+Installed components are discovered from their separate completion state under `/opt/pactaris`: gateway, Instance, then Identity. It never installs absent components or tries to finish a staged first installation. An incomplete install is an explicit blocker, not something silently ignored.
+
+Each changed component retains the existing build, backup, migration, activation/recovery and health gates. No configuration, IdP account, key, database, file or hostname is replaced by an example. Unchanged application revisions receive health checks without rebuilding. Identity is not restarted or relabeled when its Compose deployment is identical; changed pinned provider images block automatic updates before any component activation and require a provider-specific runbook.
+
+The parent process holds a server-wide updater lock throughout source fetch/handoff and all component operations; each deployer retains its own component lock. A failed step stops later updates. This is not a distributed atomic upgrade: earlier successful components remain active. An interrupted child receives cancellation and is stopped before temporary tooling is removed.
+
+A subsequent retry preserves an inactive failed staged application release under the component's private `failed-releases/` directory, then rebuilds the same pinned revision cleanly. It refuses to move active releases, symlinks or anything referenced by installed state/current. Config/data/backup directories are not reset. Already applied additive migrations are checked by immutable checksum and not undone. This is a bounded retry facility, not general database restore or recovery from an incompatible schema change.
+
+Other supported forms:
+
+```bash
+# Fetch and inspect the plan, without updating services/application data.
+bash /opt/pactaris-source/update.sh --check
+
+# Update only one independently installed component.
+bash /opt/pactaris-source/update.sh --component instance
+
+# Use an alternate existing deployment root.
+bash /opt/pactaris-source/update.sh --root /srv/pactaris
+
+# Pin all selected updates to a reviewed full commit.
+bash /opt/pactaris-source/update.sh --revision "$REVISION"
+```
+
+Applying is now the default for update.sh; use `--check` or `--plan` for planning. `--apply` remains accepted for previous commands. This changes the historical update wrapper's plan-only default; install.sh/resume.sh keep their explicit `--apply` requirement. `--check` still downloads temporary source and obtains a local lock, but does not build, migrate, activate or restart services. It is a preflight/plan, not proof a future build/health check will succeed. Pinned targets must contain this updater contract; historical releases predating scripts/update.py need their component-specific deployment/recovery runbook instead.
+
+The updater uses the host's existing Git read access (credential helper or scoped deploy key); no tokens in command-line URLs. An SSH source URL can be supplied with `--repository git@github.com:CoyWorks/Pactaris.git`; the same URL is passed to each component source fetch. No GitHub write permission is needed. Private-source acceptance remains to be rehearsed before changing repository visibility.
+
+The command assumes an already prepared 0.2 deployment with separate migration/backup credentials. It does not silently bootstrap an older 0.1 database, change domains, enroll remote servers, apply IdP branding or modify CloudPanel. See LOGIN_ROLLOUT.md for the original preparatory migration and INSTANCE_REGISTRY.md for pilot registry setup.
+
+## One-time updater bootstrap
+
+For a checkout whose update.sh still requires component/root/revision, obtain a reviewed updater-capable revision once:
+
+```bash
+cd /opt/pactaris-source
+git fetch origin main
+git checkout --detach origin/main
+bash update.sh
+```
+
+Git checkout refuses conflicting tracked edits; do not use reset --hard or discard local changes to bypass it. Future calls need only the single update command above. A source fetch/permission failure exits before runtime changes and retains all installed data.
 
 ## Entry points
 
@@ -14,7 +67,7 @@ Keep commands small and operationally familiar; detailed implementation may use 
 
 ## Independent installable components
 
-The installer/updater selects Identity or Instance explicitly. Each has its own artifact, service identities, config/secrets, data/migrations, lock, active release and status. An optional install-both convenience profile invokes the same independent component operations. Installing an Instance does not install local Identity or CloudPanel; installing Identity does not create a tenant Instance. Updates never implicitly restart/migrate the other component.
+Each component has its own artifact, service identities, config/secrets, data/migrations, lock, active release and status. The default updater orchestrates installed components; `--component` retains independent updates. An optional install-both convenience profile is still planned. Installing an Instance does not install local Identity or CloudPanel; installing Identity does not create a tenant Instance. A selected single-component update never restarts/migrates another component.
 
 Default app HTTPS ingress: Identity 9443, Instance 9444. All ports/bind interfaces and public origins are validated configuration. On separate hosts instances reuse 9444; multiple local instances need distinct endpoints. CloudPanel admin remains on its existing 8443.
 
