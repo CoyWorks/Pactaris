@@ -12,9 +12,15 @@ Status: required implementation scope, not available scripts. Issue #56 is M0; a
 
 Keep commands small and operationally familiar; detailed implementation may use shared internal helpers. CLI prose uses #44 catalogs, secrets never appear in output.
 
+## Independent installable components
+
+The installer/updater selects Identity or Instance explicitly. Each has its own artifact, service identities, config/secrets, data/migrations, lock, active release and status. An optional install-both convenience profile invokes the same independent component operations. Installing an Instance does not install local Identity or CloudPanel; installing Identity does not create a tenant Instance. Updates never implicitly restart/migrate the other component.
+
+Default app HTTPS ingress: Identity 9443, Instance 9444. All ports/bind interfaces and public origins are validated configuration. On separate hosts instances reuse 9444; multiple local instances need distinct endpoints. CloudPanel admin remains on its existing 8443.
+
 ## Hosting profiles
 
-Central: integrate with the existing CloudPanel public ingress and separate identity, manager and main-instance services/databases. Internal: own Node API/worker, PostgreSQL, private files, TLS identity and systemd units; no CloudPanel installation required. Accept actual domains/private bind addresses/proxy source addresses as inputs. Do not overwrite unrelated sites or expose database ports.
+Central is an optional co-location arrangement: integrate the existing CloudPanel ingress with independent Identity, manager and main-instance services/data boundaries. Internal: own Node API/worker, PostgreSQL, private files, TLS identity and systemd units; no CloudPanel installation required. Accept actual domains/private bind addresses/proxy source addresses as inputs. Do not overwrite unrelated sites or expose database ports.
 
 Initial identity methods: Google, Apple and locally registered verified email/password accounts through one maintained central identity service; instances use central OIDC. Provider credentials are provisioned separately from GitHub code. Domain/Apple Services ID/App ID/keys and Google OAuth setup must be verified before declaring all login flows operational.
 
@@ -41,3 +47,7 @@ Failure must preserve the prior healthy application when schema compatibility pe
 A fresh synthetic deployment can log in, register/select an instance, create/join a dynamic, accept scoped consent, complete a task, stop and export/leave. Demonstrate initial install, repeat installer run, restart/reboot recovery and update to a second pinned GitHub version preserving data. Exercise failed update and private-source-access failure before claiming the tool complete.
 
 Full production backup/security gates remain #28/#29/#31. Manager automation later uses the same allowlisted pinned update contract (#59), rather than adding arbitrary remote commands.
+
+## Split deployment acceptance
+
+Install Identity on one host, Instance on another and a separate proxy in front. Configure public identity/instance origins, external issuer/client/callback, private bind endpoint and backend TLS identity independently. Verify private DNS avoids public-proxy recursion, correct cert verification for loopback/remote targets and host-scoped sessions. Run an Identity-only update and Instance-only update without restarting or altering the other application. Check compatible protocol versions and data preservation. See docs/INFRASTRUCTURE.md for the example proxy map.
