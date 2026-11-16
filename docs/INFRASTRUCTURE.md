@@ -97,3 +97,11 @@ Do not use continuous cross-instance content joins or a distributed dual-write d
 5. Add full tenant relocation and paid-plan reconciliation: [#60](https://github.com/CoyWorks/Pactaris/issues/60), [#61](https://github.com/CoyWorks/Pactaris/issues/61).
 
 No Kubernetes, automatic multi-region failover or unrestricted remote management is required. The two-plane boundary is required from the core even while there is only one instance.
+
+## Confirmed first delivery
+
+The initial central identity service must support Google, Apple and local verified email/password accounts. Every instance receives central OIDC identity and manages local sessions/rights. Production databases start empty, with no imported Site accounts/content.
+
+Central CloudPanel is the public proxy for local main/identity services and private-LAN instances. Internal servers need no CloudPanel. Use systemd and isolated databases/credentials; verified TLS and restricted proxy sources on the LAN. Public proxy failure and manager failure are distinct operational conditions.
+
+#56 is M0: ship GitHub-based install.sh/update.sh/status.sh with the first working slice, including a minimum registered-instance/status path. See [INSTALL_UPDATE.md](INSTALL_UPDATE.md). Preserve a second pinned-version update in the initial acceptance demo. Advanced manager-driven canary/drain/retirement (#59) follows the same safe updater contract. Support read-only source access after the repository becomes private. No script exists yet in this planning-only repository.
