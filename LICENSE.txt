@@ -1,0 +1,11 @@
+PROPRIETARY RIGHTS NOTICE — ALL RIGHTS RESERVED
+
+All rights in original project-owned source code, documentation and assets are reserved by their respective copyright holders.
+
+No license or permission is granted by this repository notice to use, reproduce, modify, create derivative works from, distribute, sublicense, self-host, sell or otherwise commercially exploit project-owned material without prior written permission from the applicable rights holder.
+
+This notice does not limit rights that cannot be excluded under applicable law, rights granted under the applicable hosting platform's terms, or rights granted by separate licenses for third-party material. Third-party components retain their own licenses and notices; this notice does not replace or restrict them.
+
+While this repository is public on GitHub, viewing and forking through GitHub remain subject to GitHub's Terms of Service. Making the repository private later does not delete previously obtained copies or retroactively revoke rights already granted.
+
+No open-source license is granted. Access to the hosted application and any separately authorized deployment or contribution are governed by separately agreed terms; access to source alone does not grant those permissions.
