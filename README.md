@@ -37,6 +37,10 @@ Central identity must offer Google, Apple and local verified email/password acco
 
 Node.js/TypeScript with Express, PostgreSQL/Drizzle and systemd is the agreed runtime/deployment direction. Exact versions and the identity product remain to be recorded in [#1](https://github.com/CoyWorks/Pactaris/issues/1). Compare Node.js, Laravel/PHP and Django/Python in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Independently installable applications
+
+Identity and Instance are separate applications with independent install/update/configuration/data lifecycles. They may initially share the CloudPanel host, but must also work on separate servers behind another proxy. Default HTTPS ingress ports are 9443 for Identity and 9444 for every Instance; actual bind addresses/origins/ports are configuration. CloudPanel administration stays at its existing 8443. See [the concrete proxy map](docs/INFRASTRUCTURE.md).
+
 ## Free and paid
 
 Build versioned entitlements into M0 ([#53](https://github.com/CoyWorks/Pactaris/issues/53)), even if only Free is enabled initially. The illustrative Free plan supports four people. Paid plans may expand members, active tasks, schedules, storage, automation, templates, planning, insights and integrations. Prices and exact limits remain proposals in [PLANS.md](docs/PLANS.md).
