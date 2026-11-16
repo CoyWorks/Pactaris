@@ -1,56 +1,39 @@
-# Decisions and open questions
+# Decisions and remaining implementation choices
 
-Recorded 16 November 2026. These are reviewable planning decisions; unresolved choices are tracked in issues and do not block completing the inventory.
+Updated 16 November 2026. Current user decisions override earlier planning alternatives.
 
-## Current direction
+## Confirmed
 
-| Topic | Direction | Basis |
-| --- | --- | --- |
-| Product | Consenting-adult BDSM/SM/kink, play partners and overlapping romance | Explicit project direction |
-| Hosting | Manager plus self-contained instances on OCI behind CloudPanel | Each owns hosting/database/storage/workers; hosts still to select |
-| Identity | Independent platform subject, local memberships across instances | Contract #58 |
-| Domain roles | Multiple relationship/session-scoped BDSM roles, separate from technical rights | M0 #35 |
-| Plans | Free/paid readiness in core; exact prices/limits undecided | M0 #53; proposal #54 |
-| Database | PostgreSQL from the foundation | Architecture recommendation for hosted tenancy |
-| Frontend/backend | React/Vite + Node.js/TypeScript | Proposed for existing source reuse; [#1](https://github.com/CoyWorks/Pactaris/issues/1) |
-| Product name | The app in product prose | Repository identifier remains Pactaris; name provisional |
-| Repository language | English | Public project documentation; UI localization tracked separately |
-| Earlier edition plan | Superseded for this scope | No Community/Cloud split or SQLite compatibility work |
+| Topic | Decision |
+| --- | --- |
+| Product | Public consenting-adult BDSM/SM/kink platform; Obedience as functional inspiration, original implementation |
+| Domain | Multiple contextual roles/relationships; technical rights separate from dynamic roles |
+| Runtime | React/Vite; Node.js/TypeScript/Express; PostgreSQL/Drizzle; systemd |
+| Hosting | Central CloudPanel/identity/manager/main instance; internal independent instances reached over private LAN |
+| Identity methods | Google + Apple + local verified email/password account creation, through a maintained central identity service exposing OIDC |
+| Legacy data | None: empty new product; prior Site only a reference |
+| First slice | Login, dynamic/invites, contextual relationships, consent/pause and task lifecycle, with export/leave |
+| First-slice infrastructure | Service/data boundaries, minimum instance registration/status and GitHub install/update/status tooling; preserving second-version update |
+| Updates | Approved pinned GitHub version/commit; staged checks/migrations/health and recovery; private-repo read access supported |
+| Source rights | Proprietary/all rights reserved, LICENSE.txt; no open-source grant |
+| Repo visibility | Public for now; owner intends private later; no automatic visibility change |
+| Localization | English-only initially, mandatory key catalogs and independent locale/timezone from M0 |
+| Changes | Approximately 60-second visible-app checks plus opt-in Web Push; no permanent-socket requirement |
+| Plans | Free/paid entitlement architecture in core; prices/exact capacities not finalized |
 
-## Before the scaffold
+## To resolve during implementation
 
-| Choice | Options / decision needed | Issue |
-| --- | --- | --- |
-| Backend | Node.js proposal versus Laravel or Django | [#1](https://github.com/CoyWorks/Pactaris/issues/1) |
-| Authentication | Maintained app auth versus external OIDC; recovery and processor implications | [#6](https://github.com/CoyWorks/Pactaris/issues/6) |
-| Source license | Maintainer-selected open-source license and reuse notices | [#50](https://github.com/CoyWorks/Pactaris/issues/50) |
-| Data migration | Reuse interface only or transfer verified real records | [#2](https://github.com/CoyWorks/Pactaris/issues/2) |
-| Domain and environment | Development/staging/production domains and separation | [#1](https://github.com/CoyWorks/Pactaris/issues/1) |
+| Choice | Scope / issue |
+| --- | --- |
+| Identity product | Select maintained broker/service supporting all three methods, local recovery/MFA and central OIDC; #6/#58 |
+| Provider setup | Google OAuth client, Apple developer/App ID/Services ID/keys/return URLs/relay-email setup; test real integrations |
+| Domains and servers | Central and instance origins, actual host CPU/RAM/disk, private addresses and allowed proxy sources; #1/#28 |
+| Update trust/access | Version policy, artifact verification, instance read-only deploy credentials and source-private transition; #56 |
+| Safety semantics | Individual/relationship/household scope, explicit resume and queued-work disposition; #11 |
+| Storage/email | Private storage backend, sender/provider, size limits and retention; #21/#24 |
+| Recovery/operations | RPO/RTO, backup key custody, restore rehearsal, source/proxy/identity outages; #29/#31 |
+| Public launch | Adult-service policy, retention/data requests, support/reporting, pilot gates; #32/#34 |
+| Commercial release | Sponsor scope/transfer, exact quotas/prices, provider suitability and graceful downgrade; #42/#54/#61 |
+| Provenance | Existing-source and dependency rights/notices; proprietary notice does not replace third-party licenses; #50 |
 
-## Before public onboarding
-
-| Choice | Options / decision needed | Issue |
-| --- | --- | --- |
-| OCI placement | Host, CPU architecture, disk/RAM budget, isolation from other workloads | [#28](https://github.com/CoyWorks/Pactaris/issues/28) |
-| Process model | Supervised host processes versus app containers | [#28](https://github.com/CoyWorks/Pactaris/issues/28) |
-| File storage | Private local volume versus OCI Object Storage; lifecycle/quota | [#21](https://github.com/CoyWorks/Pactaris/issues/21) |
-| Email/push | Provider, sender domain, delivery policies, secrets | [#24](https://github.com/CoyWorks/Pactaris/issues/24), [#23](https://github.com/CoyWorks/Pactaris/issues/23) |
-| Privacy operations | Retention, shared ownership, jurisdiction/policy review, age policy, support responsibility | [#32](https://github.com/CoyWorks/Pactaris/issues/32) |
-| Safety semantics | Individual/household scope, resume participants and queued work disposition | [#11](https://github.com/CoyWorks/Pactaris/issues/11) |
-| Recovery | RPO/RTO, off-host retention, restore rehearsal and key custody | [#29](https://github.com/CoyWorks/Pactaris/issues/29) |
-| Registration | Invite-only pilot, quotas and criteria to open registration | [#34](https://github.com/CoyWorks/Pactaris/issues/34) |
-| Monetization | Free pilot first or launch subscriptions; billing owner and entitlements | [#42](https://github.com/CoyWorks/Pactaris/issues/42) |
-
-Keep safety, consent, personal export, leave and deletion independent of paid plans. Do not select a payment or notification provider until its operating/content policies fit the service.
-
-## Revised foundation
-
-Read [DOMAIN_MODEL.md](DOMAIN_MODEL.md), [PLANS.md](PLANS.md) and [INFRASTRUCTURE.md](INFRASTRUCTURE.md). These supersede generic-family framing and optional-later relationship modeling. Instance ownership of databases/files/workers and multiple contextual roles are requirements.
-
-Recommended choices awaiting detailed ADRs: household-sponsored subscriptions, central maintained identity, metadata-only manager registry, versioned entitlement snapshots and a pull-oriented scoped agent. Illustrative Free/Plus/Pro numbers are not approved pricing or limits.
-
-Before fleet rollout select manager placement, enrollment trust, domains, session/revocation bounds, capacity policy and recovery ownership. Before sales validate quotas/costs, sponsor changes, grace/downgrade and adult-content provider suitability. A free four-person dynamic must work.
-
-## English-first baseline
-
-Obedience is the functional reference (docs/OBEDIENCE_BASELINE.md), with original implementation and our expanded group/consent/privacy model. #44 is promoted to M0: stable message keys/shortcodes, English-only source catalogs initially, shared locale/timezone formatting and CI enforcement. New language packs require no feature-code rewrite. The previous expectation of shipping Dutch alongside English is superseded.
+Read [DOMAIN_MODEL.md](DOMAIN_MODEL.md), [INTERNATIONALIZATION.md](INTERNATIONALIZATION.md), [PLANS.md](PLANS.md), [INFRASTRUCTURE.md](INFRASTRUCTURE.md) and [INSTALL_UPDATE.md](INSTALL_UPDATE.md). Safety, privacy, basic MFA, personal export, stop/leave/delete are not subscription upsells.
