@@ -58,3 +58,9 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 - The example public origins are identity.coyworks.nl, instance1.coyworks.nl and instance2.coyworks.nl. Remote instance upstream DNS must resolve to its private host from the proxy, not back to public ingress. Verify backend TLS identity even on loopback.
 - Proxy, Identity, manager and Instance may be placed on separate hosts/proxies. Preserve public origin/issuer where possible; issuer changes require controlled auth migration.
 - Independent component updates check compatible contracts and do not restart/migrate the other app. Test co-located and split-host arrangements (#62).
+
+## Public domain configuration
+
+- All domains/subdomains and per-service public origins are validated config. coyworks.nl is the initial deployment domain; pactaris.app is an illustrative future domain only. Never embed these in application behavior or assume a common parent domain.
+- Use central URL-building helpers, exact issuer/origin/callback trust and host-scoped cookies. Internal subject/household/instance IDs survive domain changes.
+- A public-domain change is a rehearsed migration, not a transparent backend address swap: review identity/provider registrations, sessions, PWA/push origins, old invite/feed/email links, DNS/TLS/proxy settings and rollback. Update scripts preserve configured domains.
