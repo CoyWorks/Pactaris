@@ -42,7 +42,7 @@ A stable operation ID plus semantic request hash makes create/accept/decline/rev
 
 A new acceptance always inserts a fresh membership UUID. It never reactivates a departed row or copies previous roles/consent. A consumed invitation cannot rejoin a former member; a new invitation is required. Replaying an old accepted receipt after a later rejoin reports the old membership left and cannot remove the new routing hint.
 
-Before acceptance dispatch, the gateway records a durable operation. Lost responses are recovered by bounded private receipt checks in the gateway worker. The worker can confirm an existing operation but never accepts an invitation without the original explicit request. A crash before dispatch requires an explicit browser retry with the secret. Pending responses do not claim completed membership publication.
+Before acceptance dispatch, the gateway records a durable operation. Lost responses are recovered by bounded private receipt checks in the gateway worker. The worker can confirm an existing operation but never accepts an invitation without the original explicit request. A crash before dispatch requires an explicit browser retry with the secret. Pending responses do not claim completed membership publication. Known private denials are marked rejected and are not repeatedly polled; only an explicit matching browser retry can reopen that operation.
 
 Central hint publication uses the shared account lock and a current private membership proof. Delayed old acknowledgements cannot overwrite/delete a newer generation. Gateway hints still grant no authority: each household read uses live Instance membership. General outbox delivery/acknowledgement, data-retention cleanup and owner recovery are not added by this slice.
 

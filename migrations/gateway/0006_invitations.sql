@@ -11,7 +11,7 @@ CREATE TABLE pactaris.invitation_routes (
 CREATE TABLE pactaris.invitation_acceptances (
  id uuid PRIMARY KEY,invitation_id uuid NOT NULL REFERENCES pactaris.invitation_routes(id),
  account_id uuid NOT NULL REFERENCES pactaris.accounts(id),request_hash text NOT NULL CHECK(length(request_hash)=64),
- membership_id uuid,status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','complete','left')),
+ membership_id uuid,status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','complete','left','rejected')),
  created_at timestamptz NOT NULL DEFAULT now(),next_check_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX ON pactaris.invitation_acceptances(next_check_at) WHERE status='pending';

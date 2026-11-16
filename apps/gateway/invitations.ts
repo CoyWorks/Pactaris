@@ -61,23 +61,27 @@ export class GatewayInvitations {
  }
  async respond(accountId:string,sessionToken:string,invitationId:string,action:'invitePreview'|'inviteAccept'|'inviteDecline',token:string,operationId:string,termsVersion?:string):Promise<InvitationView>{
   if(!tokenValid(token))throw new InvitationError('invalid');
-  const route=await this.route(invitationId),email=await this.proof(sessionToken,accountId);
+  const email=await this.proof(sessionToken,accountId),route=await this.route(invitationId);
   const input={operationId,invitationId,tokenHash:hash(token),recipientHash:hash(token+':'+email),...(action==='inviteAccept'?{termsVersion}:{})};
   if(action==='inviteAccept'){
    const requestHash=hash(JSON.stringify([accountId,invitationId,input])),db=await this.pool.connect();
    try{
     await db.query('BEGIN');await this.lock(db,accountId);
     const active=await db.query("SELECT id FROM pactaris.accounts WHERE id=$1 AND status='active' FOR SHARE",[accountId]);if(!active.rowCount)throw new InvitationError('denied');
-    const existing=await db.query('SELECT account_id,invitation_id,request_hash FROM pactaris.invitation_acceptances WHERE id=$1',[operationId]);
-    if(existing.rowCount){const row=existing.rows[0];if(row.account_id!==accountId||row.invitation_id!==invitationId||row.request_hash!==requestHash)throw new InvitationError('conflict');}
+    const existing=await db.query('SELECT account_id,invitation_id,request_hash,status FROM pactaris.invitation_acceptances WHERE id=$1',[operationId]);
+    if(existing.rowCount){const row=existing.rows[0];if(row.account_id!==accountId||row.invitation_id!==invitationId||row.request_hash!==requestHash)throw new InvitationError('conflict');if(row.status==='rejected')await db.query("UPDATE pactaris.invitation_acceptances SET status='pending',next_check_at=now() WHERE id=$1",[operationId]);}
     else await db.query('INSERT INTO pactaris.invitation_acceptances(id,invitation_id,account_id,request_hash) VALUES($1,$2,$3,$4)',[operationId,invitationId,accountId,requestHash]);
     await db.query('COMMIT');
    }catch(error){await db.query('ROLLBACK');throw error;}finally{db.release();}
-   try{return await this.finish(accountId,route,await this.client.execute(accountId,route,action,input));}
+   let delivered=false;
+   try{const result=await this.client.execute(accountId,route,action,input);delivered=true;return await this.finish(accountId,route,result);}
    catch(error){
     // Known authorization/terms/capacity denials have no local commit. Preserve
     // the operation identity for an exact retry; unknown delivery stays pending.
-    if(error instanceof InvitationError&&error.kind!=='unavailable')throw error;
+    if(error instanceof InvitationError&&error.kind!=='unavailable'){
+      if(!delivered)await this.pool.query("UPDATE pactaris.invitation_acceptances SET status='rejected' WHERE id=$1 AND account_id=$2 AND status='pending' AND membership_id IS NULL",[operationId,accountId]);
+      throw error;
+    }
     try{const receipt=await this.client.execute(accountId,route,'inviteReceipt',{operationId,invitationId});if(receipt.status!=='missing')return await this.finish(accountId,route,receipt);}catch{}
     return {invitationId,operationId,status:'pending'};
    }

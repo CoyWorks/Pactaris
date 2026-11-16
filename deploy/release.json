@@ -69,7 +69,7 @@
       "component": "gateway",
       "id": "0006_invitations",
       "path": "migrations/gateway/0006_invitations.sql",
-      "sha256": "f98f5f755fe139eab1ffb095b27b58791aaedfdd4d749699f530b94dd4a8d0bb",
+      "sha256": "81935b3c013b773cc15a08df1268cdce895bf1460d6259f0dfe040e1349cb964",
       "backwardCompatible": true
     },
     {
