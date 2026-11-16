@@ -4,13 +4,17 @@ The app is BDSM/SM/kink-first. Use issue scopes and dependencies; phases describ
 
 ## M0 — Domain and hosting foundation
 
-1. Confirm stack, inspected source and license (#1, #2, #50); define the instance/manager and identity/placement contracts (#55, #58) alongside the scaffold (#3).
+1. Record the agreed Node stack, clean-start reference scope and proprietary rights (#1, #2, #50); define the instance/manager and identity/placement contracts (#55, #58) alongside the scaffold (#3).
 2. Build PostgreSQL tenancy (#4, #5), independent account sessions (#6), explicit invitations (#8), technical authorization (#9) and consent (#10).
 3. Build multiple relationship-scoped BDSM roles and overlapping relationship types now (#35), then individual/relationship/household safety state (#11).
 4. Establish keyed English catalogs, locale/timezone handling and CI checks (#44) with the first scaffold; additional languages are later packs.
 5. Add versioned plan entitlements/usage (#53), transactional audit/outbox (#12) and runtime CI verification (#13).
 
 Acceptance includes pair, Dom/Dom/sub/sub group and one person Dom to A and sub/bottom to B. Admin rights are independent. Entitlement contracts and instance boundaries exist before paid checkout or additional servers are activated.
+
+## First working infrastructure slice
+
+#56 is promoted from Launch to M0. Deliver the central/main/internal service/data boundaries, minimum instance registration/status and GitHub install.sh/update.sh/status.sh alongside the first user workflow. Demonstrate repeat install and a data-preserving second pinned-version update, including failure recovery/private GitHub access. Initial database is empty; no legacy migration. Google, Apple and local verified accounts are required; select/configure a maintained identity broker before claiming login complete. See [INSTALL_UPDATE.md](INSTALL_UPDATE.md).
 
 ## M1 — Usable dynamic workflows
 
@@ -22,7 +26,7 @@ First slice: sign in → join explicitly → define accepted relationships/roles
 
 Complete MFA (#7), OCI/CloudPanel deployment (#28), backups (#29), monitoring/capacity (#30), security/load checks (#31), adult-service policy/provider review (#32), limited operator administration (#33) and pilot (#34).
 
-Deliver installer (#56), authenticated enrollment/manager inventory (#57), safe upgrades/drain/retirement (#59) and two-instance isolation/outage checks (#62). First-instance public rollout can precede expansion; manager/instance interfaces must already exist. Do not onboard a second public instance before #62 passes.
+Extend the first-slice installer/updater (#56), authenticated enrollment/manager inventory (#57), safe upgrades/drain/retirement (#59) and two-instance isolation/outage checks (#62). First-instance public rollout can precede expansion; manager/instance interfaces must already exist. Do not onboard a second public instance before #62 passes.
 
 Verify separate databases/stores/credentials, correct session audiences, local safety during manager outage and restore/deletion reconciliation. Multiple instances alone do not give a household high availability.
 
@@ -40,7 +44,7 @@ Good-to-have/wishes #45–#49 cover convenience and research. Longer-form journa
 
 ## Existing Site
 
-Version 4 remains unchanged during planning. No new application build or OCI deployment is implied. Implement/cut over through #2/#34 after the foundations are verified.
+Version 4 remains unchanged during planning. No new application build or OCI deployment is implied. Use #2 only for reference/provenance review. #34 validates the new empty product; do not migrate old data.
 
 ## Baseline verification
 
