@@ -119,3 +119,26 @@ Checked 16 November 2026. Pin versions and recheck documentation at implementati
 Current direction is Node.js/TypeScript/Express, PostgreSQL/Drizzle and systemd. Central identity is a maintained broker/service supporting Google, Apple and local verified email/password accounts and exposing OIDC to instances; product choice/configuration remains open. Production starts empty; no legacy users/data transfer.
 
 Central CloudPanel proxies local identity/main services and remote private-LAN instances, each with separate data/credentials. Ship GitHub installer/updater/status and minimum instance registration/status with the first working slice (#56 M0). See [INSTALL_UPDATE.md](INSTALL_UPDATE.md). Project-owned source is proprietary/all rights reserved under LICENSE.txt; prior references to choosing an open-source license are superseded.
+
+## Identity and Instance are separate applications
+
+Identity and Instance must each be installable, deployable, updatable and movable without installing the other application or CloudPanel. A shared repository/library is allowed; mandatory shared runtime, config files, database, migration lock or release pointer is not. Keep identity data and tenant data separate, and use OIDC over verified network contracts.
+
+Initial example, not a live configuration:
+
+| Public origin (HTTPS 443) | Backend as resolved from the proxy | Purpose |
+| --- | --- | --- |
+| panel.coyseinri.nl | https://127.0.0.1:8443 | Existing CloudPanel admin |
+| identity.coyworks.nl | https://127.0.0.1:9443 | Identity application |
+| instance1.coyworks.nl | https://127.0.0.1:9444 | Local Instance application |
+| instance2.coyworks.nl | https://instance2.coyworks.nl:9444, with internal DNS resolving to the remote private host | Remote Instance application |
+
+9443 and 9444 are configurable default HTTPS ingress ports, checked for conflicts. Every instance uses the same application/default port on its own host. Multiple instances on one host need distinct endpoints/paths. 8443 belongs to existing CloudPanel administration and is not reused by Identity/Instance.
+
+The instance2 upstream hostname must resolve from the proxy to the actual private backend, not back to the public proxy. Use split DNS or a distinct internal backend name/private IP. Keep public origin, backend target, listen interface/port and verified TLS server name as separate settings.
+
+Verify backend TLS against the configured trusted identity. A hostname certificate does not automatically cover 127.0.0.1: configure an explicit trusted TLS name/SNI or a certificate with the correct IP SAN. Do not disable backend certificate validation. No ports, domains or private addresses are hardcoded into feature logic.
+
+Adding another proxy or moving Identity/Instance to separate hosts must work through configuration while preserving the public origins/issuer. Changing the public OIDC issuer itself requires controlled trust/session migration, not just swapping an internal address. CloudPanel is external ingress; neither application requires it locally.
+
+Proposed source modules now distinguish apps/identity and apps/instance, each with its own frontend/server/build and data boundary; shared contracts/i18n are libraries. Instance worker remains an independently supervised entry point within the Instance installation. This supersedes a mandatory single central bundle or shared apps/api deployment. See #3/#55/#56.
