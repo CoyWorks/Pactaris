@@ -50,3 +50,7 @@ Read [DOMAIN_MODEL.md](DOMAIN_MODEL.md), [PLANS.md](PLANS.md) and [INFRASTRUCTUR
 Recommended choices awaiting detailed ADRs: household-sponsored subscriptions, central maintained identity, metadata-only manager registry, versioned entitlement snapshots and a pull-oriented scoped agent. Illustrative Free/Plus/Pro numbers are not approved pricing or limits.
 
 Before fleet rollout select manager placement, enrollment trust, domains, session/revocation bounds, capacity policy and recovery ownership. Before sales validate quotas/costs, sponsor changes, grace/downgrade and adult-content provider suitability. A free four-person dynamic must work.
+
+## English-first baseline
+
+Obedience is the functional reference (docs/OBEDIENCE_BASELINE.md), with original implementation and our expanded group/consent/privacy model. #44 is promoted to M0: stable message keys/shortcodes, English-only source catalogs initially, shared locale/timezone formatting and CI enforcement. New language packs require no feature-code rewrite. The previous expectation of shipping Dutch alongside English is superseded.
