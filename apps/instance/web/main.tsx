@@ -7,13 +7,13 @@ type Status = { component: 'instance' | 'gateway'; version: string; readiness: '
 function App() {
   const [status, setStatus] = useState<Status>(), [failed, setFailed] = useState(false), [checked, setChecked] = useState<Date>();
   useEffect(() => {
-    let gone = false, timer: ReturnType<typeof setTimeout> | undefined, active: AbortController | undefined;
+    let gone = false, gateway = false, timer: ReturnType<typeof setTimeout> | undefined, active: AbortController | undefined;
     const load = async () => {
       if (gone || document.hidden || !navigator.onLine || active) return;
       active = new AbortController(); const timeout = setTimeout(() => active?.abort(), 10000);
-      try { const res = await fetch('/api/status', { cache: 'no-store', signal: active.signal }); if (!res.ok) throw Error('status'); const data = await res.json() as Status; if (!gone) { setStatus(data); setFailed(false); setChecked(new Date()); } }
+      try { const res = await fetch('/api/status', { cache: 'no-store', signal: active.signal }); if (!res.ok) throw Error('status'); const data = await res.json() as Status; gateway=data.component==='gateway'; if (!gone) { setStatus(data); setFailed(false); setChecked(new Date()); } }
       catch { if (!gone) setFailed(true); }
-      finally { clearTimeout(timeout); active = undefined; if (!gone) timer = setTimeout(() => { void load(); }, 60000); }
+      finally { clearTimeout(timeout); active = undefined; if (!gone && !gateway) timer = setTimeout(() => { void load(); }, 60000); }
     };
     const resume = () => { if (timer) clearTimeout(timer); if (document.hidden) { active?.abort(); } else void load(); };
     document.addEventListener('visibilitychange', resume); window.addEventListener('online', resume); void load();

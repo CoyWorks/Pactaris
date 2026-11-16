@@ -4,15 +4,17 @@ Operational lessons and regression requirements: [FIRST_INSTALL_NOTES.md](docs/F
 
 Target automated installation and one public household entry: [INSTALLER_EXPERIENCE.md](docs/INSTALLER_EXPERIENCE.md).
 
-Current alpha fresh-server installation commands, including apt dependencies: [FRESH_SERVER.md](docs/FRESH_SERVER.md).
+Historical 0.1 empty-server bootstrap, including apt dependencies (upgrade to 0.2 using LOGIN_ROLLOUT.md): [FRESH_SERVER.md](docs/FRESH_SERVER.md).
 
 A mobile-first platform for consenting-adult BDSM, SM and kink: Dom/sub and play-partner relationships, protocols, tasks, rituals, negotiated sessions, rewards/consequences and aftercare.
 
-**Status: foundation implementation, 0.1.0-alpha.1.** The repository now contains an executable Instance status runtime, an independently deployable Identity candidate definition, and experimental install/update/status tooling. The connected alpha is not complete and is not ready for public onboarding. The confirmed product name is Pactaris.
+**Status: central-login implementation, 0.2.0-alpha.1.** The repository contains independently deployable Identity/Instance components, a central OIDC/session gateway, authorized household selection, reviewed PostgreSQL migrations and experimental install/update/status tooling. The connected alpha is not complete and is not ready for public onboarding. The confirmed product name is Pactaris.
 
-Identity provider/application import: [OIDC blueprint instructions](docs/IDENTITY_OIDC.md).
+Central-login rollout: [LOGIN_ROLLOUT.md](docs/LOGIN_ROLLOUT.md), with trust boundaries in [LOGIN_GATEWAY.md](docs/LOGIN_GATEWAY.md).
 
-Start with [Milestone 1](docs/MILESTONE_1.md) and [development/install instructions](docs/DEVELOPMENT.md). Sign-in, household workflows and real host/provider acceptance remain pending; this foundation does not expose household data.
+Historical direct-Instance Identity provider/application import: [OIDC blueprint instructions](docs/IDENTITY_OIDC.md).
+
+Start with [Milestone 1](docs/MILESTONE_1.md) and [development/install instructions](docs/DEVELOPMENT.md). Real authentik sign-in rollout and household creation/invitation workflows remain pending; this foundation does not expose household data.
 
 Obedience is the functional reference for core habits, rewards/consequences, points redemption, partner updates/chat and progress charts. See [the baseline mapping](docs/OBEDIENCE_BASELINE.md); implement original code and presentation.
 
@@ -89,4 +91,4 @@ No covert tracking, blackmail, forced participation, punitive withdrawal or devi
 
 [Pactaris](https://consent-households.coyseinri.chatgpt.site), version 4, is a reference only. This is a new product with empty production databases; no legacy users, accounts or household content will be migrated. This documentation update does not change that Site or deploy OCI services. See the source assessment for verified behavior and gaps.
 
-Installer/updater/status entry points now exist with a read-only plan default; host application remains experimental and unverified. See docs/DEVELOPMENT.md for prerequisites, refusal/recovery behavior and limitations. Google/Apple/provider login, tenant schema, full updater acceptance and complete rights review remain open. The proprietary licensing direction and clean start are decided.
+Installer/updater/status entry points now exist with a read-only plan default; host application remains experimental and unverified. See docs/DEVELOPMENT.md for prerequisites, refusal/recovery behavior and limitations. Google/Apple and live provider acceptance, full domain workflows and updater acceptance and complete rights review remain open. The proprietary licensing direction and clean start are decided.

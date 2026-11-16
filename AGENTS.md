@@ -62,7 +62,7 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 
 ## Public domain configuration
 
-- All domains/subdomains and per-service public origins are validated config. coyworks.nl is the initial deployment domain; pactaris.app is the future default product-domain example, still configurable and not verified domain ownership. Never embed these in application behavior or assume a common parent domain.
+- All domains/subdomains and per-service public origins are validated config. coyworks.nl is the initial deployment domain; the owner confirmed purchase of pactaris.app as the product domain; all origins remain configurable and live cutover is explicit. Never embed these in application behavior or assume a common parent domain.
 - Use central URL-building helpers, exact issuer/origin/callback trust and host-scoped cookies. Internal subject/household/instance IDs survive domain changes.
 - A public-domain change is a rehearsed migration, not a transparent backend address swap: review identity/provider registrations, sessions, PWA/push origins, old invite/feed/email links, DNS/TLS/proxy settings and rollback. Update scripts preserve configured domains.
 
@@ -70,3 +70,9 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 
 - Follow docs/INSTALLER_EXPERIENCE.md and #56/#58/#62. The target normal installer asks only Identity/Instance/both and hostname; consume trusted fleet configuration/enrollment and central one-time external credentials rather than inventing access or silently weakening security. This workflow is not implemented by the current alpha.
 - Browser users select authorized households at the configured canonical product origin. Instance endpoints are private infrastructure; public callbacks, API/file links and redirects must not expose them. Earlier direct-instance OIDC setup is transitional and needs an explicit migration. Design gateway sessions/delegation before implementation; every Instance retains local tenant authorization.
+
+## Central login slice
+
+- Read docs/LOGIN_GATEWAY.md and docs/LOGIN_ROLLOUT.md before authentication, gateway, migration, delegation or setup changes. Gateway owns the browser session; no browser cookies or IdP tokens are passed to Instances. Keep per-request signed instance/household/method/path/purpose validation, replay rejection and live local membership/RLS enforcement.
+- Preserve separate non-owner runtime, schema-migration and read-only BYPASSRLS backup roles. Migration/backup credential files remain root-only and must never be copied into service-readable secrets.
+- The old direct-Instance OIDC blueprint is a historical test setup. The new pactaris-gateway blueprint is for fresh central clients; never reimport either over a working client without reviewing issuer/slug/callback/secret preservation.

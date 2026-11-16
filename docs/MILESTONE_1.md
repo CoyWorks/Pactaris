@@ -58,3 +58,9 @@ Update this section and relevant issues after each checkpoint with commits, comm
 
 - 2026-11-16: milestone recorded; repository inspected; implementation starting. No application services deployed.
 - 2026-11-16: checkpoint A started: Node/Express Instance health/readiness/status and React status UI; English keyed messages/locale validation; independent authentik candidate Compose definition; component install/update/status planning and experimental host activation. Type checks, build, six TypeScript config/HTTP-handler tests and six Python operational tests pass locally. No real Docker/PostgreSQL/systemd/CloudPanel or provider login tests completed. Read DEVELOPMENT.md before any host application. No parent issue is marked complete.
+
+## Central login implementation checkpoint — 0.2.0-alpha.1
+
+Implemented the scoped #4/#5/#6/#8/#55/#56/#58 slice: separate gateway and Instance migrations, private household-summary contract with signed audience/method/path-scoped delegation and current membership/RLS enforcement, maintained-library OIDC/PKCE/nonce/signature validation, DB-backed sessions/local logout, mobile household selector/empty states, migration-aware independent deployment and existing-host preparation helper. See [LOGIN_GATEWAY.md](LOGIN_GATEWAY.md) and [LOGIN_ROLLOUT.md](LOGIN_ROLLOUT.md).
+
+This does not close the broad parents: household creation/invitation/consent/task workflows, Google/Apple/verified registration/global revocation, the full two-question installer/enrollment/renewal and live provider/deployment acceptance remain separate gates. Never label a new account's empty selector as an operational household feature set.

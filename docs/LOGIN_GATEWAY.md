@@ -29,3 +29,7 @@ Gateway is an advanced independently deployable runtime for the central profile.
 ## Acceptance
 
 Verify actual JWT signature/issuer/audience/nonce/state/PKCE/code-replay failures using a controlled OIDC fixture, persistence and expiration, session fixation/CSRF/logout, two account/household boundaries, real PostgreSQL RLS/pool reuse and wrong-Instance/replayed delegations. Check startup, migration repeat/checksum failure, health gates and preserving update behavior. Real authentik/social-provider acceptance and the live CloudPanel/domain cutover remain an operator rollout gate.
+
+## Verification evidence
+
+The implementation branch passed local type/i18n/build checks and controlled signed-token/OIDC tests. [Native PostgreSQL/HTTPS CI](https://github.com/CoyWorks/Pactaris/actions/runs/43878293911) passed against two separate Instance databases plus the gateway, non-superuser schema/runtime roles, RLS/pool reuse, replay rejection, wrong certificate names, current membership revocation and private routing. The integration harness uses real HTTP requests throughout to avoid test-adapter prototype changes affecting listening Express apps. Live authentik and the root co-located bootstrap still need operator acceptance.

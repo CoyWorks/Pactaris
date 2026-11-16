@@ -54,5 +54,6 @@
   "portal.emptyDescription": "You are signed in. No active dynamics are available for this account. Creating a dynamic and accepting invitations will be available in a later release.",
   "portal.more": "Show more",
   "cli.loginPlan": "Prepare the existing local Identity/Instance installation for the gateway at {publicOrigin}; no changes were applied.",
-  "cli.loginPrepared": "Login preparation completed for {publicOrigin}. Gateway configuration: {path}. Install/update the runtimes and configure public ingress before testing sign-in."
+  "cli.loginPrepared": "Login preparation completed for {publicOrigin}. Gateway configuration: {path}. Install/update the runtimes and configure public ingress before testing sign-in.",
+  "portal.return": "Return to Pactaris"
 }

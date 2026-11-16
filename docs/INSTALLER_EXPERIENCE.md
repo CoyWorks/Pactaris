@@ -9,7 +9,7 @@ The interactive installer asks for:
 1. Components: **Identity**, **Instance**, or **both**.
 2. Hostname: the service/backend FQDN for this installation, validated against the selected role and fleet configuration.
 
-Use `pactaris.app` as the future default product-domain example. The default canonical application origin is `https://pactaris.app`, with `https://identity.pactaris.app` for the identity service. Both remain operator-configurable. Existing `https://www.coyworks.nl`/CoyWorks settings must be preserved until a deliberate cutover; this decision does not establish domain ownership, provision DNS or authorize a live migration.
+The owner confirmed purchase of `pactaris.app`; use it as the default product domain. The default canonical application origin is `https://pactaris.app`, with `https://identity.pactaris.app` for the identity service. Both remain operator-configurable. Existing `https://www.coyworks.nl`/CoyWorks settings must be preserved until a deliberate cutover; this decision does not provision DNS or trigger a live migration.
 
 The operator should not normally enter ports, database names/passwords, TLS names, file paths, OIDC client IDs/secrets or callback routes. Advanced overrides and unattended preserved configuration remain supported for split-host deployments, another public domain, existing infrastructure and nonstandard bindings. Do not change the machine's OS hostname merely because a service FQDN was entered.
 

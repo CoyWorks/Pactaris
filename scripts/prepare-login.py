@@ -96,10 +96,15 @@ def main():
         existing=None
     deployment_directory(gateway)
     with contextlib.ExitStack() as stack:
-        for base in (instance,gateway):
+        for base in (instance,gateway,identity):
             lock=stack.enter_context(open(base/'operation.lock','a'))
             try: fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
             except BlockingIOError: raise DeployError('cli.locked')
+        if read_json(instance/'config.json')!=cfg or read_json(identity/'config.json')!=identity_config:
+            fail('login.configuration_changed_retry')
+        if gateway_config.exists() and read_json(gateway_config)!=existing:
+            fail('login.configuration_changed_retry')
+        identity_state=read_json(identity/'state.json')
         metadata_code="""import json
 from authentik.providers.oauth2.models import OAuth2Provider
 p=OAuth2Provider.objects.get(name=%r)
@@ -129,6 +134,7 @@ print('PACTARIS_METADATA='+json.dumps({'clientId':p.client_id,'secret':p.client_
         ca=bootstrap/'ca.crt';ca_key=bootstrap/'ca.key'
         for p in (ca,ca_key):
             if not p.is_file(): fail('login.internal_ca_required')
+        if ca_key.is_symlink() or ca_key.stat().st_uid!=0 or ca_key.stat().st_mode & 0o077: fail('login.ca_key_permissions')
         private=folder/'delegation.key';public=folder/'delegation.pub'
         if not private.exists(): run(['openssl','genpkey','-algorithm','Ed25519','-out',str(private)])
         os.chmod(private,0o600)

@@ -1,3 +1,7 @@
+# Current login slice — 0.2.0-alpha.1
+
+Read [LOGIN_GATEWAY.md](LOGIN_GATEWAY.md) and [LOGIN_ROLLOUT.md](LOGIN_ROLLOUT.md) for the central OIDC/session gateway, migration/backup roles and real-host rollout. The sections below describe the original 0.1 foundation checkpoint and its historical limits. Parent issues remain open for their wider criteria.
+
 # Foundation checkpoint — 0.1.0-alpha.1
 
 This first code checkpoint starts milestone 1; it does not complete the connected alpha. Read MILESTONE_1.md for remaining gates.

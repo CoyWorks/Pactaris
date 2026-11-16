@@ -25,7 +25,7 @@ Updated 16 November 2026. Current user decisions override earlier planning alter
 
 | Choice | Scope / issue |
 | --- | --- |
-| Identity product | Select maintained broker/service supporting all three methods, local recovery/MFA and central OIDC; #6/#58 |
+| Identity product | Authentik 2026.8.5 is deployed for the alpha; complete real local/social/recovery/MFA acceptance remains #6/#58 |
 | Provider setup | Google OAuth client, Apple developer/App ID/Services ID/keys/return URLs/relay-email setup; test real integrations |
 | Domains and servers | Central and instance origins, actual host CPU/RAM/disk, private addresses and allowed proxy sources; #1/#28 |
 | Update trust/access | Version policy, artifact verification, instance read-only deploy credentials and source-private transition; #56 |
@@ -44,7 +44,7 @@ Identity and Instance are separately installable/updatable applications, not one
 
 ## Domain decision
 
-All domains/subdomains and per-service origins are configurable. The current deployment starts on coyworks.nl. Use pactaris.app as the future default product-domain example, still configurable and not an assertion of verified ownership or a live migration. No code assumes a fixed suffix or shared parent domain. Public-origin/issuer migration, unlike backend relocation, requires a tested identity/session/PWA/push/link cutover plan; see docs/INFRASTRUCTURE.md and #58/#62. No live domain/DNS changes are performed during planning.
+All domains/subdomains and per-service origins are configurable. The current deployment starts on coyworks.nl. The owner confirmed purchase of pactaris.app as the product domain. Keep origins configurable; registration and live migration are separate deployment operations. No code assumes a fixed suffix or shared parent domain. Public-origin/issuer migration, unlike backend relocation, requires a tested identity/session/PWA/push/link cutover plan; see docs/INFRASTRUCTURE.md and #58/#62. No live domain/DNS changes are performed during planning.
 
 ## Minimal-input installation and public household entry
 

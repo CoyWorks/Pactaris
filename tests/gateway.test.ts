@@ -86,3 +86,12 @@ test('host poisoning and throttled login cannot create an authentication attempt
   const f=fixture();assert.equal((await inject(f.app,{url:'/auth/login',headers:{host:'attacker.invalid','x-forwarded-host':'pactaris.app'}})).statusCode,400);
   f.store.limited=true;assert.equal((await inject(f.app,{url:'/auth/login',headers})).statusCode,429);assert.equal(f.store.attempts.size,0);
 });
+
+test('browser login failures render catalog text instead of raw protocol details',async()=>{
+  const f=fixture();
+  const response=await inject(f.app,{url:'/auth/oidc/callback?error=fixture-private-detail',headers:{...headers,accept:'text/html'}});
+  assert.equal(response.statusCode,400);assert.match(String(response.headers['content-type']),/text\/html/);
+  assert.ok(response.payload.includes('Sign-in could not be completed'));
+  assert.ok(!response.payload.includes('fixture-private-detail'));
+  assert.ok(!response.payload.includes('messageKey'));
+});

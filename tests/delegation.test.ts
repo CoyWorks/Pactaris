@@ -17,7 +17,8 @@ test('signed delegations bind identity, instance audience, household, method, pu
   const gateway=parseGatewayConfig(JSON.parse(readFileSync('config/gateway.example.json','utf8')));gateway.delegation.privateKeyFile=privateFile;
   const config=parseConfig(JSON.parse(readFileSync('config/instance.example.json','utf8')));config.instanceId=instance;config.delegation={issuer:gateway.publicOrigin,publicKeys:{'gateway-v1':publicFile}};
   const verifier=new DelegationVerifier(config),token=await new DelegationSigner(gateway).sign(account,household,instance);
-  assert.equal((await verifier.verify(token,household)).accountId,account);
+  const verified=await verifier.verify(token,household);assert.equal(verified.accountId,account);
+  assert.ok(verified.expiresAt.getTime()>=Date.now()+30000); // replay markers outlive the clock-tolerance window
   await assert.rejects(verifier.verify(token,randomUUID()));
   await assert.rejects(new DelegationVerifier({...config,instanceId:randomUUID()}).verify(token,household));
   await assert.rejects(new DelegationVerifier({...config,delegation:{...config.delegation,issuer:'https://attacker.invalid'}}).verify(token,household));

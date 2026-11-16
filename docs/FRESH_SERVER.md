@@ -1,4 +1,6 @@
-# Fresh main server — experimental foundation
+# Historical 0.1 foundation bootstrap (fixed tooling)
+
+For the new central-login release on an existing server, use [LOGIN_ROLLOUT.md](LOGIN_ROLLOUT.md). This historical empty-host path deliberately installs the original 0.1 runtime using the later repaired installer; it does not provision the new gateway/migration roles. Complete the initial Identity setup before following the 0.2 rollout. The full minimal-input fresh installer remains tracked in #56.
 
 Target: an empty Ubuntu 24.04 or 26.04 LTS systemd server, amd64 or arm64. Run the blocks in order as root in one SSH session. Stop on any error. This provisions the foundation for a test deployment, not a working production login/household service. Privileged installation has not yet been verified on an OCI host; see [verification limits](DEVELOPMENT.md).
 
@@ -78,11 +80,12 @@ pg_isready -h 127.0.0.1 -p 5432
 ```bash
 git clone https://github.com/CoyWorks/Pactaris.git /opt/pactaris-source
 cd /opt/pactaris-source
-REVISION="$(git rev-parse HEAD)"
+git checkout --detach 39d8661762202e011d4923714312fe66df7f3b10
+REVISION="ed86e4261d3e551b5dee03aabc17d74042d9cc09"
 git show --no-patch --oneline "$REVISION"
 ```
 
-Inspect and approve that commit before continuing. Set `REVISION` to a reviewed full commit SHA and `git checkout --detach "$REVISION"` if selecting another release. Installers subsequently fetch exactly this SHA, not a moving branch. Private repository access later requires an operator-provisioned read-only deploy key; never embed a token in a URL.
+Inspect and approve the repaired tooling commit and the separate original runtime SHA before continuing. Do not substitute the migration-bearing 0.2 runtime into this historical bootstrap without its migration/backup configuration. Keep the tooling checkout at the repaired commit and REVISION at the original runtime SHA. The installer fetches that exact runtime SHA independently, not a moving branch. Private repository access later requires an operator-provisioned read-only deploy key; never embed a token in a URL.
 
 ```bash
 umask 077

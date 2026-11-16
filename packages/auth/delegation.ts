@@ -34,7 +34,7 @@ export class DelegationVerifier {
     const now=Math.floor(Date.now()/1000);
     if(!uuid(payload.sub)||!uuid(payload.jti)||payload.household_id!==householdId||payload.purpose!=='household.summary'||payload.method!=='GET'||payload.path!==summaryPath(householdId)||
       typeof payload.iat!=='number'||typeof payload.exp!=='number'||payload.exp-payload.iat>30||payload.iat>now+3||payload.exp<=payload.iat)throw Error('delegation.scope');
-    return {accountId:payload.sub,jti:payload.jti,expiresAt:new Date(payload.exp*1000)};
+    return {accountId:payload.sub,jti:payload.jti,expiresAt:new Date((payload.exp+3)*1000)};
     }catch{throw new DelegationError('delegation.invalid');}
   }
 }
