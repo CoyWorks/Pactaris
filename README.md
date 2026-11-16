@@ -14,7 +14,7 @@ Central-login rollout: [LOGIN_ROLLOUT.md](docs/LOGIN_ROLLOUT.md), with trust bou
 
 Historical direct-Instance Identity provider/application import: [OIDC blueprint instructions](docs/IDENTITY_OIDC.md).
 
-Start with [Milestone 1](docs/MILESTONE_1.md) and [development/install instructions](docs/DEVELOPMENT.md). Real authentik sign-in rollout and household creation/invitation workflows remain pending; this foundation does not expose household data.
+Start with [Milestone 1](docs/MILESTONE_1.md) and [development/install instructions](docs/DEVELOPMENT.md). The operator has reported working central sign-in/local logout on the product domains. [Milestone 2](docs/MILESTONE_2.md) now covers explicit household onboarding; its first checkpoint adds [pilot Instance registration and technical permissions](docs/INSTANCE_REGISTRY.md). Household creation/invitation/leave workflows and IdP branding remain in progress or scoped, not completed.
 
 Obedience is the functional reference for core habits, rewards/consequences, points redemption, partner updates/chat and progress charts. See [the baseline mapping](docs/OBEDIENCE_BASELINE.md); implement original code and presentation.
 

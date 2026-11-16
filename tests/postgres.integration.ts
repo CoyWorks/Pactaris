@@ -16,6 +16,7 @@ import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
 import { PrivateHouseholdClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
+import { registerInstance } from '../packages/routing/registry.js';
 const adminUrl=process.env.TEST_DATABASE_URL;
 test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance household selection',{skip:!adminUrl,timeout:120000},async()=>{
  const root=new pg.Pool({connectionString:adminUrl,max:1}),folder=await mkdtemp(join(tmpdir(),'pactaris-postgres-'));
@@ -26,7 +27,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   for(const [role,flags] of [[runtime,'NOBYPASSRLS'],[migration,'NOBYPASSRLS'],[backup,'BYPASSRLS']])await root.query(`CREATE ROLE "${role}" LOGIN PASSWORD 'fixture-only-password' NOSUPERUSER NOCREATEDB NOCREATEROLE ${flags}`);
   await root.query(`CREATE DATABASE "${database}" OWNER postgres`);
   await root.query(`REVOKE ALL ON DATABASE "${database}" FROM PUBLIC;GRANT CONNECT ON DATABASE "${database}" TO "${runtime}","${migration}","${backup}";GRANT CREATE ON DATABASE "${database}" TO "${migration}"`);
-  const owner=new pg.Pool({connectionString:url(database),max:1}),migrator=new pg.Pool({connectionString:url(database,migration,'fixture-only-password'),max:1}),pool=new pg.Pool({connectionString:url(database,runtime,'fixture-only-password'),max:1});pools.push(owner,migrator,pool);
+  const owner=new pg.Pool({connectionString:url(database),max:1}),migrator=new pg.Pool({connectionString:url(database,migration,'fixture-only-password'),max:3}),pool=new pg.Pool({connectionString:url(database,runtime,'fixture-only-password'),max:1});pools.push(owner,migrator,pool);
   await migrate(migrator,process.cwd(),kind,runtime,backup);await migrate(migrator,process.cwd(),kind,runtime,backup);
   await requireSchema(pool,kind);
   await assert.rejects(requireSchema(owner,kind));
@@ -82,8 +83,16 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    const server=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},app);servers.push(server);
    await new Promise<void>((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
    const address=server.address();assert.ok(address&&typeof address!=='string');
-   await gatewayDb.owner.query('INSERT INTO pactaris.instances(id,endpoint,tls_server_name,ca_file) VALUES($1,$2,$3,$4)',[ids[i],`https://127.0.0.1:${address.port}`,'backend.fixture.invalid',certificate]);
+   const registration={id:ids[i]!,endpoint:`https://127.0.0.1:${address.port}/`,tlsServerName:'backend.fixture.invalid',caFile:certificate};
+   assert.deepEqual((await Promise.all([registerInstance(gatewayDb.migrator,registration),registerInstance(gatewayDb.migrator,registration)])).sort(),['registered','unchanged']);
+   await assert.rejects(registerInstance(gatewayDb.migrator,{...registration,tlsServerName:'wrong.fixture.invalid'}));
+   await assert.rejects(registerInstance(gatewayDb.pool,registration));
   }
+  assert.equal((await gatewayDb.owner.query('SELECT count(*)::int AS count FROM pactaris.registry_events')).rows[0].count,2);
+  await gatewayDb.owner.query("UPDATE pactaris.instances SET status='disabled' WHERE id=$1",[ids[0]]);
+  const disabled=(await gatewayDb.owner.query('SELECT endpoint,tls_server_name,ca_file FROM pactaris.instances WHERE id=$1',[ids[0]])).rows[0];
+  await assert.rejects(registerInstance(gatewayDb.migrator,{id:ids[0]!,endpoint:disabled.endpoint,tlsServerName:disabled.tls_server_name,caFile:disabled.ca_file}));
+  await gatewayDb.owner.query("UPDATE pactaris.instances SET status='active' WHERE id=$1",[ids[0]]);
   for(const [i,id] of households.entries())await gatewayDb.owner.query('INSERT INTO pactaris.placements(household_id,instance_id,version) VALUES($1,$2,1)',[id,ids[i===2?1:0]]);
   // Include a stale/forged hint to another household: Instance membership remains authoritative.
   for(const id of households)await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id) VALUES($1,$2)',[account.id,id]);

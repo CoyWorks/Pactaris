@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0-alpha.1",
+  "version": "0.2.1-alpha.1",
   "protocol": 2,
   "migrations": [
     {
@@ -14,6 +14,13 @@
       "id": "0001_households",
       "path": "migrations/instance/0001_households.sql",
       "sha256": "be6e1e474d0a14118382db365bd61d09e67eb2a35fd9d32aad856dc9c9197ad5",
+      "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0002_registry_events",
+      "path": "migrations/gateway/0002_registry_events.sql",
+      "sha256": "949e1fe61bf800c5d079a7ee42e845975fcb3bd58998c3fb6f195d23a411c630",
       "backwardCompatible": true
     }
   ]
