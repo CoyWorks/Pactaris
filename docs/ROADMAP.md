@@ -1,42 +1,42 @@
 # Build order and release gates
 
-Use the linked issues as scoped work items. Phase tags describe roadmap groups; this repository does not yet have GitHub milestone objects. Dependencies in issue bodies establish the starting order, not a promise that every step must be developed serially.
+The app is BDSM/SM/kink-first. Use issue scopes and dependencies; phases describe roadmap groups, not existing GitHub milestone objects.
 
-## M0 — Hosted foundation
+## M0 — Domain and hosting foundation
 
-1. Decide runtime/hosting boundary ([#1](https://github.com/CoyWorks/Pactaris/issues/1)), map the source ([#2](https://github.com/CoyWorks/Pactaris/issues/2)) and settle source licensing ([#50](https://github.com/CoyWorks/Pactaris/issues/50)).
-2. Create the scaffold ([#3](https://github.com/CoyWorks/Pactaris/issues/3)), PostgreSQL model ([#4](https://github.com/CoyWorks/Pactaris/issues/4)), isolation ([#5](https://github.com/CoyWorks/Pactaris/issues/5)) and accounts ([#6](https://github.com/CoyWorks/Pactaris/issues/6)).
-3. Add explicit household invitations ([#8](https://github.com/CoyWorks/Pactaris/issues/8)), authorization ([#9](https://github.com/CoyWorks/Pactaris/issues/9)), consent ([#10](https://github.com/CoyWorks/Pactaris/issues/10)) and safety ([#11](https://github.com/CoyWorks/Pactaris/issues/11)).
-4. Make audit/side effects transactional ([#12](https://github.com/CoyWorks/Pactaris/issues/12)) and prove core behavior in CI ([#13](https://github.com/CoyWorks/Pactaris/issues/13)).
+1. Confirm stack, inspected source and license (#1, #2, #50); define the instance/manager and identity/placement contracts (#55, #58) alongside the scaffold (#3).
+2. Build PostgreSQL tenancy (#4, #5), independent account sessions (#6), explicit invitations (#8), technical authorization (#9) and consent (#10).
+3. Build multiple relationship-scoped BDSM roles and overlapping relationship types now (#35), then individual/relationship/household safety state (#11).
+4. Add versioned plan entitlements/usage (#53), transactional audit/outbox (#12) and runtime CI verification (#13).
 
-Exit check: two unrelated households cannot access each other; a user can have different permissions in both; withdrawal blocks protected work; one member cannot resume another's paused participation. No real user data is needed for this check.
+Acceptance includes pair, Dom/Dom/sub/sub group and one person Dom to A and sub/bottom to B. Admin rights are independent. Entitlement contracts and instance boundaries exist before paid checkout or additional servers are activated.
 
-## M1 — First usable product
+## M1 — Usable dynamic workflows
 
-1. Port the safe PWA shell ([#14](https://github.com/CoyWorks/Pactaris/issues/14)) and daily view ([#15](https://github.com/CoyWorks/Pactaris/issues/15)).
-2. Complete protocols ([#16](https://github.com/CoyWorks/Pactaris/issues/16)), one task lifecycle ([#17](https://github.com/CoyWorks/Pactaris/issues/17)) and recurrence/jobs ([#18](https://github.com/CoyWorks/Pactaris/issues/18)).
-3. Add check-ins ([#19](https://github.com/CoyWorks/Pactaris/issues/19)), optional ledger ([#20](https://github.com/CoyWorks/Pactaris/issues/20)) and private attachments ([#21](https://github.com/CoyWorks/Pactaris/issues/21)).
-4. Add inbox ([#22](https://github.com/CoyWorks/Pactaris/issues/22)), Web Push ([#23](https://github.com/CoyWorks/Pactaris/issues/23)) and transactional email ([#24](https://github.com/CoyWorks/Pactaris/issues/24)). Email setup may need to begin earlier to exercise account verification/invitations.
-5. Finish personal/household export ([#25](https://github.com/CoyWorks/Pactaris/issues/25)), leave/deletion ([#26](https://github.com/CoyWorks/Pactaris/issues/26)) and settings ([#27](https://github.com/CoyWorks/Pactaris/issues/27)).
+PWA/dashboard (#14, #15), protocols (#16), tasks/recurrence (#17, #18), rituals/aftercare/check-ins (#19), optional ledger (#20), private uploads (#21), inbox/push/email (#22–#24), export/deletion (#25, #26), settings (#27) and negotiated play sessions (#52).
 
-First vertical slice: sign in, create/join, explicitly accept, create/complete a task, pause, export and leave. Demonstrate this in staging before expanding all modules. Recurring jobs and notification delivery must work with the browser closed.
+First slice: sign in → join explicitly → define accepted relationships/roles → negotiate consent → assign/complete task → stop → export/leave. Validate a free four-person dynamic with multiple roles. Basic negotiation/aftercare is included free. Workers must operate correctly while the browser is closed.
 
-## Launch — Public-service readiness
+## Launch — Public service and managed instances
 
-Complete MFA/session controls ([#7](https://github.com/CoyWorks/Pactaris/issues/7)), OCI deployment ([#28](https://github.com/CoyWorks/Pactaris/issues/28)), backups/restore ([#29](https://github.com/CoyWorks/Pactaris/issues/29)), monitoring/capacity ([#30](https://github.com/CoyWorks/Pactaris/issues/30)), security/concurrency checks ([#31](https://github.com/CoyWorks/Pactaris/issues/31)), policy review ([#32](https://github.com/CoyWorks/Pactaris/issues/32)) and limited platform administration ([#33](https://github.com/CoyWorks/Pactaris/issues/33)).
+Complete MFA (#7), OCI/CloudPanel deployment (#28), backups (#29), monitoring/capacity (#30), security/load checks (#31), adult-service policy/provider review (#32), limited operator administration (#33) and pilot (#34).
 
-Run the invite-only pilot ([#34](https://github.com/CoyWorks/Pactaris/issues/34)) with at least two unrelated households, a multi-household user and target mobile devices. Public onboarding remains gated until findings and operational ownership are resolved.
+Deliver installer (#56), authenticated enrollment/manager inventory (#57), safe upgrades/drain/retirement (#59) and two-instance isolation/outage checks (#62). First-instance public rollout can precede expansion; manager/instance interfaces must already exist. Do not onboard a second public instance before #62 passes.
 
-A successful demo is not a production acceptance test. Verify database isolation, private-content visibility, real worker safety checks, restore/deletion reconciliation and proxy/session behavior on representative infrastructure.
+Verify separate databases/stores/credentials, correct session audiences, local safety during manager outage and restore/deletion reconciliation. Multiple instances alone do not give a household high availability.
 
-## Later — Product expansion
+## Paid rollout
 
-Relationships/standing, bounded delegation, templates, planner/ICS, constrained Automation Studio, search, opt-in insights, hosted subscriptions, scoped APIs/webhooks and Dutch/English localization. Each has a separate issue in the [inventory](FEATURE_INVENTORY.md).
+Seed Free in M0 (#53). Validate [the matrix](PLANS.md) (#54), provider suitability/payment flows (#42) and authenticated versioned entitlement distribution (#61) before charging. No prices or exact commercial quotas are fixed yet.
 
-## Good-to-have and wishes
+Test upgrade, over-limit downgrade, sponsor transfer and manager/provider outage. Never auto-evict members, delete records, override agreements or block safety/export/leave/delete.
 
-Safe themes/layouts/custom fields; private journaling; mobile wrapper; narrow E2EE research; opt-in external integrations. Research and user evidence come before implementation commitments.
+## Later and wishes
 
-## Existing Site and versions
+Scoped delegation (#36), templates (#37), planner/ICS (#38), richer automation (#39), search (#40), opt-in insights (#41), billing (#42), API/webhooks (#43), localization (#44), plan validation (#54), household relocation (#60) and subscription synchronization (#61). Standing/member-journey refinements can follow the foundational graph.
 
-Leave the existing Site at version 4 during planning. Do not reset history, deploy this documentation as a new version or imply application functionality exists in this repository. The first implementation will be a new development build after source/stack review; choose its release number when its scope is real.
+Good-to-have/wishes #45–#49 cover convenience and research. Longer-form journaling is optional; basic aftercare is already in #19/#52. See [inventory](FEATURE_INVENTORY.md) and [tracker](https://github.com/CoyWorks/Pactaris/issues/51).
+
+## Existing Site
+
+Version 4 remains unchanged during planning. No new application build or OCI deployment is implied. Implement/cut over through #2/#34 after the foundations are verified.
