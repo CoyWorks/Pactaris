@@ -8,6 +8,8 @@ The installer previously captured child output silently. Long authentik initiali
 
 Status distinguishes staged/incomplete installations from absent installations. `resume.sh` uses the original staged source revision and existing component configuration. It refuses completed installations, missing Identity secrets, a different active release and changed tracked source files. It keeps the Compose project name and volumes. It does not clone a new release, regenerate Identity secrets or change stored configuration. Instance dependency installation/build is repeated as the component user; certificates are copied only if no component configuration has yet been stored. State is written only after the normal health gates succeed.
 
+Deployment ancestor directories explicitly allow traversal even when the invoking shell uses `umask 077`. Built Instance releases remain root-owned and readable/executable by the service group, with no access for other users. TLS directories explicitly allow service-group traversal while keys remain restricted.
+
 ## Before resuming
 
 Check container state and recent logs. Initial provider migrations can take several minutes; warnings during that interval do not alone prove a persistent failure. An HTTP 200 from the npm registry proves endpoint access from that shell, not that all dependency downloads/builds have completed. The installer remains experimental; real host recovery must still be validated.

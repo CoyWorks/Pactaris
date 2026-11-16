@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -85,6 +86,18 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(result, 'private-database-url')
         self.assertNotIn('private-database-url', output.getvalue())
         self.assertEqual(json.loads(output.getvalue())['messageKey'], 'cli.command')
+
+    def test_private_bootstrap_umask_does_not_block_service_directory_traversal(self):
+        with tempfile.TemporaryDirectory() as folder:
+            previous = os.umask(0o077)
+            try:
+                root = Path(folder) / 'pactaris'
+                base = root / 'instance'
+                for path in (root, base, base / 'releases'):
+                    deploy.deployment_directory(path)
+                    self.assertEqual(path.stat().st_mode & 0o777, 0o755)
+            finally:
+                os.umask(previous)
 
     def test_slow_commands_report_waiting_without_exposing_credentials(self):
         with patch.object(deploy.subprocess, 'Popen') as process, patch('sys.stdout', new_callable=io.StringIO) as output:

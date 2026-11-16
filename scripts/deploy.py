@@ -287,6 +287,11 @@ def validate_resume(base, release):
         if (base / 'identity.env').is_symlink():
             fail('resume_identity_secrets_symlink')
 
+def deployment_directory(path):
+    # Bootstrap intentionally uses umask 077. Service ancestors still need traversal.
+    path.mkdir(mode=0o755, parents=True, exist_ok=True)
+    path.chmod(0o755)
+
 def deploy(args):
     if args.component not in COMPONENTS:
         fail('component')
@@ -328,8 +333,8 @@ def deploy(args):
     root = safe_root(args.root)
     safe_root(str(root / args.component))
     preflight(args.component, base, cfg)
-    root.mkdir(mode=0o755, parents=True, exist_ok=True)
-    base.mkdir(mode=0o755, exist_ok=True)
+    deployment_directory(root)
+    deployment_directory(base)
     with open(base / 'operation.lock', 'a') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -347,7 +352,7 @@ def deploy(args):
         release = base / 'releases' / args.revision
         if release.exists() and args.action != 'resume':
             fail('release_exists')
-        release.parent.mkdir(mode=0o755, exist_ok=True)
+        deployment_directory(release.parent)
         try:
             if args.action == 'resume':
                 emit('cli.resuming', component=args.component, revision=args.revision)
@@ -373,7 +378,8 @@ def deploy(args):
                 build_env = {**os.environ, 'npm_config_cache': str(base / 'data/npm-cache'), 'HOME': str(base / 'data')}
                 run(['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], cwd=release, env=build_env, user=info.pw_name)
                 run(['npm', 'run', 'build'], cwd=release, env=build_env, user=info.pw_name)
-                run(['chown', '-R', 'root:root', str(release)])
+                run(['chown', '-R', 'root:' + info.pw_name, str(release)])
+                run(['chmod', '-R', 'u=rwX,g=rX,o=', str(release)])
             if args.component == 'identity' and existing:
                 # authentik performs its own migrations; do not silently roll provider versions back.
                 old_compose = Path(existing['release']) / 'apps/identity/compose.yaml'
@@ -385,6 +391,7 @@ def deploy(args):
                     tls_dir = base / 'tls'
                     safe_root(str(tls_dir))
                     tls_dir.mkdir(mode=0o750, exist_ok=True)
+                    tls_dir.chmod(0o750)
                     shutil.chown(tls_dir, 0, info.pw_gid)
                     for key in ('certFile', 'keyFile', 'caFile'):
                         target = tls_dir / key
