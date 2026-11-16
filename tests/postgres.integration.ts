@@ -8,7 +8,6 @@ import { execFileSync } from 'node:child_process';
 import https from 'node:https';
 import pg from 'pg';
 import { generateKeyPair,exportPKCS8,exportSPKI } from 'jose';
-import { inject } from 'light-my-request';
 import { migrate,requireSchema } from '../packages/db/migrations.js';
 import { PgGatewayStore } from '../apps/gateway/store.js';
 import { InstanceHouseholds } from '../apps/instance/households.js';
@@ -98,8 +97,19 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await assert.rejects(client.summary(account.id,{...placement,endpoint:'https://169.254.169.254/'}));
   await store.createSession('a'.repeat(43),account,'csrf',60,120);
   const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client);
-  const response=await inject(gateway,{url:'/api/households',headers:{host:'pactaris.app',cookie:'__Host-pactaris-session='+'a'.repeat(43)}});
-  assert.equal(response.statusCode,200);assert.equal(response.json().households.length,2);assert.ok(!response.payload.includes('127.0.0.1'));assert.ok(!response.payload.includes('instance'));
+  // Real network requests throughout: injection adapters mutate Express prototypes and
+  // must not run in the same process as independently listening backend applications.
+  const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
+  await new Promise<void>((resolve,reject)=>{gatewayServer.once('error',reject);gatewayServer.listen(0,'127.0.0.1',resolve);});
+  const gatewayAddress=gatewayServer.address();assert.ok(gatewayAddress&&typeof gatewayAddress!=='string');
+  const readFileSyncFixture=await readFile(certificate);
+  const response=await new Promise<{status:number;body:string}>((resolve,reject)=>{
+    const request=https.get({hostname:'127.0.0.1',port:gatewayAddress.port,path:'/api/households',servername:'backend.fixture.invalid',ca:readFileSyncFixture,
+      headers:{host:'pactaris.app',cookie:'__Host-pactaris-session='+'a'.repeat(43)}},r=>{
+      let body='';r.setEncoding('utf8');r.on('data',chunk=>{body+=chunk;});r.on('error',reject);r.on('end',()=>resolve({status:r.statusCode!,body}));
+    });request.on('error',reject);
+  });
+  assert.equal(response.status,200);assert.equal(JSON.parse(response.body).households.length,2);assert.ok(!response.body.includes('127.0.0.1'));assert.ok(!response.body.includes('instance'));
   await a.owner.query("UPDATE pactaris.memberships SET status='revoked' WHERE household_id=$1 AND account_id=$2",[households[0],account.id]);
   assert.equal(await client.summary(account.id,placement),undefined);
   // Backups have dedicated read access, including FORCE RLS tables; runtime does not gain BYPASSRLS.
