@@ -376,7 +376,13 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await store.createSession('k'.repeat(43),receiver,'registration-csrf',60,120,first.email);
   // A fresh assertion in another session must not revive this stale session.
   assert.equal((await api(responsePath+'/preview','POST',{token:first.token},receiverSession)).status,403);
-  await gatewayDb.owner.query('UPDATE pactaris.sessions SET recipient_asserted_at=now() WHERE token_hash=$1',[hash(receiverSession)]);
+  await gatewayDb.owner.query('UPDATE pactaris.sessions s SET recipient_asserted_at=a.verified_email_asserted_at FROM pactaris.accounts a WHERE a.id=s.account_id AND s.token_hash=$1',[hash(receiverSession)]);
+  await store.account('https://idp.fixture.invalid/','invite-first','Invited fixture');
+  assert.equal((await api(responsePath+'/preview','POST',{token:first.token},receiverSession)).status,403);
+  await store.account('https://idp.fixture.invalid/','invite-first','Invited fixture',first.email);
+  // Re-verification in another login cannot revive an earlier session assertion.
+  assert.equal((await api(responsePath+'/preview','POST',{token:first.token},receiverSession)).status,403);
+  await store.logout(receiverSession);await store.createSession(receiverSession,receiver,'registration-csrf',60,120,first.email);
   const preview=await api(responsePath+'/preview','POST',{token:first.token},receiverSession);assert.equal(preview.status,200);assert.equal(preview.data.role,'participant');
   assert.equal((await inviteDb.owner.query("SELECT count(*)::int AS n FROM pactaris.memberships WHERE household_id=$1 AND status='active'",[inviteHousehold.householdId])).rows[0].n,1);
   assert.equal((await api(responsePath+'/accept','POST',{token:first.token,operationId:randomUUID(),termsVersion:preview.data.termsVersion,accountId:wrong.id},receiverSession)).status,400);

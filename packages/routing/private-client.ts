@@ -87,6 +87,12 @@ export class PrivateInvitationClient {
      (result.membershipId!==undefined&&!uuid(result.membershipId))||
      (result.invitationId!==undefined&&result.invitationId!==input.invitationId)||
      (result.status==='accepted'&&!uuid(result.membershipId)))throw Error('routing.response');
+   if(result.status==='preview'&&(typeof result.name!=='string'||!result.name||[...result.name].length>120||
+     result.role!=='participant'||typeof result.termsVersion!=='string'||!/^[1-9][0-9]{0,15}$/.test(result.termsVersion)||
+     typeof result.expiresAt!=='string'||!Number.isFinite(Date.parse(result.expiresAt))))throw Error('routing.response');
+   if(result.status==='listed'&&(!Array.isArray(result.invitations)||result.invitations.length>50||result.invitations.some(i=>
+     !i||!uuid(i.invitationId)||i.role!=='participant'||!['pending','accepted','declined','revoked','inactive'].includes(i.status)||
+     typeof i.expiresAt!=='string'||!Number.isFinite(Date.parse(i.expiresAt)))))throw Error('routing.response');
    return result;
   }catch(error){if(error instanceof InvitationError)throw error;throw new InvitationError('unavailable');}
  }

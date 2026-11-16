@@ -45,8 +45,13 @@ export class PgGatewayStore implements GatewayStore {
     return {id:r.rows[0].id,displayName:r.rows[0].display_name};
   }
   async createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number,verifiedEmail?:string) {
-    await this.pool.query(`INSERT INTO pactaris.sessions(token_hash,account_id,csrf_token,expires_at,idle_expires_at,recipient_email,recipient_asserted_at)
-      VALUES($1,$2,$3,now()+$4*interval '1 second',now()+$5*interval '1 second',$6,CASE WHEN $6::text IS NULL THEN NULL ELSE statement_timestamp() END)`,[hash(token),account.id,csrfToken,absolute,idle,normalizeEmail(verifiedEmail)??null]);
+    const email=normalizeEmail(verifiedEmail)??null;
+    const r=await this.pool.query(`INSERT INTO pactaris.sessions(token_hash,account_id,csrf_token,expires_at,idle_expires_at,recipient_email,recipient_asserted_at)
+      SELECT $1,a.id,$3,now()+$4*interval '1 second',now()+$5*interval '1 second',
+        CASE WHEN a.verified_email=$6 THEN $6 ELSE NULL END,
+        CASE WHEN a.verified_email=$6 THEN a.verified_email_asserted_at ELSE NULL END
+      FROM pactaris.accounts a WHERE a.id=$2 AND a.status='active'`,[hash(token),account.id,csrfToken,absolute,idle,email]);
+    if(r.rowCount!==1)throw Error('authentication.suspended');
   }
   async session(token:string,idle:number) {
     const r=await this.pool.query(`UPDATE pactaris.sessions s SET idle_expires_at=LEAST(s.expires_at,now()+$2*interval '1 second')

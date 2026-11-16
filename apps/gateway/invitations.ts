@@ -5,6 +5,7 @@ import {normalizeEmail} from '../../packages/auth/email.js';
 import {uuid,type InvitationAction} from '../../packages/auth/delegation.js';
 import type {HouseholdClient,PrivateInvitationClient} from '../../packages/routing/private-client.js';
 import {InvitationError,type InvitationResult} from '../instance/invitations.js';
+export type InvitationView={invitationId:string;status:string;operationId?:string;householdId?:string;name?:string;role?:string;termsVersion?:string;expiresAt?:string};
 type Route=Placement&{invitationId:string;creatorAccountId:string;creatorMembershipId:string;createOperationId:string;requestHash:string};
 const tokenValid=(value:string)=>/^[A-Za-z0-9_-]{43}$/.test(value);
 export class GatewayInvitations {
@@ -20,7 +21,7 @@ export class GatewayInvitations {
   const r=await this.pool.query(`SELECT s.recipient_email FROM pactaris.sessions s JOIN pactaris.accounts a ON a.id=s.account_id
     WHERE s.token_hash=$1 AND a.id=$2 AND a.status='active' AND s.expires_at>now() AND s.idle_expires_at>now()
     AND s.recipient_asserted_at>now()-interval '5 minutes' AND s.recipient_asserted_at<=now()
-    AND s.recipient_email=a.verified_email`,[hash(sessionToken),accountId]);
+    AND s.recipient_email=a.verified_email AND s.recipient_asserted_at=a.verified_email_asserted_at`,[hash(sessionToken),accountId]);
   const email=normalizeEmail(r.rows[0]?.recipient_email);if(!email)throw new InvitationError('proof');return email;
  }
  private async own(accountId:string,householdId:string){
@@ -58,7 +59,7 @@ export class GatewayInvitations {
   const result=await this.client.execute(accountId,own.placement,'inviteRevoke',{operationId,invitationId,membershipId:own.membershipId});
   return {invitationId,status:result.status};
  }
- async respond(accountId:string,sessionToken:string,invitationId:string,action:'invitePreview'|'inviteAccept'|'inviteDecline',token:string,operationId:string,termsVersion?:string){
+ async respond(accountId:string,sessionToken:string,invitationId:string,action:'invitePreview'|'inviteAccept'|'inviteDecline',token:string,operationId:string,termsVersion?:string):Promise<InvitationView>{
   if(!tokenValid(token))throw new InvitationError('invalid');
   const route=await this.route(invitationId),email=await this.proof(sessionToken,accountId);
   const input={operationId,invitationId,tokenHash:hash(token),recipientHash:hash(token+':'+email),...(action==='inviteAccept'?{termsVersion}:{})};

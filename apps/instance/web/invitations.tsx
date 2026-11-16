@@ -5,7 +5,7 @@ type Invite={invitationId:string;status:string;role:string;expiresAt:string};
 const errorKey=(key:unknown):MessageKey=>(['invitations.invalid','invitations.denied','invitations.conflict','invitations.capacity','invitations.proof','invitations.unavailable','errors.rateLimited','errors.request'] as unknown[]).includes(key)?key as MessageKey:'invitations.unavailable';
 function secret(){const data=crypto.getRandomValues(new Uint8Array(32));return btoa(String.fromCharCode(...data)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');}
 export function InvitationManager({householdId,session,language}:{householdId:string;session:Session;language:string}){
- const t=createTranslator(language),[items,setItems]=useState<Invite[]>(),[allowed,setAllowed]=useState(false),[email,setEmail]=useState(''),[draft,setDraft]=useState<{id:string;token:string}>(),[link,setLink]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[refresh,setRefresh]=useState(0),[copied,setCopied]=useState(false);
+ const t=createTranslator(language),[items,setItems]=useState<Invite[]>(),[allowed,setAllowed]=useState(false),[email,setEmail]=useState(''),[draft,setDraft]=useState<{id:string;token:string}>(),[link,setLink]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[refresh,setRefresh]=useState(0),[copied,setCopied]=useState(false),[revokeIds,setRevokeIds]=useState<Record<string,string>>({});
  useEffect(()=>{
   const controller=new AbortController();let gone=false;
   void fetch('/api/households/'+householdId+'/invitations',{cache:'no-store',signal:controller.signal}).then(async r=>{
@@ -24,8 +24,8 @@ export function InvitationManager({householdId,session,language}:{householdId:st
   }catch{setError('invitations.unknownCreate');}finally{setBusy(false);}
  }
  async function revoke(id:string){
-  if(busy)return;setBusy(true);setError(undefined);
-  try{const r=await fetch('/api/households/'+householdId+'/invitations/'+id+'/revoke',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({operationId:crypto.randomUUID()})}),body=await r.json();
+  if(busy)return;setBusy(true);setError(undefined);const operationId=revokeIds[id]??crypto.randomUUID();setRevokeIds(v=>({...v,[id]:operationId}));
+  try{const r=await fetch('/api/households/'+householdId+'/invitations/'+id+'/revoke',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({operationId})}),body=await r.json();
    if(!r.ok){setError(errorKey(body.messageKey));return;}setRefresh(v=>v+1);if(link.includes(id))setLink('');
   }catch{setError('invitations.unavailable');}finally{setBusy(false);}
  }
