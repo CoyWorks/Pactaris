@@ -1,5 +1,5 @@
 {
-  "version": "0.4.0-alpha.1",
+  "version": "0.5.0-alpha.1",
   "protocol": 2,
   "migrations": [
     {
@@ -77,6 +77,20 @@
       "id": "0005_invitations",
       "path": "migrations/instance/0005_invitations.sql",
       "sha256": "8f594d181c252c99d9decdf97761954c99f482fb1432a234dfd28ea95f899cef",
+      "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0007_membership_operations",
+      "path": "migrations/gateway/0007_membership_operations.sql",
+      "sha256": "eb5f6c25869f546692cdef4d569fc2ea60df1e4c51a4ac8b76b67b7e886834f2",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0006_member_administration",
+      "path": "migrations/instance/0006_member_administration.sql",
+      "sha256": "35bba8ea88390badc067e2c45cba595c8035483380255b57e6d7af69710c0be6",
       "backwardCompatible": true
     }
   ]

@@ -97,3 +97,26 @@ export class PrivateInvitationClient {
   }catch(error){if(error instanceof InvitationError)throw error;throw new InvitationError('unavailable');}
  }
 }
+
+export class PrivateMemberClient{
+ constructor(private signer:DelegationSigner){}
+ async execute(accountId:string,placement:Placement,action:import('../auth/delegation.js').MembershipAction,input:Record<string,unknown>):Promise<import('../../apps/instance/members.js').MemberResult>{
+  const {MemberError}=await import('../../apps/instance/members.js');
+  try{
+   if(!uuid(input.operationId))throw new MemberError('invalid');
+   const body=JSON.stringify(input),token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body);
+   const response=await privateResponse(placement,commandPath(placement.householdId,action),token,body);
+   if(response.status===403||response.status===404)throw new MemberError('denied');
+   if(response.status===400)throw new MemberError('invalid');if(response.status===409)throw new MemberError('conflict');
+   const result=response.data as import('../../apps/instance/members.js').MemberResult;
+   if(response.status!==200||!result||result.householdId!==placement.householdId||result.operationId!==input.operationId||
+     !['listed','applied','missing'].includes(result.status)||['actorMembershipId','targetMembershipId','targetAccountId','endingId','offerId'].some(k=>k in result&&!uuid((result as unknown as Record<string,unknown>)[k])))throw Error('routing.response');
+   if(result.status==='applied'&&(!result.action||!['memberAlias','memberRemove','ownerOffer','ownerAccept','ownerDecline','ownerCancel'].includes(result.action)||!uuid(result.actorMembershipId)))throw Error('routing.response');
+   if(result.status==='listed'&&(!uuid(result.actorMembershipId)||!Array.isArray(result.members)||result.members.length>25||!Array.isArray(result.offers)||result.offers.length>20||
+     (result.nextCursor!==null&&!uuid(result.nextCursor))||result.members.some(m=>!uuid(m.membershipId)||typeof m.displayName!=='string'||[...m.displayName].length>80||
+       !['owner','admin','participant'].includes(m.technicalRole)||typeof m.isSelf!=='boolean'||typeof m.canRemove!=='boolean'||typeof m.canOffer!=='boolean')||
+     result.offers.some(o=>!uuid(o.offerId)||!uuid(o.fromMembershipId)||!uuid(o.toMembershipId)||!['pending','accepted','declined','cancelled','expired','invalidated'].includes(o.status)||!Number.isFinite(Date.parse(o.expiresAt)))))throw Error('routing.response');
+   return result;
+  }catch(error){if(error instanceof MemberError)throw error;throw new MemberError('unavailable');}
+ }
+}

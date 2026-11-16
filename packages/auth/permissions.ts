@@ -9,7 +9,7 @@ export type ResourceScope = {
   visibility: 'private' | 'participants' | 'household';
   participantMembershipIds?: readonly string[];
 };
-export type Permission = 'household.view' | 'household.settings.update' |
+export type Permission = 'household.view' | 'household.settings.update' | 'membership.list' | 'membership.alias.self' | 'membership.remove' | 'ownership.offer' | 'ownership.respond' |
   'invitations.manage' | 'membership.leave' | 'consent.self.manage' |
   'safety.self.pause' | 'safety.household.stop' | 'resource.read';
 
@@ -17,11 +17,16 @@ export function permits(actor: MemberActor, permission: string, householdId: str
   if (!actor.accountId || !actor.membershipId || !householdId || actor.householdId !== householdId ||
       actor.status !== 'active' || !['owner', 'admin', 'participant'].includes(actor.technicalRole)) return false;
   switch (permission) {
+    case 'membership.list':
+    case 'membership.alias.self':
+    case 'ownership.respond':
     case 'household.view':
     case 'membership.leave':
     case 'consent.self.manage':
     case 'safety.self.pause':
     case 'safety.household.stop': return true;
+    case 'ownership.offer': return actor.technicalRole === 'owner';
+    case 'membership.remove':
     case 'household.settings.update':
     case 'invitations.manage': return actor.technicalRole === 'owner' || actor.technicalRole === 'admin';
     case 'resource.read': {
@@ -32,4 +37,10 @@ export function permits(actor: MemberActor, permission: string, householdId: str
     }
     default: return false;
   }
+}
+
+export function mayRemoveMember(actor:MemberActor,target:MemberActor):boolean{
+ if(!permits(actor,'membership.remove',target.householdId)||target.status!=='active'||actor.membershipId===target.membershipId||
+   !['owner','admin','participant'].includes(target.technicalRole))return false;
+ return actor.technicalRole==='owner'?target.technicalRole!=='owner':target.technicalRole==='participant';
 }

@@ -9,6 +9,8 @@ import { uuid } from '../../packages/auth/delegation.js';
 import { createTranslator,type MessageKey } from '../../packages/i18n/index.js';
 import { headers, frontend, errors } from '../../packages/http/index.js';
 import manifest from '../../package.json' with {type:'json'};
+import {MemberError} from '../instance/members.js';
+import type {GatewayMembers} from './members.js';
 import { InvitationError } from '../instance/invitations.js';
 import type { GatewayInvitations } from './invitations.js';
 import { randomUUID } from 'node:crypto';
@@ -24,7 +26,7 @@ export function cookie(req:express.Request,name:string):string|undefined {
 function setCookie(res:express.Response,name:string,value:string,seconds:number) {
   res.append('Set-Cookie',`${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${seconds}`);
 }
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -171,6 +173,37 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     try{if(!invitations)throw new InvitationError('unavailable');
       res.json(await invitations.respond(session.account.id,cookie(req,SESSION)!,req.params.invitationId,action==='preview'?'invitePreview':action==='accept'?'inviteAccept':'inviteDecline',body.token,action==='preview'?randomUUID():body.operationId,body.termsVersion));
     }catch(error){inviteFailure(res,error);}
+  });
+
+  function memberFailure(res:express.Response,error:unknown){
+    const kind=error instanceof MemberError?error.kind:'unavailable';
+    res.status({invalid:400,denied:404,conflict:409,reauthenticate:403,unavailable:503}[kind]).json({code:'member_'+kind,messageKey:('members.'+kind) as MessageKey});
+  }
+  app.get('/api/member-operations',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(req.query.householdId!==undefined&&!uuid(req.query.householdId)){memberFailure(res,new MemberError('invalid'));return;}
+    try{if(!members)throw new MemberError('unavailable');res.json(await members.operations(session.account.id,req.query.householdId as string|undefined));}catch(error){memberFailure(res,error);}
+  });
+  app.get('/api/households/:householdId/members',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!uuid(req.params.householdId)||(req.query.after!==undefined&&!uuid(req.query.after))){memberFailure(res,new MemberError('invalid'));return;}
+    try{if(!members)throw new MemberError('unavailable');res.json(await members.list(session.account.id,req.params.householdId,req.query.after as string|undefined));}catch(error){memberFailure(res,error);}
+  });
+  app.post('/api/households/:householdId/members/:action',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    const action=req.params.action,input=req.body,expected=action==='alias'?'name,operationId':action==='remove'||action==='offer'?'operationId,targetMembershipId':'offerId,operationId';
+    if(!uuid(req.params.householdId)||!['alias','remove','offer','accept','decline','cancel'].includes(action)||!input||Object.keys(input).sort().join(',')!==expected||
+      !uuid(input.operationId)||((action==='remove'||action==='offer')&&!uuid(input.targetMembershipId))||
+      (['accept','decline','cancel'].includes(action)&&!uuid(input.offerId))||
+      (action==='alias'&&(typeof input.name!=='string'||[...input.name].length>80||input.name!==input.name.trim()||/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(input.name)))){memberFailure(res,new MemberError('invalid'));return;}
+    if(!await store.throttle('member:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+    try{
+     if(!members)throw new MemberError('unavailable');
+     const map={alias:'memberAlias',remove:'memberRemove',offer:'ownerOffer',accept:'ownerAccept',decline:'ownerDecline',cancel:'ownerCancel'} as const;
+     const result=await members.change(session.account.id,cookie(req,SESSION)!,req.params.householdId,map[action as keyof typeof map],input);
+     res.status(result.status==='pending'?202:200).json(result);
+    }catch(error){memberFailure(res,error);}
   });
   app.use('/api',(_req,res)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});});
   frontend(app,webRoot,['/','/households/:householdId','/join']);errors(app);return app;

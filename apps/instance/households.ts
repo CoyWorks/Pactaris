@@ -6,13 +6,17 @@ import { InstanceCommands } from './commands.js';
 import type { HouseholdAction } from '../../packages/auth/delegation.js';
 import { InstanceInvitations } from './invitations.js';
 import type { InvitationAction } from '../../packages/auth/delegation.js';
+import {InstanceMembers} from './members.js';
+import type {MembershipAction} from '../../packages/auth/delegation.js';
 export class InstanceHouseholds {
   private verifier:DelegationVerifier;
   private commands:InstanceCommands;
   private invitations:InstanceInvitations;
-  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new DelegationVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);}
+  private members:InstanceMembers;
+  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new DelegationVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);this.members=new InstanceMembers(pool,config);}
   command(token:string,householdId:string,action:HouseholdAction,body:Buffer){return this.commands.execute(token,householdId,action,body);}
   invitation(token:string,householdId:string,action:InvitationAction,body:Buffer){return this.invitations.execute(token,householdId,action,body);}
+  membership(token:string,householdId:string,action:MembershipAction,body:Buffer){return this.members.execute(token,householdId,action,body);}
   async summary(token:string,householdId:string) {
     const verified=await this.verifier.verify(token,householdId);
     const db=await this.pool.connect();
