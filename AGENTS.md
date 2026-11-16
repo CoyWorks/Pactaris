@@ -11,7 +11,7 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 - Accounts can join households on different instances. Verify subject/audience and current local membership; manager metadata must not become a shared tenant-content database.
 - The current hosted direction supersedes the historical Community/Cloud and SQLite self-hosting plan. Do not introduce edition flags or SQLite portability as default scope.
 - Read README.md, docs/ARCHITECTURE.md, docs/DOMAIN_MODEL.md, docs/PLANS.md, docs/INFRASTRUCTURE.md, docs/EXISTING_SITE.md and the target issue before implementation.
-- The proposed React/Vite + Node.js/TypeScript + PostgreSQL/Drizzle stack still requires the architecture decision in issue #1.
+- Agreed direction: React/Vite, Node.js/TypeScript/Express, PostgreSQL/Drizzle and systemd. Record exact versions/provider integration in #1. Central identity must support Google, Apple and local verified email/password accounts via a maintained broker/service and OIDC (#6/#58).
 
 ## Consent and privacy
 
@@ -43,3 +43,10 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 - Keep message language, BCP 47 formatting locale and IANA timezone separate. New translations/locales are validated packs; Dutch is not part of the initial deliverable.
 - Preserve user-authored content and custom labels. Technical constants/developer-only logs/docs are not UI translations; never surface raw technical errors.
 - Add CI key/parameter/locale validation and visible-literal checks. Message and locale support is M0, not a later rewrite.
+
+## Confirmed clean start, source rights and first delivery
+
+- This is an empty new product: no legacy users/identities/household data/files are migrated. Existing Site is a reference, with source reuse only after third-party rights/provenance review.
+- First working version includes minimal central/main/internal infrastructure and instance registration/status, plus install.sh/update.sh/status.sh from GitHub (#56, docs/INSTALL_UPDATE.md). Demonstrate a second pinned-version update preserving data. Advanced fleet orchestration remains later.
+- Support private GitHub access using scoped read-only instance credentials, with pinned versions, staged releases, update lock, recovery checkpoints, migrations, health checks and truthful rollback limits. Preserve secrets/config/database/files/instance identity.
+- Project-owned source is proprietary/all rights reserved under LICENSE.txt, not open source. No generic modification, redistribution, self-hosting or commercial rights are granted. Respect third-party licenses/applicable law/platform terms. The owner plans private visibility later; do not change visibility incidentally.
