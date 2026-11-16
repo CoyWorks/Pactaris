@@ -9,3 +9,7 @@ The installer creates a private environment file, stable Compose project and vol
 After deployment, configure the admin/bootstrap account, English-only brand/flows, verified local registration, SMTP/recovery, Google/Apple sources, signing key and an OIDC client with exact instance callback/logout URLs. Never treat a reachable login page as proof these workflows work. Default provider certificates must be replaced/configured for the intended trusted backend TLS identity before CloudPanel production acceptance; never disable upstream verification.
 
 The current installer verifies provider containers and liveness inside the container network. Full external TLS, OIDC, Google and Apple flows still need real-server acceptance. No credentials are seeded or displayed.
+
+## OIDC application import
+
+An operator-imported blueprint for the first Instance is provided in `blueprints/pactaris-instance1.yaml`. See [IDENTITY_OIDC.md](../../docs/IDENTITY_OIDC.md) for configurable deployment values, credential preservation, import steps and verification limits. This prepares the provider; the Instance callback/session runtime is not implemented yet.

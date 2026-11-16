@@ -4,7 +4,9 @@ Fresh-server installation commands, including apt dependencies: [FRESH_SERVER.md
 
 A mobile-first platform for consenting-adult BDSM, SM and kink: Dom/sub and play-partner relationships, protocols, tasks, rituals, negotiated sessions, rewards/consequences and aftercare.
 
-**Status: foundation implementation, 0.1.0-alpha.1.** The repository now contains an executable Instance status runtime, an independently deployable Identity candidate definition, and experimental install/update/status tooling. The connected alpha is not complete and is not ready for public onboarding. Pactaris is the repository identifier; the product name remains provisional.
+**Status: foundation implementation, 0.1.0-alpha.1.** The repository now contains an executable Instance status runtime, an independently deployable Identity candidate definition, and experimental install/update/status tooling. The connected alpha is not complete and is not ready for public onboarding. The confirmed product name is Pactaris.
+
+Identity provider/application import: [OIDC blueprint instructions](docs/IDENTITY_OIDC.md).
 
 Start with [Milestone 1](docs/MILESTONE_1.md) and [development/install instructions](docs/DEVELOPMENT.md). Sign-in, household workflows and real host/provider acceptance remain pending; this foundation does not expose household data.
 
