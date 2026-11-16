@@ -34,3 +34,12 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 - Test real tenant boundaries and safety races; re-check consent and authorization when jobs execute. Include pair/four-person/contextual switch fixtures, independent instance stores/audiences, manager outage and plan downgrade.
 - Never commit secrets or real household data. Use English repository documentation and synthetic fixtures.
 - Do not change or deploy the existing ChatGPT Site during planning. Review the cutover issue before migration/publication.
+
+## Functional reference and translations
+
+- Obedience is functional inspiration. Read docs/OBEDIENCE_BASELINE.md; implement its mapped core habits, catalog/redemption, chat/live sharing and progress charts in addition to existing scope, using original code/assets/text.
+- English-only first release. From the first scaffold, no hardcoded human-language system text in UI, templates or feature/domain logic. Resolve semantic keys/shortcodes through English message catalogs (#44, docs/INTERNATIONALIZATION.md).
+- Cover central login, server manager, instances, accessibility labels, errors, seeded system labels, emails, push, audit presentation and report headings. Use stable API codes and structured parameters; no concatenated sentences or inline English fallback literals.
+- Keep message language, BCP 47 formatting locale and IANA timezone separate. New translations/locales are validated packs; Dutch is not part of the initial deliverable.
+- Preserve user-authored content and custom labels. Technical constants/developer-only logs/docs are not UI translations; never surface raw technical errors.
+- Add CI key/parameter/locale validation and visible-literal checks. Message and locale support is M0, not a later rewrite.
