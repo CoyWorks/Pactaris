@@ -41,9 +41,9 @@ React/TypeScript, Vinext/Vite, Drizzle SQLite/D1 schema and migrations, Cloudfla
 
 The existing Site is a useful feature and visual reference. It is not evidence that all declared schema concepts are fully implemented or safe to expose as a public service.
 
-## Data cutover
+## Clean product start
 
-First decide whether the existing Site contains data that should be transferred. Do not assume a clean demo or migrate data without mapping verified account ownership and tenant boundaries. If migration is needed, specify versioned export/import, file transfer, dry-run reconciliation, read-only cutover window and rollback in [#2](https://github.com/CoyWorks/Pactaris/issues/2) and [#34](https://github.com/CoyWorks/Pactaris/issues/34).
+The owner has decided to start with empty production databases. Do not migrate old users, identity mappings, households, agreements or attachments. The Site remains a functional/visual reference; source reuse needs rights/provenance review. Initial onboarding creates new accounts/households. Future relocation between the new product's instances (#60) is separate from legacy import.
 
 ## Current target requirements
 
