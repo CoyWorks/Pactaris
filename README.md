@@ -18,9 +18,11 @@ One public hosted product runs on operator-managed instances, starting on OCI be
 
 A server manager registers instances and manages placement, health, capacity and controlled lifecycle operations. It holds operational/identity/entitlement metadata, not a shared database of intimate tenant content. Contracts must exist in the foundation, even while only one instance is deployed.
 
-This supersedes the historical SQLite Community/Cloud self-hosting plan. Open-source licensing remains a separate decision ([#50](https://github.com/CoyWorks/Pactaris/issues/50)).
+This supersedes the historical SQLite Community/Cloud self-hosting plan. Project-owned source is proprietary/all rights reserved; see [LICENSE.txt](LICENSE.txt) and [#50](https://github.com/CoyWorks/Pactaris/issues/50). No general permission for reuse, modification, redistribution, self-hosting or commercial exploitation is granted. Third-party licenses, applicable law and GitHub platform terms still apply. The owner plans to make the repository private later; it remains public for now.
 
-## Proposed stack
+Central identity must offer Google, Apple and local verified email/password accounts, with OIDC sessions for instances. Select a maintained identity broker/service that supports all three; OIDC alone does not supply local account management.
+
+## Implementation stack
 
 | Layer | Proposal |
 | --- | --- |
@@ -33,7 +35,7 @@ This supersedes the historical SQLite Community/Cloud self-hosting plan. Open-so
 | Management | Separate server-manager/agent contract, identity/placement and entitlement integration |
 | Hosting | OCI, CloudPanel/NGINX TLS proxy, supervised services or isolated app containers |
 
-Runtime/provider choices remain proposals for [#1](https://github.com/CoyWorks/Pactaris/issues/1). Compare Node.js, Laravel/PHP and Django/Python in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Node.js/TypeScript with Express, PostgreSQL/Drizzle and systemd is the agreed runtime/deployment direction. Exact versions and the identity product remain to be recorded in [#1](https://github.com/CoyWorks/Pactaris/issues/1). Compare Node.js, Laravel/PHP and Django/Python in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Free and paid
 
@@ -46,6 +48,8 @@ Basic relationship diversity and multiple contextual roles, consent, limits, saf
 Accounts; explicit invitations; technical permissions; accepted multi-role relationship graph; negotiation/consent; pause and stop; protocols; tasks/recurrence; check-ins and aftercare; play-session planning; optional rewards/agreed consequences; private attachments; inbox/push/email; audit; export/delete; profile and dynamic settings.
 
 First slice: **sign in → join a dynamic explicitly → define accepted relationships/roles → negotiate consent → assign/complete a task → stop → export/leave**. Validate a pair, four-person group and contextual switch before broader feature expansion.
+
+The first working slice includes infrastructure: central/main/internal instance service boundaries, minimum registration/status and GitHub-based install/update/status tooling (#56), with a preserving update to a second pinned version. See [INSTALL_UPDATE.md](docs/INSTALL_UPDATE.md).
 
 ## English-first messages and locales
 
@@ -69,6 +73,6 @@ No covert tracking, blackmail, forced participation, punitive withdrawal or devi
 
 ## Existing prototype and development
 
-[The app](https://consent-households.coyseinri.chatgpt.site), version 4, is the inspected product reference. This documentation update does not change that Site or deploy OCI services. See the source assessment for verified behavior and gaps.
+[The app](https://consent-households.coyseinri.chatgpt.site), version 4, is a reference only. This is a new product with empty production databases; no legacy users, accounts or household content will be migrated. This documentation update does not change that Site or deploy OCI services. See the source assessment for verified behavior and gaps.
 
-There are no install/deploy commands yet. Confirm stack/source/license and build the domain, instance and entitlement contracts before implementing the first slice. No source license has been selected; public repository visibility alone is not a license grant ([#50](https://github.com/CoyWorks/Pactaris/issues/50)).
+Installer/updater scripts are planned but do not exist yet. Build them with the first slice, along with domain, instance, identity and entitlement contracts. Google/Apple provider setup and rights/provenance review remain implementation tasks; the proprietary licensing direction and clean start are decided.
