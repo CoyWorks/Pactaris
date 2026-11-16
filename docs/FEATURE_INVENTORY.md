@@ -1,19 +1,17 @@
 # Feature inventory
 
-All entries describe proposed work, not delivered functionality. The app centers consenting-adult BDSM/SM/kink dynamics, play partners and overlapping romance. Contextual role diversity is core, not a premium feature.
-
-61 work items plus [tracker #51](https://github.com/CoyWorks/Pactaris/issues/51). Phase/area tags are in titles; native GitHub milestone objects are not implied.
+65 proposed work items plus [tracker #51](https://github.com/CoyWorks/Pactaris/issues/51); none is implied implemented. The app centers consenting-adult BDSM/SM/kink and overlapping relationships. Obedience is functional inspiration; see [baseline mapping](OBEDIENCE_BASELINE.md).
 
 | Phase | Count |
 | --- | ---: |
-| M0 | 17 |
-| M1 | 15 |
+| M0 | 18 |
+| M1 | 20 |
 | Launch | 12 |
-| Later | 12 |
+| Later | 10 |
 | Good-to-have | 1 |
 | Wish | 4 |
 
-M1 alone does not allow open registration. Complete applicable Launch gates; second-instance public onboarding needs #62. Paid checkout is later but entitlement/usage contracts are M0. Relationship modeling #35 has moved from Later to M0.
+#44 is M0: English-first keyed catalogs and locales from the first scaffold. Additional languages are later packs. #41 basic progress charts is now M1; advanced analysis can expand later. #63–#66 make baseline habits, catalogs/redemption, chat/live updates and notes explicit.
 
 | Issue | Phase | Area | Scope |
 | --- | --- | --- | --- |
@@ -57,10 +55,10 @@ M1 alone does not allow open registration. Complete applicable Launch gates; sec
 | [#38](https://github.com/CoyWorks/Pactaris/issues/38) | Later | Calendar | Add planner views and revocable private ICS feeds |
 | [#39](https://github.com/CoyWorks/Pactaris/issues/39) | Later | Automation | Build a constrained event-based automation studio |
 | [#40](https://github.com/CoyWorks/Pactaris/issues/40) | Later | Search | Add permission-filtered search, tags and saved filters |
-| [#41](https://github.com/CoyWorks/Pactaris/issues/41) | Later | Insights | Provide opt-in household summaries and wellbeing-oriented trends |
+| [#41](https://github.com/CoyWorks/Pactaris/issues/41) | M1 | Insights | Provide basic habit statistics and scoped progress charts |
 | [#42](https://github.com/CoyWorks/Pactaris/issues/42) | Later | Billing | Evaluate paid hosted subscriptions for BDSM dynamics |
 | [#43](https://github.com/CoyWorks/Pactaris/issues/43) | Later | Integrations | Design scoped API tokens and signed outbound webhooks |
-| [#44](https://github.com/CoyWorks/Pactaris/issues/44) | Later | Accessibility | Add Dutch/English localization and configurable regional formats |
+| [#44](https://github.com/CoyWorks/Pactaris/issues/44) | M0 | Internationalization | Require keyed English message catalogs and extensible locales from day one |
 | [#45](https://github.com/CoyWorks/Pactaris/issues/45) | Good-to-have | Personalization | Add safe themes, dashboard layouts and custom profile fields |
 | [#46](https://github.com/CoyWorks/Pactaris/issues/46) | Wish | Wellbeing | Explore private journaling, reflections and aftercare check-ins |
 | [#47](https://github.com/CoyWorks/Pactaris/issues/47) | Wish | Mobile | Evaluate a thin mobile wrapper after validating the PWA |
@@ -78,15 +76,19 @@ M1 alone does not allow open registration. Complete applicable Launch gates; sec
 | [#60](https://github.com/CoyWorks/Pactaris/issues/60) | Later | Infrastructure | Implement complete household relocation between instances |
 | [#61](https://github.com/CoyWorks/Pactaris/issues/61) | Later | Billing | Synchronize subscription entitlements to instances safely |
 | [#62](https://github.com/CoyWorks/Pactaris/issues/62) | Launch | Infrastructure | Verify multi-instance isolation, routing and manager outage recovery |
+| [#63](https://github.com/CoyWorks/Pactaris/issues/63) | M1 | Habits | Implement count-based daily/weekly habits and progress history |
+| [#64](https://github.com/CoyWorks/Pactaris/issues/64) | M1 | Rewards | Build reward/consequence catalogs, redemption and outstanding-action tracking |
+| [#65](https://github.com/CoyWorks/Pactaris/issues/65) | M1 | Chat | Add private partner/dynamic chat and permission-safe live updates |
+| [#66](https://github.com/CoyWorks/Pactaris/issues/66) | M1 | Notes | Add private and explicitly shared notes and ideas |
 
 ## Specifications
 
-- [Domain model](DOMAIN_MODEL.md): multi-role graph, negotiation, session scope and visibility.
-- [Plans](PLANS.md): proposed Free/Plus/Pro capacities, sponsorship and safe downgrade behavior.
-- [Infrastructure](INFRASTRUCTURE.md): manager, installer, independent instances, routing and lifecycle.
+- [Internationalization](INTERNATIONALIZATION.md): English source catalog, message keys, language/locale/timezone and CI.
+- [Reference baseline](OBEDIENCE_BASELINE.md): public-source feature mapping and gaps.
+- [Domain model](DOMAIN_MODEL.md): contextual roles, relationships and visibility.
+- [Plans](PLANS.md): proposed capacities and safe downgrade rules.
+- [Infrastructure](INFRASTRUCTURE.md): independent instances, manager, placement and lifecycle.
 
-## Boundaries
+M1 is not a public-launch approval; complete applicable Launch gates and #62 before second-instance public onboarding. Entitlements belong in M0; prices remain undecided.
 
-No general-family/residence assumption, single-global Dom/sub field, automatic authority from relationship labels or cross-household private graph sharing. No public self-hosted edition, SQLite portability, covert tracking, blackmail, forced participation, punitive withdrawal, public compliance rankings or device punishment.
-
-Safety, consent, privacy, basic MFA, personal export, leave and deletion remain available in every plan. Public marketplaces, predictive relationship scoring and offline mutation synchronization are outside MVP.
+No generic family/residence model, single-global Dom/sub field, automatic role-derived technical authority, hidden monitoring, coercion, punitive withdrawal, cross-household private sharing or device punishment. No public self-hosting/SQLite scope. Basic safety/consent/privacy/MFA/personal export/leave/delete remain free. Relationship diversity, translation/locale support and basic reference flows are not premium-only.
