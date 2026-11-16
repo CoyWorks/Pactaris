@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type pg from 'pg';
+import { normalizeEmail } from '../../packages/auth/email.js';
 export const hash = (token: string) => createHash('sha256').update(token).digest('hex');
 export type LoginAttempt = {state:string;nonce:string;verifier:string};
 export type Account = {id:string;displayName:string};
@@ -10,7 +11,7 @@ export interface GatewayStore {
   throttle(bucket:string):Promise<boolean>;
   beginLogin(cookie:string, attempt:LoginAttempt):Promise<void>;
   consumeLogin(cookie:string,state:string):Promise<LoginAttempt|undefined>;
-  account(issuer:string,subject:string,name:string):Promise<Account>;
+  account(issuer:string,subject:string,name:string,verifiedEmail?:string):Promise<Account>;
   createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number):Promise<void>;
   session(token:string,idle:number):Promise<Session|undefined>;
   logout(token:string):Promise<void>;
@@ -33,10 +34,14 @@ export class PgGatewayStore implements GatewayStore {
     const r=await this.pool.query('DELETE FROM pactaris.login_attempts WHERE cookie_hash=$1 AND state=$2 AND expires_at>now() RETURNING state,nonce,verifier',[hash(cookie),state]);
     return r.rows[0] as LoginAttempt|undefined;
   }
-  async account(issuer:string,subject:string,name:string) {
-    const r=await this.pool.query(`INSERT INTO pactaris.accounts(id,issuer,subject,display_name) VALUES($1,$2,$3,$4)
-      ON CONFLICT(issuer,subject) DO UPDATE SET display_name=EXCLUDED.display_name RETURNING id,display_name,status`,[randomUUID(),issuer,subject,name]);
-    if(r.rows[0].status!=='active')throw Error('authentication.suspended');
+  async account(issuer:string,subject:string,name:string,verifiedEmail?:string) {
+    const email=normalizeEmail(verifiedEmail)??null;
+    const r=await this.pool.query(`INSERT INTO pactaris.accounts(id,issuer,subject,display_name,verified_email,verified_email_asserted_at)
+      VALUES($1,$2,$3,$4,$5,CASE WHEN $5::text IS NULL THEN NULL ELSE statement_timestamp() END)
+      ON CONFLICT(issuer,subject) DO UPDATE SET display_name=EXCLUDED.display_name,
+      verified_email=EXCLUDED.verified_email,verified_email_asserted_at=EXCLUDED.verified_email_asserted_at
+      WHERE pactaris.accounts.status='active' RETURNING id,display_name,status`,[randomUUID(),issuer,subject,name,email]);
+    if(r.rows[0]?.status!=='active')throw Error('authentication.suspended');
     return {id:r.rows[0].id,displayName:r.rows[0].display_name};
   }
   async createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number) {

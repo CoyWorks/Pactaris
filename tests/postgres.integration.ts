@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp,readFile,writeFile,rm } from 'node:fs/promises';
+import { mkdtemp,readFile,writeFile,rm,mkdir,cp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -29,7 +29,24 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await root.query(`CREATE DATABASE "${database}" OWNER postgres`);
   await root.query(`REVOKE ALL ON DATABASE "${database}" FROM PUBLIC;GRANT CONNECT ON DATABASE "${database}" TO "${runtime}","${migration}","${backup}";GRANT CREATE ON DATABASE "${database}" TO "${migration}"`);
   const owner=new pg.Pool({connectionString:url(database),max:1}),migrator=new pg.Pool({connectionString:url(database,migration,'fixture-only-password'),max:3}),pool=new pg.Pool({connectionString:url(database,runtime,'fixture-only-password'),max:4});pools.push(owner,migrator,pool);
+  if(kind==='gateway') {
+   // Exercise the actual preserving upgrade, not just a clean schema. Previous
+   // runtimes must still read legacy accounts/sessions after this additive step.
+   const previous=join(folder,'previous-gateway');await mkdir(join(previous,'deploy'),{recursive:true});
+   const manifest=JSON.parse(await readFile('deploy/release.json','utf8'));
+   manifest.migrations=manifest.migrations.filter((m:{component:string;id:string})=>m.component!=='gateway'||m.id!=='0004_verified_email');
+   await writeFile(join(previous,'deploy/release.json'),JSON.stringify(manifest));
+   await cp('migrations',join(previous,'migrations'),{recursive:true});
+   await migrate(migrator,previous,kind,runtime,backup);
+   await pool.query("INSERT INTO pactaris.accounts(id,issuer,subject,display_name) VALUES($1,'https://legacy.fixture.invalid/','legacy-subject','Legacy fixture')",['10000000-0000-4000-8000-000000000099']);
+   await pool.query("INSERT INTO pactaris.sessions(token_hash,account_id,csrf_token,expires_at,idle_expires_at) SELECT repeat('f',64),id,'legacy-csrf',now()+interval '1 hour',now()+interval '1 hour' FROM pactaris.accounts");
+  }
   await migrate(migrator,process.cwd(),kind,runtime,backup);await migrate(migrator,process.cwd(),kind,runtime,backup);
+  if(kind==='gateway') {
+   const legacy=await pool.query("SELECT id,display_name,verified_email,verified_email_asserted_at FROM pactaris.accounts WHERE subject='legacy-subject'");
+   assert.deepEqual(legacy.rows,[{id:'10000000-0000-4000-8000-000000000099',display_name:'Legacy fixture',verified_email:null,verified_email_asserted_at:null}]);
+   assert.equal((await pool.query("SELECT csrf_token FROM pactaris.sessions WHERE token_hash=repeat('f',64)")).rows[0].csrf_token,'legacy-csrf');
+  }
   await requireSchema(pool,kind);
   await assert.rejects(requireSchema(owner,kind));
   await assert.rejects(pool.query('CREATE TABLE pactaris.should_fail(id integer)'));
@@ -41,6 +58,31 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const account=await store.account('https://idp.fixture.invalid/','subject-a','Fixture user'),other=await store.account('https://idp.fixture.invalid/','subject-b','Other fixture');
   assert.notEqual(account.id,other.id);
   const sameSubjectOtherIssuer=await store.account('https://other-idp.fixture.invalid/','subject-a','Fixture user');assert.notEqual(account.id,sameSubjectOtherIssuer.id);
+  // Email assertions never key or merge accounts, and do not enter sessions.
+  const proof=()=>gatewayDb.pool.query('SELECT verified_email,verified_email_asserted_at FROM pactaris.accounts WHERE id=$1',[account.id]);
+  const email='Fixture+invite@example.invalid';
+  assert.deepEqual(await store.account('https://idp.fixture.invalid/','subject-a','Fixture user',email),account);
+  assert.equal((await proof()).rows[0].verified_email,email);assert.ok((await proof()).rows[0].verified_email_asserted_at instanceof Date);
+  assert.equal((await store.account('https://idp.fixture.invalid/','subject-b','Other fixture',email)).id,other.id);
+  assert.equal((await store.account('https://other-idp.fixture.invalid/','subject-a','Fixture user',email)).id,sameSubjectOtherIssuer.id);
+  assert.equal((await gatewayDb.pool.query('SELECT count(*)::int AS n FROM pactaris.accounts WHERE verified_email=$1',[email])).rows[0].n,3);
+  await store.createSession('email-session',account,'csrf',60,120);
+  assert.deepEqual((await store.session('email-session',60))?.account,account);
+  await store.account('https://idp.fixture.invalid/','subject-a','Fixture user','Changed@EXAMPLE.INVALID');
+  assert.equal((await proof()).rows[0].verified_email,'Changed@example.invalid');
+  await store.account('https://idp.fixture.invalid/','subject-a','Fixture user');
+  assert.deepEqual((await proof()).rows,[{verified_email:null,verified_email_asserted_at:null}]);
+  for(const invalid of ['malformed','fixture@example.invalid\n']) {
+   await store.account('https://idp.fixture.invalid/','subject-a','Fixture user',email);
+   await store.account('https://idp.fixture.invalid/','subject-a','Fixture user',invalid);
+   assert.deepEqual((await proof()).rows,[{verified_email:null,verified_email_asserted_at:null}]);
+  }
+  await store.logout('email-session');
+  await gatewayDb.owner.query("UPDATE pactaris.accounts SET status='suspended' WHERE id=$1",[account.id]);
+  await assert.rejects(store.account('https://idp.fixture.invalid/','subject-a','Changed name',email));
+  assert.deepEqual((await proof()).rows,[{verified_email:null,verified_email_asserted_at:null}]);
+  assert.equal((await gatewayDb.pool.query('SELECT display_name FROM pactaris.accounts WHERE id=$1',[account.id])).rows[0].display_name,'Fixture user');
+  await gatewayDb.owner.query("UPDATE pactaris.accounts SET status='active' WHERE id=$1",[account.id]);
   await store.beginLogin('fixture-binding',{state:'fixture-state',nonce:'fixture-nonce',verifier:'fixture-verifier'});
   assert.equal(await store.consumeLogin('different-browser','fixture-state'),undefined);
   assert.equal(await store.consumeLogin('fixture-binding','wrong-state'),undefined);

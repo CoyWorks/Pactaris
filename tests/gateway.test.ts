@@ -10,12 +10,12 @@ import type { OnboardingService } from '../apps/gateway/onboarding.js';
 const accountA='10000000-0000-4000-8000-000000000001',accountB='10000000-0000-4000-8000-000000000002';
 const householdA='20000000-0000-4000-8000-000000000001',householdB='20000000-0000-4000-8000-000000000002';
 class FixtureStore implements GatewayStore {
-  attempts=new Map<string,LoginAttempt>();sessions=new Map<string,Session>();calls=0;limited=false;
+  attempts=new Map<string,LoginAttempt>();sessions=new Map<string,Session>();calls=0;limited=false;accountInput?:unknown[];
   async probe(){}
   async throttle(){return !this.limited;}
   async beginLogin(cookie:string,a:LoginAttempt){this.attempts.set(hash(cookie),a);}
   async consumeLogin(cookie:string,state:string){const a=this.attempts.get(hash(cookie));if(a?.state!==state)return;this.attempts.delete(hash(cookie));return a;}
-  async account():Promise<Account>{return {id:accountA,displayName:'Fixture user'};}
+  async account(...input:unknown[]):Promise<Account>{this.accountInput=input;return {id:accountA,displayName:'Fixture user'};}
   async createSession(token:string,account:Account,csrfToken:string){this.sessions.set(hash(token),{account,csrfToken,expiresAt:new Date(Date.now()+100000).toISOString()});}
   async session(token:string){return this.sessions.get(hash(token));}
   async logout(token:string){this.sessions.delete(hash(token));}
@@ -27,7 +27,7 @@ const config=()=>parseGatewayConfig(JSON.parse(readFileSync('config/gateway.exam
 const headers={host:'pactaris.app'};
 function fixture(onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>){
   const store=new FixtureStore();let finish=0,summary=0,unavailable=false,revoked=false;
-  const oidc:OidcLogin={start:async a=>'https://identity.example.invalid/authorize?state='+a.state,finish:async()=>{finish++;return {issuer:'https://identity.example.invalid/',subject:'subject',name:'Fixture user'};}};
+  const oidc:OidcLogin={start:async a=>'https://identity.example.invalid/authorize?state='+a.state,finish:async()=>{finish++;return {issuer:'https://identity.example.invalid/',subject:'subject',name:'Fixture user',verifiedEmail:'private-fixture@example.invalid'};}};
   const app=createGatewayApp(config(),store,oidc,{summary:async(account,p)=>{summary++;if(unavailable)throw Error('https://secret:password@private-node.invalid');if(revoked)return;return {id:p.householdId,name:'Fixture dynamic'};}},undefined,onboarding);
   return {app,store,get finish(){return finish;},get summaries(){return summary;},setUnavailable(){unavailable=true;},setRevoked(){revoked=true;}};
 }
@@ -45,6 +45,9 @@ test('browser-bound one-time login rotates sessions and ignores forged identity 
   assert.equal((await inject(f.app,{url:'/api/session',headers:{...headers,'x-forwarded-user':'admin','oai-authenticated-user-email':'fixture@example.invalid'}})).statusCode,401);
   const {cookie,first,state}=await login(f);
   const session=await inject(f.app,{url:'/api/session',headers:{...headers,cookie}});assert.equal(session.statusCode,200);assert.equal(session.json().account.id,accountA);
+  assert.deepEqual(f.store.accountInput,['https://identity.example.invalid/','subject','Fixture user','private-fixture@example.invalid']);
+  assert.deepEqual(Object.keys(session.json().account).sort(),['displayName','id']);
+  assert.ok(!session.payload.includes('private-fixture@example.invalid'));
   assert.equal(f.finish,1);
   const replay=await inject(f.app,{url:'/auth/oidc/callback?code=fixture-code&state='+state,headers:{...headers,cookie:cookies(first).join('; ')}});
   assert.equal(replay.statusCode,400);assert.equal(f.finish,1);

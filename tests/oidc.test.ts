@@ -11,13 +11,14 @@ import { OpenIdLogin } from '../packages/auth/oidc.js';
 import { parseGatewayConfig } from '../packages/config/index.js';
 const issuer='https://idp.example.invalid/application/o/fixture/',clientId='fixture-client';
 const attempt={state:'fixture-state',nonce:'fixture-nonce',verifier:'a'.repeat(43)};
-async function fixture(callback:(client:OpenIdLogin,flags:{nonce?:string;issuer?:string;audience?:string;badSignature?:boolean;badEndpoint?:boolean;tokenCalls:number})=>Promise<void>){
+type Flags={nonce?:string;issuer?:string;audience?:string;badSignature?:boolean;badEndpoint?:boolean;email?:unknown;email_verified?:unknown;tokenCalls:number};
+async function fixture(callback:(client:OpenIdLogin,flags:Flags)=>Promise<void>){
   const folder=await mkdtemp(join(tmpdir(),'pactaris-oidc-'));
   try{
     const secret=join(folder,'client.secret');await writeFile(secret,'fixture-client-secret',{mode:0o600});
     const config=parseGatewayConfig(JSON.parse(readFileSync('config/gateway.example.json','utf8')));config.oidc={issuer,clientId,clientSecretFile:secret};
     const keys=await generateKeyPair('RS256'),other=await generateKeyPair('RS256'),jwk=await exportJWK(keys.publicKey);jwk.kid='fixture';jwk.alg='RS256';jwk.use='sig';
-    const flags:{nonce?:string;issuer?:string;audience?:string;badSignature?:boolean;badEndpoint?:boolean;tokenCalls:number}={tokenCalls:0};let consumed=false;
+    const flags:Flags={tokenCalls:0};let consumed=false;
     const transport:NonNullable<oidc.DiscoveryRequestOptions[typeof oidc.customFetch]>=async(input,init)=>{
       const url=new URL(input);
       if(url.pathname.endsWith('/.well-known/openid-configuration'))return Response.json({issuer,authorization_endpoint:'https://idp.example.invalid/authorize',token_endpoint:flags.badEndpoint?'https://attacker.invalid/token':'https://idp.example.invalid/token',jwks_uri:'https://idp.example.invalid/jwks',response_types_supported:['code'],subject_types_supported:['public'],id_token_signing_alg_values_supported:['RS256'],token_endpoint_auth_methods_supported:['client_secret_post'],code_challenge_methods_supported:['S256']});
@@ -27,7 +28,7 @@ async function fixture(callback:(client:OpenIdLogin,flags:{nonce?:string;issuer?
         assert.equal(params.get('client_secret'),'fixture-client-secret');assert.equal(params.get('code_verifier'),attempt.verifier);
         assert.equal(params.get('redirect_uri'),'https://pactaris.app/auth/oidc/callback');
         if(consumed||params.get('code')!=='fixture-code')return Response.json({error:'invalid_grant'},{status:400});consumed=true;
-        const jwt=await new SignJWT({nonce:flags.nonce??attempt.nonce,name:'Fixture user'}).setProtectedHeader({alg:'RS256',kid:'fixture'}).setIssuer(flags.issuer??issuer).setAudience(flags.audience??clientId).setSubject('fixture-subject').setIssuedAt().setExpirationTime('60s').sign(flags.badSignature?other.privateKey:keys.privateKey);
+        const jwt=await new SignJWT({nonce:flags.nonce??attempt.nonce,name:'Fixture user',email:flags.email,email_verified:flags.email_verified}).setProtectedHeader({alg:'RS256',kid:'fixture'}).setIssuer(flags.issuer??issuer).setAudience(flags.audience??clientId).setSubject('fixture-subject').setIssuedAt().setExpirationTime('60s').sign(flags.badSignature?other.privateKey:keys.privateKey);
         return Response.json({access_token:'fixture-access-token',token_type:'Bearer',id_token:jwt,expires_in:60});
       }
       throw Error('unexpected fixture request');
@@ -44,6 +45,7 @@ test('maintained OIDC client sends S256 PKCE and validates signed identity; code
   await assert.rejects(client.finish(callback(),attempt));
 }));
 for(const kind of ['nonce','issuer','audience','badSignature'] as const)test('OIDC rejects invalid '+kind,async()=>fixture(async(client,flags)=>{
+  flags.email='fixture@example.invalid';flags.email_verified=true;
   if(kind==='badSignature')flags.badSignature=true;else flags[kind]='wrong-fixture-value';
   await assert.rejects(client.finish(callback(),attempt));
 }));
@@ -51,3 +53,16 @@ test('OIDC rejects wrong state before exchanging a code',async()=>fixture(async(
   const url=callback();url.searchParams.set('state','attacker-state');await assert.rejects(client.finish(url,attempt));assert.equal(flags.tokenCalls,0);
 }));
 test('discovery cannot move sensitive endpoints to another origin',async()=>fixture(async(client,flags)=>{flags.badEndpoint=true;await assert.rejects(client.start(attempt));assert.equal(flags.tokenCalls,0);}));
+
+test('verified email is extracted only after validating the signed ID token',async()=>fixture(async(client,flags)=>{
+  flags.email='Fixture+invite@EXAMPLE.INVALID';flags.email_verified=true;
+  assert.deepEqual(await client.finish(callback(),attempt),{issuer,subject:'fixture-subject',name:'Fixture user',verifiedEmail:'Fixture+invite@example.invalid'});
+}));
+for(const flag of [undefined,false,'true',1])test('signed but unverified email does not gain recipient authority: '+String(flag),async()=>fixture(async(client,flags)=>{
+  flags.email='fixture@example.invalid';flags.email_verified=flag;
+  assert.equal((await client.finish(callback(),attempt)).verifiedEmail,undefined);
+}));
+test('malformed verified email does not prevent ordinary subject-based sign-in',async()=>fixture(async(client,flags)=>{
+  flags.email='fixture@example.invalid\r\n';flags.email_verified=true;
+  assert.deepEqual(await client.finish(callback(),attempt),{issuer,subject:'fixture-subject',name:'Fixture user'});
+}));

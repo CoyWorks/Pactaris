@@ -21,7 +21,7 @@ A signed-in account can explicitly create a private household, invite another pe
 | 5 | #10, #11, #35 | Exact-version individual consent, pause/stop and scoped relationship controls before any tasks/protocol execution. |
 | Throughout | #44, #13, #62, #67 | English catalogs, real database/isolation/failure tests and reproducible Identity branding. |
 
-Email-bound acceptance additionally requires #6 verified email assertions. Current login stores issuer/subject/name only: do not infer a verified email from a username, display name or an unverified IdP claim. Google/Apple credentials and email delivery remain separate work.
+Email-bound acceptance additionally requires #6 verified email assertions. The initial login stored issuer/subject/name only; 0.3.1 adds the bounded assertion foundation below. Do not infer a verified email from a username, display name or an unverified IdP claim. Google/Apple credentials and email delivery remain separate work.
 
 ## First implementation checkpoint — 0.2.1-alpha.1
 
@@ -54,6 +54,12 @@ Update: the create/placement/self-leave and receipt-recovery part below is now i
 8. Keep membership technical roles separate from relationship roles. Render names as user-authored DB content. A four-person household does not create an all-to-all relationship graph.
 
 ## Acceptance before calling this milestone complete
+
+### Invitation prerequisites — 0.3.1-alpha.1
+
+[#69](https://github.com/CoyWorks/Pactaris/issues/69) adds verified-email assertions extracted only from validated signed ID tokens and refreshed/cleared at login. An additive gateway migration preserves accounts and sessions. Account identity remains issuer + subject; same-email accounts are never merged, and email is absent from browser/Instance payloads. See [VERIFIED_EMAIL.md](VERIFIED_EMAIL.md) for provider requirements, bounded address format, migration tests and freshness limits.
+
+This does not enable invitation acceptance. [#70](https://github.com/CoyWorks/Pactaris/issues/70) first fences history/commands/central hints to an exact membership, so a delayed old leave cannot remove a newly joined membership. #8 must additionally implement a recent proof tied to the accepting session, explicit preview/accept/decline/revoke and atomic member quota reservations. Cached account email alone cannot authorize joining. Broad parents remain open.
 
 Real PostgreSQL checks must cover two independent stores, pair/four-person membership, wrong account/household/Instance, changed/expired/revoked invitations, simultaneous accept/revoke, crash after local commit, stale hints, owner transfer/closure and immediate leave. Browser checks must show one public app origin, truthful offline/error states and no private endpoint disclosure. Real IdP branding/MFA/recovery and operator rollout remain separate acceptance evidence.
 

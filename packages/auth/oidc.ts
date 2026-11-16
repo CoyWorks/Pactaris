@@ -2,9 +2,10 @@ import * as oidc from 'openid-client';
 import { readFile } from 'node:fs/promises';
 import type { GatewayConfig } from '../config/index.js';
 import type { LoginAttempt } from '../../apps/gateway/store.js';
+import { verifiedEmailClaim } from './email.js';
 export interface OidcLogin {
   start(attempt:LoginAttempt):Promise<string>;
-  finish(url:URL,attempt:LoginAttempt):Promise<{issuer:string;subject:string;name:string}>;
+  finish(url:URL,attempt:LoginAttempt):Promise<{issuer:string;subject:string;name:string;verifiedEmail?:string}>;
 }
 export class OpenIdLogin implements OidcLogin {
   private cached?:Promise<oidc.Configuration>;
@@ -44,7 +45,10 @@ export class OpenIdLogin implements OidcLogin {
     const tokens=await oidc.authorizationCodeGrant(c,url,{pkceCodeVerifier:attempt.verifier,expectedState:attempt.state,expectedNonce:attempt.nonce,idTokenExpected:true});
     const claims=tokens.claims();
     if(!claims || typeof claims.sub!=='string' || !claims.sub || claims.sub.length>255 || claims.iss!==this.config.oidc.issuer)throw Error('oidc.claims');
-    // Do not store access/ID tokens or trust email/group claims as membership.
-    return {issuer:claims.iss,subject:claims.sub,name:typeof claims.name==='string'?claims.name.slice(0,120):''};
+    // No tokens persist. Email is a provider assertion, never an account key or
+    // membership grant. Omit malformed/unverified claims without blocking login.
+    const verifiedEmail=verifiedEmailClaim(claims);
+    return {issuer:claims.iss,subject:claims.sub,name:typeof claims.name==='string'?claims.name.slice(0,120):'',
+      ...(verifiedEmail?{verifiedEmail}:{})};
   }
 }

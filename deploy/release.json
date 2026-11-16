@@ -1,5 +1,5 @@
 {
-  "version": "0.3.0-alpha.1",
+  "version": "0.3.1-alpha.1",
   "protocol": 2,
   "migrations": [
     {
@@ -42,6 +42,13 @@
       "id": "0003_receipt",
       "path": "migrations/instance/0003_receipt.sql",
       "sha256": "70927da9077397e1d8a6721b8258441690ec598dc10157d6b3c7f52e0f4ad32d",
+      "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0004_verified_email",
+      "path": "migrations/gateway/0004_verified_email.sql",
+      "sha256": "d2040fbace4df5809459e3992122b33820f0d05d4c236c3ec8b366749f5bbedd",
       "backwardCompatible": true
     }
   ]

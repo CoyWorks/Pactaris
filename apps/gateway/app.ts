@@ -53,7 +53,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     const attempt=await store.consumeLogin(binding,states[0]!);
     if(!attempt){loginFailure(req,res,400,'login_failed','errors.loginFailed');return;}
     try {
-      const identity=await oidc.finish(url,attempt),account=await store.account(identity.issuer,identity.subject,identity.name);
+      const identity=await oidc.finish(url,attempt),account=await store.account(identity.issuer,identity.subject,identity.name,identity.verifiedEmail);
       const previous=cookie(req,SESSION);if(previous)await store.logout(previous);
       const sessionToken=token();await store.createSession(sessionToken,account,token(),config.session.idleSeconds,config.session.absoluteSeconds);
       setCookie(res,SESSION,sessionToken,config.session.absoluteSeconds);res.redirect(303,'/');
