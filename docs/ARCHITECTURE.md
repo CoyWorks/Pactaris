@@ -113,3 +113,9 @@ Checked 16 November 2026. Pin versions and recheck documentation at implementati
 - [Laravel queues](https://laravel.com/framework/docs/queues)
 - [Django authentication](https://docs.djangoproject.com/en/dev/topics/auth/)
 - [Django deployment checklist](https://docs.djangoproject.com/en/dev/howto/deployment/checklist/)
+
+## Confirmed choices superseding earlier alternatives
+
+Current direction is Node.js/TypeScript/Express, PostgreSQL/Drizzle and systemd. Central identity is a maintained broker/service supporting Google, Apple and local verified email/password accounts and exposing OIDC to instances; product choice/configuration remains open. Production starts empty; no legacy users/data transfer.
+
+Central CloudPanel proxies local identity/main services and remote private-LAN instances, each with separate data/credentials. Ship GitHub installer/updater/status and minimum instance registration/status with the first working slice (#56 M0). See [INSTALL_UPDATE.md](INSTALL_UPDATE.md). Project-owned source is proprietary/all rights reserved under LICENSE.txt; prior references to choosing an open-source license are superseded.
