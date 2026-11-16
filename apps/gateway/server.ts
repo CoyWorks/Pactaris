@@ -15,7 +15,7 @@ try {
   const probe=async()=>{await db.probe();await requireSchema(db.pool,'gateway');};
   const store=new PgGatewayStore(db.pool,probe),login=new OpenIdLogin(config),signer=new DelegationSigner(config);
   await login.validateLocal();await signer.ready();
-  const onboarding=new OnboardingService(new PgOnboardingStore(db.pool,config.onboarding.maxOwnedHouseholds),new PrivateCommandClient(signer));
+  const onboarding=new OnboardingService(new PgOnboardingStore(db.pool,config.onboarding.maxOwnedHouseholds,new PrivateHouseholdClient(signer)),new PrivateCommandClient(signer));
   const app=createGatewayApp(config,store,login,new PrivateHouseholdClient(signer),undefined,onboarding);
   const tls=config.listen.tls;
   const server=tls?https.createServer({key:readFileSync(tls.keyFile),cert:readFileSync(tls.certFile),minVersion:'TLSv1.2'},app):http.createServer(app);

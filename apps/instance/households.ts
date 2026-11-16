@@ -23,7 +23,7 @@ export class InstanceHouseholds {
       await db.query("SELECT set_config('pactaris.household_id',$1,true)",[householdId]);
       const r=await db.query("SELECT id,display_name FROM pactaris.households WHERE id=$1 AND instance_id=$2 AND status IN ('active','paused')",[householdId,this.config.instanceId]);
       await db.query('COMMIT');
-      const row=r.rows[0];return row?{id:row.id,name:row.display_name}:undefined;
+      const row=r.rows[0];return row?{id:row.id,name:row.display_name,membershipId:rowMember.id}:undefined;
     }catch(e){await db.query('ROLLBACK');throw e;}
     finally{db.release();}
   }

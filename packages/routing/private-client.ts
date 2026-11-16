@@ -4,13 +4,13 @@ import { isIP } from 'node:net';
 import { readFile } from 'node:fs/promises';
 import type { Placement } from '../../apps/gateway/store.js';
 import type { DelegationSigner } from '../auth/delegation.js';
-import { summaryPath,commandPath,type HouseholdAction } from '../auth/delegation.js';
+import { summaryPath,commandPath,uuid,type HouseholdAction } from '../auth/delegation.js';
 import type { CommandResult } from '../../apps/instance/commands.js';
 export function privateAddress(address:string):boolean {
   if(isIP(address)===4){const [a,b]=address.split('.').map(Number);return a===10||a===127||(a===172&&b!>=16&&b!<=31)||(a===192&&b===168);}
   return address==='::1'||/^f[cd][0-9a-f]{2}:/i.test(address);
 }
-export type HouseholdSummary={id:string;name:string};
+export type HouseholdSummary={id:string;name:string;membershipId?:string};
 export interface HouseholdClient { summary(accountId:string,placement:Placement):Promise<HouseholdSummary|undefined>; }
 async function privateResponse(placement:Placement,path:string,token:string,body?:string):Promise<{status:number;data:unknown}> {
   const endpoint=new URL(placement.endpoint);
@@ -42,7 +42,8 @@ export class PrivateHouseholdClient implements HouseholdClient {
     if(response.status===403||response.status===404)return;
     const data=response.data as Partial<HouseholdSummary>|null;
     if(response.status!==200||!data||data.id!==placement.householdId||typeof data.name!=='string'||!data.name.length||[...data.name].length>120)throw Error('routing.response');
-    return {id:data.id,name:data.name};
+    if(data.membershipId!==undefined&&!uuid(data.membershipId))throw Error('routing.response');
+    return {id:data.id,name:data.name,...(data.membershipId?{membershipId:data.membershipId}:{})};
   }
 }
 export class CommandDeliveryError extends Error {
@@ -51,9 +52,9 @@ export class CommandDeliveryError extends Error {
 /** A server-side command transport, not a public create/leave API or placement manager. */
 export class PrivateCommandClient {
   constructor(private signer:DelegationSigner) {}
-  async execute(accountId:string,placement:Placement,action:HouseholdAction,operationId:string,name?:string):Promise<CommandResult> {
+  async execute(accountId:string,placement:Placement,action:HouseholdAction,operationId:string,name?:string,membershipId?:string):Promise<CommandResult> {
     try {
-      const body=JSON.stringify(action==='create'?{operationId,name}:{operationId});
+      const body=JSON.stringify(action==='create'?{operationId,name}:action==='leave'&&membershipId?{operationId,membershipId}:{operationId});
       const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,operationId,body);
       const response=await privateResponse(placement,commandPath(placement.householdId,action),token,body);
       if(response.status===403||response.status===404)throw new CommandDeliveryError('denied');
@@ -62,7 +63,9 @@ export class PrivateCommandClient {
       const result=response.data as Partial<CommandResult>|null;
       if(response.status!==200||!result||result.householdId!==placement.householdId||result.operationId!==operationId||
         !result.status||!(action==='receipt'?['created','left','missing']:action==='create'?['created']:['left']).includes(result.status))throw Error('routing.response');
-      return {householdId:result.householdId,operationId:result.operationId,status:result.status};
+      if(result.status!=='missing'&&!uuid(result.membershipId))throw Error('routing.membership_required');
+      if(action==='leave'&&membershipId&&result.membershipId!==membershipId)throw Error('routing.membership');
+      return {householdId:result.householdId,operationId:result.operationId,status:result.status,...(result.membershipId?{membershipId:result.membershipId}:{})};
     }catch(error){if(error instanceof CommandDeliveryError)throw error;throw new CommandDeliveryError('unavailable');}
   }
 }

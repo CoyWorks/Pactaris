@@ -34,14 +34,35 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    // runtimes must still read legacy accounts/sessions after this additive step.
    const previous=join(folder,'previous-gateway');await mkdir(join(previous,'deploy'),{recursive:true});
    const manifest=JSON.parse(await readFile('deploy/release.json','utf8'));
-   manifest.migrations=manifest.migrations.filter((m:{component:string;id:string})=>m.component!=='gateway'||m.id!=='0004_verified_email');
+   manifest.migrations=manifest.migrations.filter((m:{component:string;id:string})=>m.component!=='gateway'||!['0004_verified_email','0005_membership_fencing'].includes(m.id));
    await writeFile(join(previous,'deploy/release.json'),JSON.stringify(manifest));
    await cp('migrations',join(previous,'migrations'),{recursive:true});
    await migrate(migrator,previous,kind,runtime,backup);
    await pool.query("INSERT INTO pactaris.accounts(id,issuer,subject,display_name) VALUES($1,'https://legacy.fixture.invalid/','legacy-subject','Legacy fixture')",['10000000-0000-4000-8000-000000000099']);
    await pool.query("INSERT INTO pactaris.sessions(token_hash,account_id,csrf_token,expires_at,idle_expires_at) SELECT repeat('f',64),id,'legacy-csrf',now()+interval '1 hour',now()+interval '1 hour' FROM pactaris.accounts");
   }
+  if(kind==='instance') {
+   const previous=join(folder,'previous-'+name);await mkdir(join(previous,'deploy'),{recursive:true});
+   const manifest=JSON.parse(await readFile('deploy/release.json','utf8'));
+   manifest.migrations=manifest.migrations.filter((m:{component:string;id:string})=>m.component!=='instance'||m.id!=='0004_membership_fencing');
+   await writeFile(join(previous,'deploy/release.json'),JSON.stringify(manifest));await cp('migrations',join(previous,'migrations'),{recursive:true});
+   await migrate(migrator,previous,kind,runtime,backup);
+   await pool.query('SELECT pactaris.create_household_command($1,$2,$3,$4,$5,$6)',[
+    '90000000-0000-4000-8000-000000000001','90000000-0000-4000-8000-000000000002','90000000-0000-4000-8000-000000000003',
+    '90000000-0000-4000-8000-000000000004','Legacy membership fixture','a'.repeat(64)]);
+  }
   await migrate(migrator,process.cwd(),kind,runtime,backup);await migrate(migrator,process.cwd(),kind,runtime,backup);
+  if(kind==='instance') {
+   const legacyId='90000000-0000-4000-8000-000000000001';
+   const receipt=(await owner.query('SELECT result FROM pactaris.household_command_receipts WHERE household_id=$1',[legacyId])).rows[0].result;
+   const member=(await owner.query('SELECT id FROM pactaris.memberships WHERE household_id=$1',[legacyId])).rows[0].id;
+   assert.equal(receipt.membershipId,member);
+   // Fixture cleanup only; the migration itself never removes historical rows.
+   for(const table of ['household_outbox','household_command_receipts','audit_events','household_entitlements','memberships'])
+    await owner.query('DELETE FROM pactaris.'+table+' WHERE household_id=$1',[legacyId]);
+   await owner.query('DELETE FROM pactaris.households WHERE id=$1',[legacyId]);
+  }
+
   if(kind==='gateway') {
    const legacy=await pool.query("SELECT id,display_name,verified_email,verified_email_asserted_at FROM pactaris.accounts WHERE subject='legacy-subject'");
    assert.deepEqual(legacy.rows,[{id:'10000000-0000-4000-8000-000000000099',display_name:'Legacy fixture',verified_email:null,verified_email_asserted_at:null}]);
@@ -148,7 +169,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await assert.rejects(client.summary(account.id,{...placement,tlsServerName:'wrong.fixture.invalid'}));
   await assert.rejects(client.summary(account.id,{...placement,endpoint:'https://169.254.169.254/'}));
   await store.createSession('a'.repeat(43),account,'csrf',60,120);
-  const onboardingStore=new PgOnboardingStore(gatewayDb.pool,1),onboarding=new OnboardingService(onboardingStore,new PrivateCommandClient(signer));
+  const onboardingStore=new PgOnboardingStore(gatewayDb.pool,1,client),onboarding=new OnboardingService(onboardingStore,new PrivateCommandClient(signer));
   const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
@@ -257,16 +278,53 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   // A local leave can commit before its central acknowledgement. Stale hints
   // cannot retain access; a newly started reconciler completes the receipt.
   const leaving=await onboardingStore.reserveLeave(registrant.id,registeredId,randomUUID());
-  await commands.execute(registrant.id,leaving,'leave',leaving.operationId);
+  await commands.execute(registrant.id,leaving,'leave',leaving.operationId,undefined,leaving.membershipId??undefined);
   assert.ok(await store.placement(registrant.id,registeredId));
   assert.equal((await api('/api/households/'+registeredId)).status,404);
-  await new OnboardingService(new PgOnboardingStore(gatewayDb.pool,1),commands).reconcile();
+  await new OnboardingService(new PgOnboardingStore(gatewayDb.pool,1,client),commands).reconcile();
   assert.equal(await store.placement(registrant.id,registeredId),undefined);
   assert.equal((await api('/api/households/'+registeredId+'/leave','POST',{operationId:leaving.operationId})).status,200);
   assert.equal((await api('/api/households')).data.households.length,0);
   // The creation reservation is released by confirmed departure, not by a
   // timeout. A new registration is now possible, even at the same pilot limit.
   assert.equal((await api('/api/households','POST',{operationId:randomUUID(),name:'Next dynamic fixture'})).status,201);
+  // A new membership never restores the old roles/consent; old transport,
+  // old creation receipts and delayed central finalization stay generation-bound.
+  const fenceActor=await store.account('https://idp.fixture.invalid/','fencing-account','Fencing fixture');
+  const fenceCreate=await onboarding.create(fenceActor.id,randomUUID(),'Fencing fixture'),fencePlacement=(await store.placement(fenceActor.id,fenceCreate.householdId))!;
+  const fenceDb=fencePlacement.instanceId===ids[0]?a:b;
+  const oldMember=(await client.summary(fenceActor.id,fencePlacement))!.membershipId!;
+  const rel=randomUUID(),role=randomUUID(),consent=randomUUID();
+  await fenceDb.owner.query("INSERT INTO pactaris.relationships(household_id,id,label) VALUES($1,$2,'Historical fixture')",[fenceCreate.householdId,rel]);
+  await fenceDb.owner.query('INSERT INTO pactaris.relationship_participants(household_id,relationship_id,membership_id,accepted) VALUES($1,$2,$3,true)',[fenceCreate.householdId,rel,oldMember]);
+  await fenceDb.owner.query("INSERT INTO pactaris.dynamic_roles(household_id,id,label) VALUES($1,$2,'Fixture role')",[fenceCreate.householdId,role]);
+  await fenceDb.owner.query('INSERT INTO pactaris.relationship_roles(household_id,id,relationship_id,membership_id,role_id) VALUES($1,$2,$3,$4,$5)',[fenceCreate.householdId,randomUUID(),rel,oldMember,role]);
+  await fenceDb.owner.query("INSERT INTO pactaris.consent_records(household_id,id,membership_id,version,status) VALUES($1,$2,$3,1,'accepted')",[fenceCreate.householdId,consent,oldMember]);
+  // Keep one other owner so leaving does not close this synthetic household.
+  await fenceDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role) VALUES($1,$2,$3,'active','owner')",[fenceCreate.householdId,randomUUID(),other.id]);
+  const oldLeave=await onboardingStore.reserveLeave(fenceActor.id,fenceCreate.householdId,randomUUID());assert.equal(oldLeave.membershipId,oldMember);
+  const leaveProof=await commands.execute(fenceActor.id,fencePlacement,'leave',oldLeave.operationId,undefined,oldMember);
+  // Rejoin is a privileged fixture, not an invitation API in this release.
+  const newMember=randomUUID();
+  await fenceDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[fenceCreate.householdId,newMember,fenceActor.id]);
+  await assert.rejects(fenceDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[fenceCreate.householdId,randomUUID(),fenceActor.id]));
+  await assert.rejects(fenceDb.owner.query("UPDATE pactaris.memberships SET status='active' WHERE household_id=$1 AND id=$2",[fenceCreate.householdId,oldMember]));
+  await gatewayDb.owner.query('UPDATE pactaris.account_households SET membership_id=$3 WHERE account_id=$1 AND household_id=$2',[fenceActor.id,fenceCreate.householdId,newMember]);
+  await assert.rejects(commands.execute(fenceActor.id,fencePlacement,'leave',randomUUID(),undefined,oldMember),{kind:'denied'});
+  await assert.rejects(commands.execute(fenceActor.id,fencePlacement,'leave',randomUUID()),{kind:'denied'});
+  await assert.rejects(commands.execute(fenceActor.id,fencePlacement,'create',fenceCreate.operationId,'Fencing fixture'),{kind:'denied'});
+  const historic=await commands.execute(fenceActor.id,fencePlacement,'receipt',fenceCreate.operationId);
+  assert.equal(historic.status,'left');assert.equal(historic.membershipId,oldMember);
+  assert.equal((await commands.execute(fenceActor.id,fencePlacement,'leave',oldLeave.operationId,undefined,oldMember)).membershipId,oldMember);
+  await onboardingStore.finish(oldLeave,leaveProof);
+  assert.equal((await gatewayDb.pool.query('SELECT membership_id FROM pactaris.account_households WHERE account_id=$1 AND household_id=$2',[fenceActor.id,fenceCreate.householdId])).rows[0].membership_id,newMember);
+  assert.equal((await client.summary(fenceActor.id,fencePlacement))!.membershipId,newMember);
+  assert.equal((await fenceDb.owner.query('SELECT membership_id FROM pactaris.consent_records WHERE household_id=$1 AND id=$2',[fenceCreate.householdId,consent])).rows[0].membership_id,oldMember);
+  assert.equal((await fenceDb.owner.query('SELECT membership_id FROM pactaris.relationship_roles WHERE household_id=$1',[fenceCreate.householdId])).rows[0].membership_id,oldMember);
+  assert.equal((await fenceDb.owner.query('SELECT technical_role FROM pactaris.memberships WHERE household_id=$1 AND id=$2',[fenceCreate.householdId,newMember])).rows[0].technical_role,'participant');
+  const newLeave=await onboardingStore.reserveLeave(fenceActor.id,fenceCreate.householdId,randomUUID());assert.equal(newLeave.membershipId,newMember);
+  await assert.rejects(commands.execute(fenceActor.id,fencePlacement,'leave',oldLeave.operationId,undefined,newMember),{kind:'conflict'});
+  assert.equal((await onboarding.leave(fenceActor.id,fenceCreate.householdId,newLeave.operationId)).status,'complete');
   // Separate concurrent creation IDs are budgeted under the same account lock.
   const racer=await store.account('https://idp.fixture.invalid/','registration-racer','Racer fixture');await store.createSession('s'.repeat(43),racer,'registration-csrf',60,120);
   const races=await Promise.all(Array.from({length:4},()=>api('/api/households','POST',{operationId:randomUUID(),name:'Race fixture'},'s'.repeat(43))));
@@ -282,7 +340,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const interrupted=await unreliable.create(recovery.id,recoveryId,'Recoverable private name');assert.equal(interrupted.status,'pending');
   assert.equal(await store.placement(recovery.id,interrupted.householdId),undefined);
   await assert.rejects(onboardingStore.reserveCreate(recovery.id,randomUUID(),'Duplicate after timeout'),{kind:'limit'});
-  const recoveredWorker=new OnboardingService(new PgOnboardingStore(gatewayDb.pool,1),commands);await recoveredWorker.reconcile();
+  const recoveredWorker=new OnboardingService(new PgOnboardingStore(gatewayDb.pool,1,client),commands);await recoveredWorker.reconcile();
   assert.ok(await store.placement(recovery.id,interrupted.householdId));assert.equal((await onboardingStore.pending(recovery.id)).length,0);
   const replayed=await onboarding.create(recovery.id,recoveryId,'Recoverable private name');assert.equal(replayed.householdId,interrupted.householdId);assert.equal(replayed.status,'complete');
   // A crash before dispatch retains the reservation. Receipt inspection is not

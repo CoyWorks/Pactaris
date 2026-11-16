@@ -5,11 +5,11 @@ import { PgGatewayStore } from './store.js';
 import { writeFile,rename,mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { DelegationSigner } from '../../packages/auth/delegation.js';
-import { PrivateCommandClient } from '../../packages/routing/private-client.js';
+import { PrivateCommandClient,PrivateHouseholdClient } from '../../packages/routing/private-client.js';
 import { OnboardingService,PgOnboardingStore } from './onboarding.js';
 const config=loadGatewayConfig(process.env.APP_CONFIG??'',process.argv.includes('--development')),db=database(config);
 const store=new PgGatewayStore(db.pool,()=>requireSchema(db.pool,'gateway'));let stopped=false;
-const onboarding=new OnboardingService(new PgOnboardingStore(db.pool,config.onboarding.maxOwnedHouseholds),new PrivateCommandClient(new DelegationSigner(config)));
+const onboarding=new OnboardingService(new PgOnboardingStore(db.pool,config.onboarding.maxOwnedHouseholds,new PrivateHouseholdClient(new DelegationSigner(config))),new PrivateCommandClient(new DelegationSigner(config)));
 async function tick(){
   if(stopped)return;let state='ready';
   try{await store.probe();await store.cleanup();await onboarding.reconcile();}catch{state='unavailable';}
