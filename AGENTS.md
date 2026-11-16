@@ -50,3 +50,11 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 - First working version includes minimal central/main/internal infrastructure and instance registration/status, plus install.sh/update.sh/status.sh from GitHub (#56, docs/INSTALL_UPDATE.md). Demonstrate a second pinned-version update preserving data. Advanced fleet orchestration remains later.
 - Support private GitHub access using scoped read-only instance credentials, with pinned versions, staged releases, update lock, recovery checkpoints, migrations, health checks and truthful rollback limits. Preserve secrets/config/database/files/instance identity.
 - Project-owned source is proprietary/all rights reserved under LICENSE.txt, not open source. No generic modification, redistribution, self-hosting or commercial rights are granted. Respect third-party licenses/applicable law/platform terms. The owner plans private visibility later; do not change visibility incidentally.
+
+## Independent Identity and Instance deployment
+
+- Identity and Instance are separately installable/updatable applications. Shared source/packages are allowed; no mandatory shared runtime/config/database/migrations/release lock or localhost dependency. An optional co-location installer composes separate installations.
+- Default HTTPS app ingress: Identity 9443, every Instance 9444. Existing CloudPanel admin uses 8443. Ports/domains/bind/backend/TLS names are validated config, not feature-code constants.
+- The example public origins are identity.coyworks.nl, instance1.coyworks.nl and instance2.coyworks.nl. Remote instance upstream DNS must resolve to its private host from the proxy, not back to public ingress. Verify backend TLS identity even on loopback.
+- Proxy, Identity, manager and Instance may be placed on separate hosts/proxies. Preserve public origin/issuer where possible; issuer changes require controlled auth migration.
+- Independent component updates check compatible contracts and do not restart/migrate the other app. Test co-located and split-host arrangements (#62).
