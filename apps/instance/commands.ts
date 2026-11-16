@@ -17,7 +17,7 @@ export class InstanceCommands {
       input=JSON.parse(body.toString('utf8'));
       if(!input||Array.isArray(input)||input.operationId!==verified.operationId||
         Object.keys(input).sort().join(',')!==(action==='create'?'name,operationId':'operationId'))throw Error('command.input');
-      if(action==='create'&&(typeof input.name!=='string'||!input.name.trim()||[...input.name].length>120||input.name!==input.name.trim()||/[\u0000-\u001f\u007f]/.test(input.name)))throw Error('command.name');
+      if(action==='create'&&(typeof input.name!=='string'||!input.name.trim()||[...input.name].length>120||input.name!==input.name.trim()||/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(input.name)))throw Error('command.name');
     }catch{throw new CommandError('invalid');}
     // Semantic receipt hash is independent of JSON whitespace/key order. The
     // transport JWT still authenticates the exact bytes, not a parsed approximation.

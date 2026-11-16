@@ -138,6 +138,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await a.owner.query('SELECT display_name FROM pactaris.households WHERE id=$1',[created])).rows[0].display_name,name);
   assert.equal((await a.owner.query("SELECT count(*)::int AS count FROM pactaris.memberships WHERE household_id=$1 AND account_id=$2 AND status='active' AND technical_role='owner'",[created,account.id])).rows[0].count,1);
   assert.equal((await a.pool.query('SELECT pactaris.command_executor() AS privileged')).rows[0].privileged,false);
+  await assert.rejects(backupPool.query('SELECT pactaris.create_household_command($1,$2,$3,$4,$5,$6)',[randomUUID(),ids[0],account.id,randomUUID(),'Forbidden backup write','a'.repeat(64)]));
   for(const table of ['household_command_receipts','household_outbox','audit_events'])await assert.rejects(a.pool.query(`DELETE FROM pactaris.${table}`));
   await assert.rejects(commands.execute(account.id,destination,'create',operation,'Changed request'),{kind:'conflict'});
   await assert.rejects(commands.execute(other.id,destination,'create',operation,name),{kind:'conflict'});
@@ -188,7 +189,10 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
  }finally{
   for(const server of servers){server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
   await Promise.all(pools.map(p=>p.end()));
-  for(const name of names){await root.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);for(const suffix of ['runtime','migration','backup'])await root.query(`DROP ROLE IF EXISTS "${name}_${suffix}"`);}
+  // All clients have been closed above. Do not forcibly terminate connections:
+  // FORCE can race a socket's graceful shutdown and mask assertions with a late
+  // unhandled pool error. An unexpectedly live client must fail cleanup clearly.
+  for(const name of names){await root.query(`DROP DATABASE IF EXISTS "${name}"`);for(const suffix of ['runtime','migration','backup'])await root.query(`DROP ROLE IF EXISTS "${name}_${suffix}"`);}
   await root.end();await rm(folder,{recursive:true,force:true});
  }
 });
