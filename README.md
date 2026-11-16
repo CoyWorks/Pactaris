@@ -4,6 +4,8 @@ A mobile-first platform for consenting-adult BDSM, SM and kink: Dom/sub and play
 
 **Status: planning.** This repository contains requirements and implementation issues, not a runnable application. Pactaris is the repository identifier; the product name remains provisional.
 
+Obedience is the functional reference for core habits, rewards/consequences, points redemption, partner updates/chat and progress charts. See [the baseline mapping](docs/OBEDIENCE_BASELINE.md); implement original code and presentation.
+
 ## Core model
 
 A household is a private dynamic space, not a family/residence unit. It may be a Dom/sub pair, a Dom/Dom/sub/sub group or another explicitly agreed configuration. Members can hold several roles and overlapping BDSM/romantic relationships. Someone can be dominant to A and submissive/bottom to B simultaneously. Technical administrator rights remain separate from these roles.
@@ -45,12 +47,16 @@ Accounts; explicit invitations; technical permissions; accepted multi-role relat
 
 First slice: **sign in → join a dynamic explicitly → define accepted relationships/roles → negotiate consent → assign/complete a task → stop → export/leave**. Validate a pair, four-person group and contextual switch before broader feature expansion.
 
+## English-first messages and locales
+
+All visible system text is resolved from stable translation keys/shortcodes through language files from the first implementation. English is the only initial language; no hardcoded English/Dutch UI prose in application logic. Cover errors, accessibility, email, push, audit presentation, central login and server manager. Language, regional formatting locale and timezone are separate preferences. Additional translations ship as validated packs. See [INTERNATIONALIZATION.md](docs/INTERNATIONALIZATION.md) and #44 (M0).
+
 ## Planning
 
 - [Domain model](docs/DOMAIN_MODEL.md): multiple contextual BDSM roles, graph, negotiation and sessions.
 - [Free/paid matrix](docs/PLANS.md): illustrative capacities, sponsorship, entitlements and downgrade rules.
 - [Infrastructure](docs/INFRASTRUCTURE.md): installer, enrollment, manager, independent instances, identity and placement.
-- [Feature inventory](docs/FEATURE_INVENTORY.md): all 61 work items.
+- [Feature inventory](docs/FEATURE_INVENTORY.md): all 65 work items.
 - [Roadmap](docs/ROADMAP.md) and [tracker #51](https://github.com/CoyWorks/Pactaris/issues/51): delivery order and gates.
 - [Architecture](docs/ARCHITECTURE.md), [open decisions](docs/DECISIONS.md) and [existing Site assessment](docs/EXISTING_SITE.md).
 - [Contributing](CONTRIBUTING.md) and [security reporting](SECURITY.md).
