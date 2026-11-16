@@ -69,3 +69,10 @@ Billing, task execution, uploads, public onboarding, automatic remote fleet enro
 ## Membership identity checkpoint — 0.3.2-alpha.1
 
 #70 now binds command receipts, private self-leave and central operation/hint finalization to the exact membership UUID. Historical records are retained; reactivation is rejected and only one current membership is allowed. Tests use synthetic rejoin to prove old roles/consent and delayed commands cannot affect the new membership. Public invitation/rejoin is still the next #8/#53 block. See [MEMBERSHIP_LIFECYCLE.md](MEMBERSHIP_LIFECYCLE.md) and the approved [first six P0 blocks](ALPHA_P0.md).
+
+
+## Participant invitations checkpoint — 0.4.0-alpha.1
+
+#8/#53 now have a connected participant invitation create/list/review/accept/decline/revoke workflow, session-bound recent email assertion, 48-hour reservations under household locks and an explicit four-member operational pilot snapshot. Lost acceptance acknowledgements recover through durable gateway operations and private receipts; rejoining creates a fresh membership and old receipts cannot affect it. See [INVITATIONS.md](INVITATIONS.md).
+
+No automatic email, role/consent acceptance, member removal/owner transfer, commercial task/storage quotas or whole-parent completion is claimed. Real IdP ownership verification, mobile/browser acceptance and the release/privacy/backup gates remain required. The next P0 block is #26.

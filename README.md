@@ -10,7 +10,7 @@ Historical 0.1 empty-server bootstrap, including apt dependencies (upgrade to 0.
 
 A mobile-first platform for consenting-adult BDSM, SM and kink: Dom/sub and play-partner relationships, protocols, tasks, rituals, negotiated sessions, rewards/consequences and aftercare.
 
-**Status: connected alpha, 0.3.2-alpha.1.** Signed-in accounts can [create, select and explicitly leave a private dynamic](docs/HOUSEHOLD_ONBOARDING.md) through the public gateway, with durable placement/receipt recovery and independent Instance databases. Reviewed migrations and one-command updates preserve prepared installations. Invitations and the broader consent/task workflows remain unfinished; this is not ready for general public onboarding. The confirmed product name is Pactaris.
+**Status: connected alpha, 0.4.0-alpha.1.** Signed-in accounts can [create, select and explicitly leave a private dynamic](docs/HOUSEHOLD_ONBOARDING.md) through the public gateway, with durable placement/receipt recovery and independent Instance databases. Reviewed migrations and one-command updates preserve prepared installations. Participant invitations with explicit review/accept/decline/revoke and alpha member reservations are now connected; the broader consent/task workflows remain unfinished; this is not ready for general public onboarding. The confirmed product name is Pactaris.
 
 Central-login rollout: [LOGIN_ROLLOUT.md](docs/LOGIN_ROLLOUT.md), with trust boundaries in [LOGIN_GATEWAY.md](docs/LOGIN_GATEWAY.md).
 
@@ -96,3 +96,5 @@ No covert tracking, blackmail, forced participation, punitive withdrawal or devi
 Installer/updater/status entry points now exist with a read-only plan default; host application remains experimental and unverified. See docs/DEVELOPMENT.md for prerequisites, refusal/recovery behavior and limitations. Google/Apple and live provider acceptance, full domain workflows and updater acceptance and complete rights review remain open. The proprietary licensing direction and clean start are decided.
 
 Alpha delivery order: [first six P0 blocks](docs/ALPHA_P0.md), starting with [membership history and retry fencing](docs/MEMBERSHIP_LIFECYCLE.md).
+
+Participant invitation rollout and proof requirements: [INVITATIONS.md](docs/INVITATIONS.md).

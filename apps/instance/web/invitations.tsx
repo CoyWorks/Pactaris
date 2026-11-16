@@ -29,7 +29,8 @@ export function InvitationManager({householdId,session,language}:{householdId:st
    if(!r.ok){setError(errorKey(body.messageKey));return;}setRefresh(v=>v+1);if(link.includes(id))setLink('');
   }catch{setError('invitations.unavailable');}finally{setBusy(false);}
  }
- const stateKey=(value:string):MessageKey=>('invitations.state.'+(['pending','accepted','declined','revoked','inactive'].includes(value)?value:'inactive')) as MessageKey;
+ const stateKeys:Record<string,MessageKey>={pending:'invitations.state.pending',accepted:'invitations.state.accepted',declined:'invitations.state.declined',revoked:'invitations.state.revoked',inactive:'invitations.state.inactive'};
+ const stateKey=(value:string):MessageKey=>stateKeys[value]??'invitations.state.inactive';
  if(!allowed)return error?<p role="alert">{t(error)}</p>:null;
  return <section><h2>{t('invitations.title')}</h2><p>{t('invitations.createDescription')}</p>
   {error&&<p role="alert">{t(error)}</p>}
