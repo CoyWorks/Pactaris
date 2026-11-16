@@ -1,63 +1,68 @@
 # The app
 
-A mobile-first platform for consensual household dynamics, shared protocols, tasks, rituals and accountability.
+A mobile-first platform for consenting-adult BDSM, SM and kink: Dom/sub and play-partner relationships, protocols, tasks, rituals, negotiated sessions, rewards/consequences and aftercare.
 
-**Status: discovery and planning.** This repository contains the product scope, architecture proposal and implementation backlog. It does not contain a runnable application yet. The repository identifier is `CoyWorks/Pactaris`; the product name remains provisional.
+**Status: planning.** This repository contains requirements and implementation issues, not a runnable application. Pactaris is the repository identifier; the product name remains provisional.
 
-## Hosted from the core
+## Core model
 
-The project will run as one public service on OCI behind CloudPanel. People have independent accounts and can join multiple isolated households with different roles in each. A household is the tenant boundary.
+A household is a private dynamic space, not a family/residence unit. It may be a Dom/sub pair, a Dom/Dom/sub/sub group or another explicitly agreed configuration. Members can hold several roles and overlapping BDSM/romantic relationships. Someone can be dominant to A and submissive/bottom to B simultaneously. Technical administrator rights remain separate from these roles.
 
-The current direction supersedes the earlier Community/Cloud and SQLite self-hosting plan. There is one hosted product scope. Open-source licensing is a separate decision ([#50](https://github.com/CoyWorks/Pactaris/issues/50)).
+Independent accounts can join multiple households, including households on different instances. Relationship roles, technical permissions, standing, billing sponsorship and platform operations are distinct concepts.
 
-## Core principles
+## Hosted infrastructure
 
-- Explicit, versioned and revocable consent. Acknowledgement is separate from consent.
-- Any participant can pause or stop. Administrators cannot override another person's withdrawal.
-- Separate account identity, household membership, technical permissions, standing and relationships.
-- Tenant and resource authorization on every API, file, export and background job.
-- Private content stays private; household administration does not imply access to personal-private notes.
-- Personal export, leave, deletion and safety remain available independently of subscription status.
-- No covert tracking, forced monitoring, blackmail features or automated device punishment.
+One public hosted product runs on operator-managed instances, starting on OCI behind CloudPanel. Each instance owns its application hosting, PostgreSQL database, private storage, workers and backups and hosts multiple isolated households.
+
+A server manager registers instances and manages placement, health, capacity and controlled lifecycle operations. It holds operational/identity/entitlement metadata, not a shared database of intimate tenant content. Contracts must exist in the foundation, even while only one instance is deployed.
+
+This supersedes the historical SQLite Community/Cloud self-hosting plan. Open-source licensing remains a separate decision ([#50](https://github.com/CoyWorks/Pactaris/issues/50)).
 
 ## Proposed stack
 
 | Layer | Proposal |
 | --- | --- |
-| Frontend | React, Vite, TypeScript, mobile-first PWA |
-| Backend | Node.js/TypeScript with Express and modular domain services |
-| Database | PostgreSQL with Drizzle migrations and row-level security |
-| Jobs | Durable PostgreSQL-backed worker and transactional outbox |
-| Files | Private storage adapter; local volume or OCI Object Storage to be selected |
-| Notifications | In-app inbox, transactional email and opt-in Web Push per user/device |
-| Hosting | OCI VM, CloudPanel/NGINX TLS proxy, supervised application/worker processes |
+| Frontend | React/Vite/TypeScript mobile-first PWA |
+| Instance backend | Node.js/TypeScript, Express, modular domain services |
+| Data | Private PostgreSQL per instance, Drizzle migrations and tenant RLS |
+| Jobs | Durable local worker/scheduler and transactional outbox |
+| Files | Private local/OCI storage adapter with isolated instance credentials |
+| Notifications | In-app, transactional email and opt-in Web Push per user/device |
+| Management | Separate server-manager/agent contract, identity/placement and entitlement integration |
+| Hosting | OCI, CloudPanel/NGINX TLS proxy, supervised services or isolated app containers |
 
-This is a recommendation for review, not a completed technology decision. See [architecture options](docs/ARCHITECTURE.md) and [#1](https://github.com/CoyWorks/Pactaris/issues/1).
+Runtime/provider choices remain proposals for [#1](https://github.com/CoyWorks/Pactaris/issues/1). Compare Node.js, Laravel/PHP and Django/Python in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Free and paid
+
+Build versioned entitlements into M0 ([#53](https://github.com/CoyWorks/Pactaris/issues/53)), even if only Free is enabled initially. The illustrative Free plan supports four people. Paid plans may expand members, active tasks, schedules, storage, automation, templates, planning, insights and integrations. Prices and exact limits remain proposals in [PLANS.md](docs/PLANS.md).
+
+Basic relationship diversity and multiple contextual roles, consent, limits, safewords, pause/stop, privacy controls, MFA, personal export, leave and deletion stay available in every plan. Downgrade/nonpayment does not delete content, evict members or override agreements.
 
 ## First usable scope
 
-Accounts and verification; explicit household invitations; owner/admin/participant permissions; consent, pause and emergency stop; rules/protocols; tasks and recurrence; rituals/check-ins; optional points/rewards and agreed consequences; private attachments; notifications; audit; export/deletion; profile and household settings.
+Accounts; explicit invitations; technical permissions; accepted multi-role relationship graph; negotiation/consent; pause and stop; protocols; tasks/recurrence; check-ins and aftercare; play-session planning; optional rewards/agreed consequences; private attachments; inbox/push/email; audit; export/delete; profile and dynamic settings.
 
-Start with one complete vertical slice: **sign in → create/join household → agree explicitly → assign/complete a task → pause → export/leave**. Add broader modules after this slice has real isolation and safety tests.
+First slice: **sign in → join a dynamic explicitly → define accepted relationships/roles → negotiate consent → assign/complete a task → stop → export/leave**. Validate a pair, four-person group and contextual switch before broader feature expansion.
 
-Follow the [delivery tracker](https://github.com/CoyWorks/Pactaris/issues/51) for the complete backlog and phase checklist.
+## Planning
 
-## Planning documents
+- [Domain model](docs/DOMAIN_MODEL.md): multiple contextual BDSM roles, graph, negotiation and sessions.
+- [Free/paid matrix](docs/PLANS.md): illustrative capacities, sponsorship, entitlements and downgrade rules.
+- [Infrastructure](docs/INFRASTRUCTURE.md): installer, enrollment, manager, independent instances, identity and placement.
+- [Feature inventory](docs/FEATURE_INVENTORY.md): all 61 work items.
+- [Roadmap](docs/ROADMAP.md) and [tracker #51](https://github.com/CoyWorks/Pactaris/issues/51): delivery order and gates.
+- [Architecture](docs/ARCHITECTURE.md), [open decisions](docs/DECISIONS.md) and [existing Site assessment](docs/EXISTING_SITE.md).
+- [Contributing](CONTRIBUTING.md) and [security reporting](SECURITY.md).
 
-- [Feature inventory](docs/FEATURE_INVENTORY.md): all priorities and issue links.
-- [Roadmap](docs/ROADMAP.md): build order and release gates.
-- [Architecture](docs/ARCHITECTURE.md): Node.js, PHP and Python comparison; tenancy and hosting proposal.
-- [Existing Site assessment](docs/EXISTING_SITE.md): inspected source and migration gaps.
-- [Open decisions](docs/DECISIONS.md): choices required before implementation and launch.
-- [Contributing](CONTRIBUTING.md): issue and pull-request expectations.
-- [Security reporting](SECURITY.md): disclosure route and current limitations.
+## Safety and privacy
 
-## Existing prototype
+Participation is explicit and reversible. No administrator/sponsor can accept another person's consent or remove their personal pause. Apply tenant/resource/relationship visibility in APIs, files, graph views, audit, exports and jobs. Personal-private content does not become readable by a household admin.
 
-The existing ChatGPT Site is [The app](https://consent-households.coyseinri.chatgpt.site), version 4. It remains the product reference. Source was inspected on 16 November 2026; this planning pass did not modify the Site, read live household data or deploy to OCI.
+No covert tracking, blackmail, forced participation, punitive withdrawal or device punishment. Recorded consent/limits cannot establish real-world consent or guarantee emergency help. Safety state is always subject to truthful server acknowledgement.
 
-## Development status
+## Existing prototype and development
 
-There are no install or deployment commands yet. Implementation begins with [#1](https://github.com/CoyWorks/Pactaris/issues/1), [#2](https://github.com/CoyWorks/Pactaris/issues/2), [#50](https://github.com/CoyWorks/Pactaris/issues/50) and [#3](https://github.com/CoyWorks/Pactaris/issues/3). Select supported runtime versions and lock dependencies when building the scaffold.
+[The app](https://consent-households.coyseinri.chatgpt.site), version 4, is the inspected product reference. This documentation update does not change that Site or deploy OCI services. See the source assessment for verified behavior and gaps.
 
-A public repository does not itself grant an open-source license. License selection is pending; see [#50](https://github.com/CoyWorks/Pactaris/issues/50).
+There are no install/deploy commands yet. Confirm stack/source/license and build the domain, instance and entitlement contracts before implementing the first slice. No source license has been selected; public repository visibility alone is not a license grant ([#50](https://github.com/CoyWorks/Pactaris/issues/50)).
