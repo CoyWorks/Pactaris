@@ -1,17 +1,19 @@
 # Feature inventory
 
-All entries are proposed work, not delivered functionality. Classifications are reflected in issue titles so the backlog is filterable without custom GitHub labels or milestones.
+All entries describe proposed work, not delivered functionality. The app centers consenting-adult BDSM/SM/kink dynamics, play partners and overlapping romance. Contextual role diversity is core, not a premium feature.
 
-| Phase | Meaning | Count |
-| --- | --- | ---: |
-| M0 | Decisions and tested hosted foundation | 13 |
-| M1 | First usable feature set for controlled testing | 14 |
-| Launch | Required before open public onboarding | 8 |
-| Later | Planned expansion after pilot | 10 |
-| Good-to-have | Optional convenience | 1 |
-| Wish | Research/validation before commitment | 4 |
+61 work items plus [tracker #51](https://github.com/CoyWorks/Pactaris/issues/51). Phase/area tags are in titles; native GitHub milestone objects are not implied.
 
-M1 is not permission to launch publicly. Complete the Launch gates before accepting unrestricted public registration. Future entries are options, not commitments or current user requirements.
+| Phase | Count |
+| --- | ---: |
+| M0 | 17 |
+| M1 | 15 |
+| Launch | 12 |
+| Later | 12 |
+| Good-to-have | 1 |
+| Wish | 4 |
+
+M1 alone does not allow open registration. Complete applicable Launch gates; second-instance public onboarding needs #62. Paid checkout is later but entitlement/usage contracts are M0. Relationship modeling #35 has moved from Later to M0.
 
 | Issue | Phase | Area | Scope |
 | --- | --- | --- | --- |
@@ -49,14 +51,14 @@ M1 is not permission to launch publicly. Complete the Launch gates before accept
 | [#32](https://github.com/CoyWorks/Pactaris/issues/32) | Launch | Privacy | Complete the hosted-service privacy and acceptable-use launch review |
 | [#33](https://github.com/CoyWorks/Pactaris/issues/33) | Launch | Administration | Build limited platform administration and abuse handling |
 | [#34](https://github.com/CoyWorks/Pactaris/issues/34) | Launch | Release | Run an invite-only pilot and plan the existing-site cutover |
-| [#35](https://github.com/CoyWorks/Pactaris/issues/35) | Later | Relationships | Add household relationship types, standing and member journey |
+| [#35](https://github.com/CoyWorks/Pactaris/issues/35) | M0 | Dynamics | Model multiple relationship-scoped BDSM roles and relationship graphs |
 | [#36](https://github.com/CoyWorks/Pactaris/issues/36) | Later | Permissions | Add revocable, scoped and expiring delegation |
 | [#37](https://github.com/CoyWorks/Pactaris/issues/37) | Later | Templates | Create versioned household and workflow templates |
 | [#38](https://github.com/CoyWorks/Pactaris/issues/38) | Later | Calendar | Add planner views and revocable private ICS feeds |
 | [#39](https://github.com/CoyWorks/Pactaris/issues/39) | Later | Automation | Build a constrained event-based automation studio |
 | [#40](https://github.com/CoyWorks/Pactaris/issues/40) | Later | Search | Add permission-filtered search, tags and saved filters |
 | [#41](https://github.com/CoyWorks/Pactaris/issues/41) | Later | Insights | Provide opt-in household summaries and wellbeing-oriented trends |
-| [#42](https://github.com/CoyWorks/Pactaris/issues/42) | Later | Billing | Evaluate hosted subscriptions and household entitlements |
+| [#42](https://github.com/CoyWorks/Pactaris/issues/42) | Later | Billing | Evaluate paid hosted subscriptions for BDSM dynamics |
 | [#43](https://github.com/CoyWorks/Pactaris/issues/43) | Later | Integrations | Design scoped API tokens and signed outbound webhooks |
 | [#44](https://github.com/CoyWorks/Pactaris/issues/44) | Later | Accessibility | Add Dutch/English localization and configurable regional formats |
 | [#45](https://github.com/CoyWorks/Pactaris/issues/45) | Good-to-have | Personalization | Add safe themes, dashboard layouts and custom profile fields |
@@ -65,9 +67,26 @@ M1 is not permission to launch publicly. Complete the Launch gates before accept
 | [#48](https://github.com/CoyWorks/Pactaris/issues/48) | Wish | Security | Assess end-to-end encryption for narrowly scoped private content |
 | [#49](https://github.com/CoyWorks/Pactaris/issues/49) | Wish | Integrations | Evaluate opt-in calendar, messaging and external app integrations |
 | [#50](https://github.com/CoyWorks/Pactaris/issues/50) | M0 | Governance | Choose the source license and contribution policy |
+| [#52](https://github.com/CoyWorks/Pactaris/issues/52) | M1 | Play sessions | Add negotiated play sessions, check-ins and aftercare |
+| [#53](https://github.com/CoyWorks/Pactaris/issues/53) | M0 | Plans | Create versioned plan entitlements and atomic usage enforcement |
+| [#54](https://github.com/CoyWorks/Pactaris/issues/54) | Later | Plans | Validate the free and paid feature matrix against BDSM use cases |
+| [#55](https://github.com/CoyWorks/Pactaris/issues/55) | M0 | Infrastructure | Define the server-manager control plane and self-contained instance contract |
+| [#56](https://github.com/CoyWorks/Pactaris/issues/56) | Launch | Infrastructure | Build an idempotent instance installer with preflight and rollback |
+| [#57](https://github.com/CoyWorks/Pactaris/issues/57) | Launch | Infrastructure | Implement secure instance enrollment and the server-manager inventory |
+| [#58](https://github.com/CoyWorks/Pactaris/issues/58) | M0 | Infrastructure | Design platform identity, household placement and instance routing |
+| [#59](https://github.com/CoyWorks/Pactaris/issues/59) | Launch | Infrastructure | Add instance maintenance, staged upgrades, drain and retirement |
+| [#60](https://github.com/CoyWorks/Pactaris/issues/60) | Later | Infrastructure | Implement complete household relocation between instances |
+| [#61](https://github.com/CoyWorks/Pactaris/issues/61) | Later | Billing | Synchronize subscription entitlements to instances safely |
+| [#62](https://github.com/CoyWorks/Pactaris/issues/62) | Launch | Infrastructure | Verify multi-instance isolation, routing and manager outage recovery |
 
-## Explicit boundaries
+## Specifications
 
-No self-hosted edition, SQLite production compatibility, location tracking, hidden monitoring, forced participation, automatic consequences for withdrawal, public compliance rankings or arbitrary device-control integrations are planned. Safety/consent/privacy/export are not subscription upsells.
+- [Domain model](DOMAIN_MODEL.md): multi-role graph, negotiation, session scope and visibility.
+- [Plans](PLANS.md): proposed Free/Plus/Pro capacities, sponsorship and safe downgrade behavior.
+- [Infrastructure](INFRASTRUCTURE.md): manager, installer, independent instances, routing and lifecycle.
 
-No public template marketplace, AI relationship scoring, broad plugin marketplace or offline mutation synchronization is part of the MVP. Raise a separate proposal with a demonstrated need before adding these.
+## Boundaries
+
+No general-family/residence assumption, single-global Dom/sub field, automatic authority from relationship labels or cross-household private graph sharing. No public self-hosted edition, SQLite portability, covert tracking, blackmail, forced participation, punitive withdrawal, public compliance rankings or device punishment.
+
+Safety, consent, privacy, basic MFA, personal export, leave and deletion remain available in every plan. Public marketplaces, predictive relationship scoring and offline mutation synchronization are outside MVP.
