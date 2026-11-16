@@ -1,7 +1,7 @@
 // A deliberately bounded mailbox subset for recipient matching, not a delivery
 // or ownership test. Preserve local-part case, plus tags and relay aliases.
 export function normalizeEmail(value:unknown):string|undefined {
-  if(typeof value!=='string'||value.length>254||!/^[\x21-\x7e]+$/.test(value))return;
+  if(typeof value!=='string'||value.length>254||/[^\x21-\x7e]/.test(value))return;
   const parts=value.split('@');if(parts.length!==2)return;
   const [local,domain]=parts as [string,string];
   if(!local||local.length>64||local.startsWith('.')||local.endsWith('.')||local.includes('..')||

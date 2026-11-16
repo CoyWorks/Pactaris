@@ -63,6 +63,6 @@ for(const flag of [undefined,false,'true',1])test('signed but unverified email d
   assert.equal((await client.finish(callback(),attempt)).verifiedEmail,undefined);
 }));
 test('malformed verified email does not prevent ordinary subject-based sign-in',async()=>fixture(async(client,flags)=>{
-  flags.email='fixture@example.invalid\r\n';flags.email_verified=true;
+  flags.email='fixture@example.invalid\n';flags.email_verified=true;
   assert.deepEqual(await client.finish(callback(),attempt),{issuer,subject:'fixture-subject',name:'Fixture user'});
 }));

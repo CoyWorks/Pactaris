@@ -13,7 +13,7 @@ test('recipient matching preserves local case, tags and relay aliases; only DNS 
 });
 test('unusable mailbox claims are ignored without inventing an address',()=>{
   for(const value of [undefined,null,true,42,{},[],['a@example.invalid'],'',' a@example.invalid','a@example.invalid ',
-    'a\n@example.invalid','Name <a@example.invalid>','a@@example.invalid','a@localhost','a@.invalid','a@example..invalid',
+    'a\n@example.invalid','a@example.invalid\n','a@example.invalid\r\n','Name <a@example.invalid>','a@@example.invalid','a@localhost','a@.invalid','a@example..invalid',
     '.a@example.invalid','a.@example.invalid','a..b@example.invalid','a@-example.invalid','a@example-.invalid',
     'a@'+'x'.repeat(64)+'.invalid','x'.repeat(65)+'@example.invalid','ü@example.invalid','a@bücher.invalid',
     'a@127.0.0.1:25','"a b"@example.invalid','a@'+'x'.repeat(63)+'.'+('x'.repeat(63)+'.').repeat(3)+'invalid']) {
