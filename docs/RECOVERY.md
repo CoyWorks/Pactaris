@@ -58,3 +58,15 @@ Both component statuses must report `ready: true`, and Instance readiness must r
 ## Limits
 
 Resume does not repair a half-cloned Git checkout, Identity configuration written without its original secrets, incomplete JSON temporary writes, damaged TLS files, a failed migration or an interrupted update. Refuse and diagnose those cases rather than deleting data or synthesizing success state. Retrying a health failure must preserve the original revision and configuration. Partial installations from historical deployment naming require a separate reviewed migration.
+
+## Instance checkpoint fails at pg_dump
+
+The original checkpoint code put the entire configured PostgreSQL URL in `PGDATABASE`. A native libpq reproduction confirmed that an environment-supplied database URL is treated as a literal database name rather than expanding its embedded user/host/password. This could select the invoking OS user/default connection instead of the configured account. The corrected checkpoint explicitly supplies host, port, database and user; the password is in a temporary mode-0600 `PGPASSFILE` inside the private backup directory, removed on success or failure. Passwords are not added to command arguments or `PGPASSWORD`. Supported URI query options are mapped to their libpq environment variables; unsupported options fail rather than being silently discarded.
+
+A failed dump remains `database.sql.partial`; only a successful command promotes it to `database.sql`. On a nonzero pg_dump exit, the installer prints the path to a private `pg_dump.stderr.log` in that checkpoint directory. Root can inspect this file locally to distinguish connection, authentication, permission and version errors. Review it before sharing. The backup gate is mandatory and no activation/success state is synthesized after failure.
+
+Obtain the reviewed fixed tooling commit, then resume **Instance only** at its original staged SHA with the existing configuration. A successfully completed Identity installation does not need to be resumed again. Existing failed checkpoint directories are retained for diagnosis.
+
+References: [libpq environment variables](https://www.postgresql.org/docs/current/libpq-envars.html), [password files](https://www.postgresql.org/docs/current/libpq-pgpass.html).
+
+Verification includes a native libpq parameter-parsing reproduction, synthetic tests for decoded URI values, explicit connection fields, private/temporary password files, failing dumps remaining partial, preservation of TLS options, rejection of unsupported query options and private stderr diagnostics. This is not a live PostgreSQL backup/restore integration test; successful recovery on the target host still needs observation.

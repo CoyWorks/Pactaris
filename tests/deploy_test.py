@@ -162,5 +162,57 @@ class DeploymentTests(unittest.TestCase):
             with self.assertRaises(deploy.DeployError):
                 deploy.validate_resume(base, release)
 
+    def test_database_uri_is_split_and_password_file_is_private_and_temporary(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'PGUSER': 'wrong', 'PGPASSWORD': 'ambient-secret', 'PGSERVICE': 'wrong'}):
+            url = 'postgresql://fixture%20user:p%3Aa%5Css@127.0.0.1:5544/fixture%20db?sslmode=verify-full&sslrootcert=%2Fprivate%2Fca.crt'
+            with deploy.postgres_environment(url, folder) as env:
+                self.assertEqual(env['PGDATABASE'], 'fixture db')
+                self.assertEqual(env['PGUSER'], 'fixture user')
+                self.assertEqual(env['PGPORT'], '5544')
+                self.assertEqual(env['PGHOST'], '127.0.0.1')
+                self.assertEqual(env['PGSSLMODE'], 'verify-full')
+                self.assertEqual(env['PGSSLROOTCERT'], '/private/ca.crt')
+                self.assertNotIn('PGPASSWORD', env)
+                self.assertNotIn('PGSERVICE', env)
+                password_file = Path(env['PGPASSFILE'])
+                self.assertEqual(password_file.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(password_file.read_text(), '127.0.0.1:5544:fixture db:fixture user:p\\:a\\\\ss\n')
+            self.assertFalse(password_file.exists())
+
+    def test_failed_dump_retains_partial_only_and_removes_temporary_password(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder) / 'instance'; base.mkdir()
+            (base / 'config.json').write_text('{}')
+            cfg = {'database': {'url': 'postgresql://runtime:secret@127.0.0.1:5432/fixture'}}
+            def fail_dump(args, **kwargs):
+                self.assertIn('--no-password', args)
+                self.assertEqual(kwargs['env']['PGDATABASE'], 'fixture')
+                self.assertEqual(kwargs['env']['PGUSER'], 'runtime')
+                self.assertFalse(any('secret' in arg for arg in args))
+                kwargs['output'].write(b'incomplete dump')
+                kwargs['output'].flush()
+                self.assertTrue(Path(kwargs['env']['PGPASSFILE']).exists())
+                raise deploy.DeployError('cli.commandFailed', tool='pg_dump', code=1)
+            with patch.object(deploy, 'run', side_effect=fail_dump), self.assertRaises(deploy.DeployError):
+                deploy.checkpoint(base, cfg, None)
+            self.assertEqual(len(list(base.glob('backups/*/database.sql.partial'))), 1)
+            self.assertEqual(list(base.glob('backups/*/database.sql')), [])
+            self.assertEqual(list(base.glob('backups/*/pactaris-pg-*')), [])
+
+    def test_command_failure_logs_stderr_privately_without_console_credentials(self):
+        with tempfile.TemporaryDirectory() as folder, patch('sys.stdout', new_callable=io.StringIO) as output:
+            log = Path(folder) / 'error.log'
+            with self.assertRaises(deploy.DeployError):
+                deploy.run([sys.executable, '-c', 'import sys;sys.stderr.write("fixture-secret");sys.exit(1)'], error_file=log)
+            self.assertEqual(log.read_text(), 'fixture-secret')
+            self.assertEqual(log.stat().st_mode & 0o777, 0o600)
+            self.assertNotIn('fixture-secret', output.getvalue())
+
+    def test_unknown_database_options_fail_instead_of_dropping_security_settings(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaises(deploy.DeployError):
+                with deploy.postgres_environment('postgresql://runtime:secret@127.0.0.1/fixture?unsupported_security_option=required', folder):
+                    self.fail('unsupported option accepted')
+
 if __name__ == '__main__':
     unittest.main()

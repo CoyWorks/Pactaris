@@ -32,5 +32,6 @@
   "cli.commandFailed": "Command {tool} failed ({code}); configuration and data were retained.",
   "cli.resuming": "Resuming the staged first installation of {component} at {revision}; existing configuration and secrets are preserved.",
   "cli.interrupted": "Operation interrupted; configuration and data were retained. Use resume.sh for a staged first installation; do not delete volumes or secrets.",
-  "cli.incomplete": "A staged installation exists without a successful completion record. Use resume.sh with the original full release SHA; preserve configuration, secrets and volumes."
+  "cli.incomplete": "A staged installation exists without a successful completion record. Use resume.sh with the original full release SHA; preserve configuration, secrets and volumes.",
+  "cli.commandLog": "Protected command diagnostics were saved to {path}."
 }

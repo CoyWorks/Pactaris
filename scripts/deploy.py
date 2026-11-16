@@ -22,7 +22,7 @@ import sys
 import tarfile
 import tempfile
 import time
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 SOURCE = Path(__file__).resolve().parent.parent
 MESSAGES = json.loads((SOURCE / 'locales/en/messages.json').read_text())
@@ -42,7 +42,7 @@ def emit(key, **params):
         message = message.replace('{' + name + '}', str(value))
     print(json.dumps({'messageKey': key, 'message': message, **params}), flush=True)
 
-def run(args, *, cwd=None, env=None, user=None, output=None):
+def run(args, *, cwd=None, env=None, user=None, output=None, error_file=None):
     command = list(args)
     if user:
         command = ['runuser', '-u', user, '--', *command]
@@ -55,7 +55,7 @@ def run(args, *, cwd=None, env=None, user=None, output=None):
         try:
             while True:
                 try:
-                    stdout, _ = child.communicate(timeout=15)
+                    stdout, stderr = child.communicate(timeout=15)
                     break
                 except subprocess.TimeoutExpired:
                     elapsed = int(time.monotonic() - started)
@@ -73,6 +73,11 @@ def run(args, *, cwd=None, env=None, user=None, output=None):
                     child.communicate()
             raise
         if child.returncode:
+            if error_file is not None:
+                fd = os.open(error_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, 'wb') as log:
+                    log.write(stderr)
+                emit('cli.commandLog', path=str(error_file))
             raise DeployError('cli.commandFailed', tool=tool, code=child.returncode)
     return stdout.decode().strip() if stdout is not None else ''
 
@@ -245,6 +250,41 @@ def safe_root(value):
             fail('root_permissions')
     return path
 
+@contextlib.contextmanager
+def postgres_environment(url, directory):
+    # Environment-supplied PGDATABASE is a literal database name, not a parsed URI.
+    u = urlsplit(url)
+    fields = {'host': unquote(u.hostname or ''), 'port': str(u.port or 5432),
+              'dbname': unquote(u.path.removeprefix('/')), 'user': unquote(u.username or '')}
+    password = unquote(u.password or '')
+    parameters = {'host': 'PGHOST', 'hostaddr': 'PGHOSTADDR', 'port': 'PGPORT',
+                  'dbname': 'PGDATABASE', 'user': 'PGUSER', 'sslmode': 'PGSSLMODE',
+                  'sslrootcert': 'PGSSLROOTCERT', 'sslcert': 'PGSSLCERT', 'sslkey': 'PGSSLKEY',
+                  'channel_binding': 'PGCHANNELBINDING', 'target_session_attrs': 'PGTARGETSESSIONATTRS',
+                  'application_name': 'PGAPPNAME', 'options': 'PGOPTIONS', 'connect_timeout': 'PGCONNECT_TIMEOUT'}
+    for key, value in parse_qsl(u.query, keep_blank_values=True):
+        if key == 'password':
+            password = value
+        elif key in parameters:
+            fields[key] = value
+        else:
+            fail('database.backup_query_parameter')
+    if not all(fields.get(key) for key in ('host', 'port', 'dbname', 'user')):
+        fail('database.backup_connection')
+    if any('\n' in value or '\r' in value or '\x00' in value for value in [*fields.values(), password]):
+        fail('database.backup_connection')
+    env = {key: value for key, value in os.environ.items() if not key.startswith('PG')}
+    env['PGCONNECT_TIMEOUT'] = '5'
+    env.update({parameters[key]: value for key, value in fields.items()})
+    with tempfile.TemporaryDirectory(prefix='pactaris-pg-', dir=directory) as folder:
+        path = Path(folder) / 'pgpass'
+        escape = lambda value: value.replace('\\', '\\\\').replace(':', '\\:')
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'w') as stream:
+            stream.write(':'.join(escape(fields[key]) for key in ('host', 'port', 'dbname', 'user')) + ':' + escape(password) + '\n')
+        env['PGPASSFILE'] = str(path)
+        yield env
+
 def checkpoint(base, cfg, previous):
     backup = base / 'backups' / str(time.time_ns())
     backup.mkdir(mode=0o700, parents=True)
@@ -258,10 +298,12 @@ def checkpoint(base, cfg, previous):
                 run(compose(base, Path(previous['release'])) + ['exec', '-T', 'postgresql', 'pg_dump', '-U', 'authentik', '-d', 'authentik'], output=output)
         shutil.copy2(base / 'identity.env', backup / 'identity.env')
     else:
-        env = {**os.environ, 'PGDATABASE': cfg['database']['url'], 'PGCONNECT_TIMEOUT': '5'}
-        with open(backup / 'database.sql', 'xb') as output:
+        partial = backup / 'database.sql.partial'
+        with postgres_environment(cfg['database']['url'], backup) as env, open(partial, 'xb') as output:
             os.chmod(output.name, 0o600)
-            run(['pg_dump', '--no-owner'], env=env, output=output)
+            run(['pg_dump', '--no-owner', '--no-password'], env=env, output=output,
+                error_file=backup / 'pg_dump.stderr.log')
+        os.replace(partial, backup / 'database.sql')
     return backup
 
 def activate_link(base, release):
