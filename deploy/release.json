@@ -1,1 +1,20 @@
-{"version":"0.1.0-alpha.1","protocol":1,"migrations":[]}
+{
+  "version": "0.2.0-alpha.1",
+  "protocol": 2,
+  "migrations": [
+    {
+      "component": "gateway",
+      "id": "0001_login",
+      "path": "migrations/gateway/0001_login.sql",
+      "sha256": "08921679dcd62a23d985520c20707b13ebc29ce7fbb4a15bac2996b7c814d1f0",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0001_households",
+      "path": "migrations/instance/0001_households.sql",
+      "sha256": "be6e1e474d0a14118382db365bd61d09e67eb2a35fd9d32aad856dc9c9197ad5",
+      "backwardCompatible": true
+    }
+  ]
+}

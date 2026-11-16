@@ -1,0 +1,26 @@
+import https from 'node:https';
+import http from 'node:http';
+import { readFileSync } from 'node:fs';
+import { loadGatewayConfig } from '../../packages/config/index.js';
+import { database } from '../../packages/db/index.js';
+import { requireSchema } from '../../packages/db/migrations.js';
+import { OpenIdLogin } from '../../packages/auth/oidc.js';
+import { DelegationSigner } from '../../packages/auth/delegation.js';
+import { PrivateHouseholdClient } from '../../packages/routing/private-client.js';
+import { PgGatewayStore } from './store.js';
+import { createGatewayApp } from './app.js';
+try {
+  const config=loadGatewayConfig(process.env.APP_CONFIG??'',process.argv.includes('--development')),db=database(config);
+  const probe=async()=>{await db.probe();await requireSchema(db.pool,'gateway');};
+  const store=new PgGatewayStore(db.pool,probe),login=new OpenIdLogin(config),signer=new DelegationSigner(config);
+  await login.validateLocal();await signer.ready();
+  const app=createGatewayApp(config,store,login,new PrivateHouseholdClient(signer));
+  const tls=config.listen.tls;
+  const server=tls?https.createServer({key:readFileSync(tls.keyFile),cert:readFileSync(tls.certFile),minVersion:'TLSv1.2'},app):http.createServer(app);
+  server.requestTimeout=15000;server.headersTimeout=10000;
+  server.listen(config.listen.port,config.listen.address,()=>process.stdout.write(JSON.stringify({code:'gateway.listening',port:config.listen.port})+'\n'));
+  let stopping=false;
+  const stop=()=>{if(stopping)return;stopping=true;server.close(()=>{void db.close().then(()=>process.exit(0));});setTimeout(()=>process.exit(1),10000).unref();};
+  process.on('SIGTERM',stop);process.on('SIGINT',stop);
+  server.on('error',()=>{process.stderr.write(JSON.stringify({code:'gateway.listen_failed'})+'\n');process.exit(1);});
+}catch{process.stderr.write(JSON.stringify({code:'gateway.start_failed',messageKey:'errors.unavailable'})+'\n');process.exit(1);}

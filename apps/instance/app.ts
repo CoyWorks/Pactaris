@@ -2,9 +2,11 @@ import express from 'express';
 import { join } from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 import type { InstanceConfig } from '../../packages/config/index.js';
+import { uuid, DelegationError } from '../../packages/auth/delegation.js';
+import type { InstanceHouseholds } from './households.js';
 import manifest from '../../package.json' with { type: 'json' };
 
-export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web')) {
+export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web'), households?: Pick<InstanceHouseholds,'summary'>) {
   const app = express();
   app.disable('x-powered-by');
   // Identity always comes from the future verified OIDC session, never proxy identity headers.
@@ -22,6 +24,14 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
   app.get('/api/status', async (_req, res) => {
     let ready = false; try { await probe(); ready = true; } catch { /* no driver details in response */ }
     res.json({ component: 'instance', version: manifest.version, readiness: ready ? 'ready' : 'unavailable', authentication: 'not_enabled', locale: config.locale });
+  });
+  app.get('/internal/households/:householdId/summary',async(req,res)=>{
+    const id=req.params.householdId,authorization=req.get('authorization');
+    if(!config.delegation||!households||!uuid(id)||!authorization?.startsWith('Bearer ')){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    try{const summary=await households.summary(authorization.slice(7),id);
+      if(!summary){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+      res.json(summary);
+    }catch(e){if(e instanceof DelegationError)res.status(403).json({code:'request_denied',messageKey:'errors.request'});else res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});}
   });
   app.get('/api/session', (_req, res) => { res.status(401).json({ code: 'authentication_required', messageKey: 'errors.authenticationRequired' }); });
   app.use('/api', (_req, res) => { res.status(404).json({ code: 'not_found', messageKey: 'errors.notFound' }); });

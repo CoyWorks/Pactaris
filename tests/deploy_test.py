@@ -214,5 +214,35 @@ class DeploymentTests(unittest.TestCase):
                 with deploy.postgres_environment('postgresql://runtime:secret@127.0.0.1/fixture?unsupported_security_option=required', folder):
                     self.fail('unsupported option accepted')
 
+class GatewayDeploymentTests(unittest.TestCase):
+    def test_gateway_units_select_gateway_runtime_and_keep_a_separate_identity(self):
+        unit = deploy.render_unit(Path('/opt/pactaris/gateway'), '/usr/bin/node')
+        self.assertIn('/apps/gateway/server.js', unit)
+        self.assertIn('User=pactaris-gateway-', unit)
+        self.assertNotIn('/apps/instance/', unit)
+        self.assertNotEqual(deploy.service_identity(Path('/opt/pactaris/gateway')), deploy.service_identity(Path('/opt/pactaris/instance')))
+
+    def test_runtime_staging_copies_only_required_secrets_and_preserves_root_only_database_files(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); base = root / 'gateway'; base.mkdir()
+            client = root / 'client.secret'; client.write_text('fixture-client-secret')
+            key = root / 'private.key'; key.write_text('fixture-signing-key')
+            migration = root / 'migration.url'; migration.write_text('fixture-migration-credential'); migration.chmod(0o600)
+            cfg = {'oidc': {'clientSecretFile': str(client)}, 'delegation': {'privateKeyFile': str(key)}, 'database': {'migrationUrlFile': str(migration)}}
+            info = SimpleNamespace(pw_gid=os.getgid())
+            previous = os.umask(0o077)
+            try:
+                with patch.object(deploy, 'safe_root'), patch.object(deploy.shutil, 'chown'):
+                    deploy.stage_runtime_secrets(base, cfg, info)
+                self.assertEqual((base/'secrets').stat().st_mode & 0o777, 0o750)
+                self.assertEqual(Path(cfg['oidc']['clientSecretFile']).stat().st_mode & 0o777, 0o640)
+                self.assertEqual(Path(cfg['oidc']['clientSecretFile']).read_text(), 'fixture-client-secret')
+                self.assertEqual(cfg['database']['migrationUrlFile'], str(migration))
+                self.assertFalse((base/'secrets/migration.url').exists())
+                self.assertEqual(migration.stat().st_mode & 0o777, 0o600)
+            finally:
+                os.umask(previous)
+
 if __name__ == '__main__':
     unittest.main()

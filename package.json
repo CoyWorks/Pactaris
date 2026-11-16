@@ -1,6 +1,6 @@
 {
   "name": "@pactaris/instance-foundation",
-  "version": "0.1.0-alpha.1",
+  "version": "0.2.0-alpha.1",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
@@ -21,12 +21,18 @@
     "check": "npm run typecheck && npm run check:i18n && npm test && python3 -m unittest discover -s tests -p '*_test.py'",
     "start:instance": "node dist/server/apps/instance/server.js",
     "start:worker": "node dist/server/apps/instance/worker.js",
-    "dev:instance": "node --import tsx apps/instance/server.ts"
+    "dev:instance": "node --import tsx apps/instance/server.ts",
+    "start:gateway": "node dist/server/apps/gateway/server.js",
+    "start:gateway-worker": "node dist/server/apps/gateway/worker.js",
+    "migrate": "node dist/server/scripts/migrate.js",
+    "test:integration": "node --import tsx --test tests/*.integration.ts"
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",
     "express": "5.3.0",
     "intl-messageformat": "10.7.18",
+    "jose": "6.2.17",
+    "openid-client": "6.9.0",
     "pg": "8.16.3",
     "react": "19.2.0",
     "react-dom": "19.2.0"

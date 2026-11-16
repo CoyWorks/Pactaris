@@ -1,0 +1,12 @@
+{
+  "gatewayId": "00000000-0000-4000-8000-000000000002",
+  "publicOrigin": "https://pactaris.app",
+  "listen": {"address":"127.0.0.1","port":9445,"tls":{"certFile":"/etc/pactaris/bootstrap/login/gateway.crt","keyFile":"/etc/pactaris/bootstrap/login/gateway.key","caFile":"/etc/pactaris/bootstrap/ca.crt","serverName":"pactaris.app"}},
+  "database": {"url":"postgresql://pactaris_gateway_runtime:REPLACE@127.0.0.1:5432/pactaris_gateway","maxConnections":4,"runtimeRole":"pactaris_gateway_runtime","migrationUrlFile":"/etc/pactaris/bootstrap/login/pactaris_gateway_migrator.url","backupRole":"pactaris_gateway_backup","backupUrlFile":"/etc/pactaris/bootstrap/login/pactaris_gateway_backup.url"},
+  "locale": {"language":"en","format":"en-GB","timeZone":"UTC"},
+  "worker": {"heartbeatFile":"/opt/pactaris/gateway/data/worker.json","intervalSeconds":30},
+  "oidc": {"issuer":"https://identity.pactaris.app/application/o/pactaris-instance1/","clientId":"CONFIGURE_CLIENT_ID","clientSecretFile":"/etc/pactaris/bootstrap/instance1-oidc.secret"},
+  "delegation": {"keyId":"gateway-v1","privateKeyFile":"/etc/pactaris/bootstrap/login/delegation.key"},
+  "trustedProxyAddresses": ["127.0.0.1","::1"],
+  "session": {"idleSeconds":1800,"absoluteSeconds":28800}
+}

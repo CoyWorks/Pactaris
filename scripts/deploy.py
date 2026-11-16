@@ -26,8 +26,8 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 
 SOURCE = Path(__file__).resolve().parent.parent
 MESSAGES = json.loads((SOURCE / 'locales/en/messages.json').read_text())
-COMPONENTS = ('identity', 'instance')
-PROTOCOL = 1
+COMPONENTS = ('identity', 'instance', 'gateway')
+PROTOCOL = 2
 
 class DeployError(Exception):
     def __init__(self, key='cli.preflight', **params):
@@ -107,8 +107,8 @@ def validate_config(component, cfg):
     languages = json.loads((SOURCE / 'locales/manifest.json').read_text())['languages']
     if cfg.get('locale', {}).get('language') not in languages:
         fail('locale.language')
-    if component == 'instance':
-        if not re.fullmatch(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}', cfg.get('instanceId', '')):
+    if component != 'identity':
+        if not re.fullmatch(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}', cfg.get('gatewayId' if component == 'gateway' else 'instanceId', '')):
             fail('instanceId')
         tls = listen.get('tls', {})
         for key in ('certFile', 'keyFile', 'caFile'):
@@ -163,7 +163,7 @@ Group={user}
 WorkingDirectory={base}/current
 Environment=NODE_ENV=production
 Environment=APP_CONFIG={base}/config.json
-ExecStart={node} {base}/current/dist/server/apps/instance/{command}.js
+ExecStart={node} {base}/current/dist/server/apps/{base.name}/{command}.js
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=15
@@ -203,7 +203,7 @@ def health(base, cfg, release):
     with context.wrap_socket(raw, server_hostname=tls['serverName']) as sock:
         conn = http.client.HTTPConnection(tls['serverName'], timeout=4)
         conn.sock = sock
-        conn.request('GET', '/health/ready')
+        conn.request('GET', '/health/ready', headers={'Host': urlsplit(cfg['publicOrigin']).netloc})
         response = conn.getresponse()
         if response.status != 200:
             fail('health')
@@ -299,7 +299,9 @@ def checkpoint(base, cfg, previous):
         shutil.copy2(base / 'identity.env', backup / 'identity.env')
     else:
         partial = backup / 'database.sql.partial'
-        with postgres_environment(cfg['database']['url'], backup) as env, open(partial, 'xb') as output:
+        backup_url_file = cfg['database'].get('backupUrlFile')
+        backup_url = Path(backup_url_file).read_text().strip() if backup_url_file else cfg['database']['url']
+        with postgres_environment(backup_url, backup) as env, open(partial, 'xb') as output:
             os.chmod(output.name, 0o600)
             run(['pg_dump', '--no-owner', '--no-password'], env=env, output=output,
                 error_file=backup / 'pg_dump.stderr.log')
@@ -328,6 +330,31 @@ def validate_resume(base, release):
             fail('resume_identity_secrets_missing')
         if (base / 'identity.env').is_symlink():
             fail('resume_identity_secrets_symlink')
+
+def stage_runtime_secrets(base, cfg, info):
+    directory = base / 'secrets'
+    safe_root(str(directory))
+    directory.mkdir(mode=0o750, exist_ok=True)
+    directory.chmod(0o750)
+    shutil.chown(directory, 0, info.pw_gid)
+    def copy(source, name):
+        target = directory / name
+        if target.is_symlink():
+            fail('secret_symlink')
+        if Path(source).resolve() != target.resolve():
+            shutil.copyfile(source, target)
+        os.chmod(target, 0o640)
+        shutil.chown(target, 0, info.pw_gid)
+        return str(target)
+    if base.name == 'gateway':
+        cfg['oidc']['clientSecretFile'] = copy(cfg['oidc']['clientSecretFile'], 'oidc-client.secret')
+        cfg['delegation']['privateKeyFile'] = copy(cfg['delegation']['privateKeyFile'], 'delegation.key')
+    elif cfg.get('delegation'):
+        keys = cfg['delegation']['publicKeys']
+        for kid, source in list(keys.items()):
+            if not re.fullmatch(r'[a-zA-Z0-9_-]{1,64}', kid):
+                fail('delegation.key_id')
+            keys[kid] = copy(source, 'public-' + kid + '.pem')
 
 def deployment_directory(path):
     # Bootstrap intentionally uses umask 077. Service ancestors still need traversal.
@@ -408,9 +435,22 @@ def deploy(args):
             if run(['git', '-C', str(release), 'rev-parse', 'HEAD']) != args.revision:
                 fail('revision_mismatch')
             release_meta = read_json(release / 'deploy/release.json')
-            if release_meta.get('protocol') != PROTOCOL or release_meta.get('migrations') != []:
+            protocol = release_meta.get('protocol')
+            entries = release_meta.get('migrations')
+            if protocol not in (1, PROTOCOL) or not isinstance(entries, list) or (protocol == 1 and entries):
                 fail('unsupported_migration_or_protocol')
-            if args.component == 'instance':
+            selected_migrations = [m for m in entries if isinstance(m, dict) and m.get('component') == args.component]
+            if selected_migrations:
+                for key in ('runtimeRole', 'backupRole'):
+                    if not re.fullmatch(r'[a-z_][a-z0-9_]{0,62}', cfg['database'].get(key, '')):
+                        fail('database.' + key)
+                for key in ('migrationUrlFile', 'backupUrlFile'):
+                    path = Path(cfg['database'].get(key, ''))
+                    if not path.is_absolute() or not path.is_file() or path.is_symlink() or path.stat().st_uid != 0 or path.stat().st_mode & 0o077:
+                        fail('database.' + key)
+                if any(not m.get('backwardCompatible') for m in selected_migrations):
+                    fail('migration_requires_reviewed_runbook')
+            if args.component != 'identity':
                 info = ensure_user(base)
                 for directory in (release, base / 'data'):
                     directory.mkdir(mode=0o700, exist_ok=True)
@@ -429,7 +469,7 @@ def deploy(args):
                 if image_lines(old_compose) != image_lines(release / 'apps/identity/compose.yaml'):
                     fail('provider_image_upgrade_requires_reviewed_runbook')
             if not existing and not stored_config:
-                if args.component == 'instance':
+                if args.component != 'identity':
                     tls_dir = base / 'tls'
                     safe_root(str(tls_dir))
                     tls_dir.mkdir(mode=0o750, exist_ok=True)
@@ -443,7 +483,7 @@ def deploy(args):
                         cfg['listen']['tls'][key] = str(target)
                     cfg['worker']['heartbeatFile'] = str(base / 'data/worker.json')
                 atomic_json(base / 'config.json', cfg)
-                if args.component == 'instance':
+                if args.component != 'identity':
                     shutil.chown(base / 'config.json', 0, info.pw_gid)
                     os.chmod(base / 'config.json', 0o640)
                 else:
@@ -454,6 +494,14 @@ def deploy(args):
                     with os.fdopen(fd, 'w') as out:
                         out.write('PG_PASS=' + secrets.token_hex(32) + '\nAUTHENTIK_SECRET_KEY=' + secrets.token_hex(48) + '\nBIND_ADDRESS=' + address + '\nHTTPS_PORT=' + str(cfg['listen']['port']) + '\n')
             checkpoint(base, cfg, existing)
+            if args.component != 'identity':
+                stage_runtime_secrets(base, cfg, info)
+                atomic_json(base / 'config.json', cfg, 0o640)
+                os.chmod(base / 'config.json', 0o640)
+                shutil.chown(base / 'config.json', 0, info.pw_gid)
+                if selected_migrations:
+                    run([shutil.which('node'), str(release / 'dist/server/scripts/migrate.js'), args.component],
+                        cwd=release, env={**os.environ, 'APP_CONFIG': str(base / 'config.json')})
             if args.component == 'identity':
                 run(compose(base, release) + ['config', '--quiet'])
                 if args.action != 'resume':
@@ -479,7 +527,7 @@ def deploy(args):
                     if attempt == 19:
                         raise
                     time.sleep(2)
-            atomic_json(base / 'state.json', {'revision': args.revision, 'version': release_meta['version'], 'protocol': PROTOCOL, 'release': str(release)})
+            atomic_json(base / 'state.json', {'revision': args.revision, 'version': release_meta['version'], 'protocol': release_meta['protocol'], 'release': str(release)})
             emit('cli.installed', component=args.component, revision=args.revision)
             return 0
         except Exception as error:

@@ -6,10 +6,11 @@ import manifest from '../../locales/manifest.json' with { type: 'json' };
 export type InstanceConfig = {
   instanceId: string; publicOrigin: string;
   listen: { address: string; port: number; tls?: { certFile: string; keyFile: string; caFile: string; serverName: string } };
-  database: { url: string; maxConnections: number };
+  database: { url: string; maxConnections: number; migrationUrlFile?: string; runtimeRole?: string; backupUrlFile?: string; backupRole?: string };
   locale: { language: string; format: string; timeZone: string };
   worker: { heartbeatFile: string; intervalSeconds: number };
   oidc?: { issuer: string; clientId: string };
+  delegation?: { issuer: string; publicKeys: Record<string, string> };
 };
 export class ConfigError extends Error { constructor(public field: string) { super('errors.config'); } }
 function invalid(field: string): never { throw new ConfigError(field); }
@@ -56,10 +57,46 @@ export function parseConfig(value: unknown, development = false): InstanceConfig
     if (issuer.protocol !== 'https:' || !issuer.hostname || issuer.username || issuer.password || issuer.search || issuer.hash) invalid('oidc.issuer');
     oidc = { issuer: issuer.href, clientId: text(o.clientId, 'oidc.clientId') };
   }
-  return { instanceId, publicOrigin, listen: { address, port, ...(tls ? { tls } : {}) }, database: { url, maxConnections: integer(db.maxConnections, 'database.maxConnections', 1, 20) },
-    locale: { language, format, timeZone }, worker: { heartbeatFile: file(worker.heartbeatFile, 'worker.heartbeatFile'), intervalSeconds: integer(worker.intervalSeconds, 'worker.intervalSeconds', 5, 300) }, ...(oidc ? { oidc } : {}) };
+  let delegation: InstanceConfig['delegation'];
+  if (c.delegation) {
+    const d = object(c.delegation, 'delegation'), keys = object(d.publicKeys, 'delegation.publicKeys');
+    if (!Object.keys(keys).length || Object.keys(keys).some(k => !/^[a-zA-Z0-9_-]{1,64}$/.test(k))) invalid('delegation.publicKeys');
+    delegation = { issuer: origin(d.issuer, 'delegation.issuer', development), publicKeys: Object.fromEntries(Object.entries(keys).map(([k,v]) => [k,file(v,'delegation.publicKeys')])) };
+  }
+  let runtimeRole: string | undefined;
+  if (db.runtimeRole !== undefined) { runtimeRole = text(db.runtimeRole,'database.runtimeRole'); if (!/^[a-z_][a-z0-9_]{0,62}$/.test(runtimeRole)) invalid('database.runtimeRole'); }
+  const migrationUrlFile = db.migrationUrlFile === undefined ? undefined : file(db.migrationUrlFile,'database.migrationUrlFile');
+  return { instanceId, publicOrigin, listen: { address, port, ...(tls ? { tls } : {}) }, database: { url, maxConnections: integer(db.maxConnections, 'database.maxConnections', 1, 20), ...(runtimeRole ? { runtimeRole } : {}), ...(migrationUrlFile ? { migrationUrlFile } : {}), ...(db.backupUrlFile ? {backupUrlFile:file(db.backupUrlFile,'database.backupUrlFile')} : {}), ...(db.backupRole ? {backupRole:text(db.backupRole,'database.backupRole')} : {}) },
+    locale: { language, format, timeZone }, worker: { heartbeatFile: file(worker.heartbeatFile, 'worker.heartbeatFile'), intervalSeconds: integer(worker.intervalSeconds, 'worker.intervalSeconds', 5, 300) }, ...(oidc ? { oidc } : {}), ...(delegation ? { delegation } : {}) };
 }
 export function loadConfig(path: string, development = false): InstanceConfig {
   try { return parseConfig(JSON.parse(readFileSync(path, 'utf8')), development); }
+  catch (e) { if (e instanceof ConfigError) throw e; throw new ConfigError('file'); }
+}
+
+export type GatewayConfig = Omit<InstanceConfig, 'instanceId' | 'oidc' | 'delegation'> & {
+  gatewayId: string;
+  oidc: { issuer: string; clientId: string; clientSecretFile: string };
+  delegation: { issuer: string; keyId: string; privateKeyFile: string };
+  trustedProxyAddresses: string[];
+  session: { idleSeconds: number; absoluteSeconds: number };
+};
+export function parseGatewayConfig(value: unknown, development = false): GatewayConfig {
+  const c = object(value, 'root'), o = object(c.oidc,'oidc'), d = object(c.delegation,'delegation');
+  const base = parseConfig({ ...c, instanceId: c.gatewayId, delegation: undefined }, development);
+  const { instanceId, oidc, ...shared } = base;
+  if (!oidc) invalid('oidc');
+  const keyId = text(d.keyId,'delegation.keyId'); if (!/^[a-zA-Z0-9_-]{1,64}$/.test(keyId)) invalid('delegation.keyId');
+  const proxies = c.trustedProxyAddresses ?? [];
+  if (!Array.isArray(proxies) || proxies.some(v => typeof v !== 'string' || !isIP(v))) invalid('trustedProxyAddresses');
+  const session = object(c.session ?? {idleSeconds:1800,absoluteSeconds:28800},'session');
+  const idleSeconds = integer(session.idleSeconds,'session.idleSeconds',60,86400);
+  const absoluteSeconds = integer(session.absoluteSeconds,'session.absoluteSeconds',idleSeconds,604800);
+  return { ...shared, gatewayId: instanceId, oidc: { ...oidc, clientSecretFile: file(o.clientSecretFile,'oidc.clientSecretFile') },
+    delegation: { issuer: base.publicOrigin, keyId, privateKeyFile: file(d.privateKeyFile,'delegation.privateKeyFile') },
+    trustedProxyAddresses: proxies, session: {idleSeconds,absoluteSeconds} };
+}
+export function loadGatewayConfig(path: string, development = false): GatewayConfig {
+  try { return parseGatewayConfig(JSON.parse(readFileSync(path,'utf8')),development); }
   catch (e) { if (e instanceof ConfigError) throw e; throw new ConfigError('file'); }
 }
