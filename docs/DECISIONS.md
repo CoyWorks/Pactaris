@@ -9,7 +9,7 @@ Updated 16 November 2026. Current user decisions override earlier planning alter
 | Product | Public consenting-adult BDSM/SM/kink platform; Obedience as functional inspiration, original implementation |
 | Domain | Multiple contextual roles/relationships; technical rights separate from dynamic roles |
 | Runtime | React/Vite; Node.js/TypeScript/Express; PostgreSQL/Drizzle; systemd |
-| Hosting | Central CloudPanel/identity/manager/main instance; internal independent instances reached over private LAN |
+| Hosting | Initial co-location behind CloudPanel, with independently deployable Identity/Instance and separate data boundaries; remote instances over private LAN |
 | Identity methods | Google + Apple + local verified email/password account creation, through a maintained central identity service exposing OIDC |
 | Legacy data | None: empty new product; prior Site only a reference |
 | First slice | Login, dynamic/invites, contextual relationships, consent/pause and task lifecycle, with export/leave |
@@ -37,3 +37,7 @@ Updated 16 November 2026. Current user decisions override earlier planning alter
 | Provenance | Existing-source and dependency rights/notices; proprietary notice does not replace third-party licenses; #50 |
 
 Read [DOMAIN_MODEL.md](DOMAIN_MODEL.md), [INTERNATIONALIZATION.md](INTERNATIONALIZATION.md), [PLANS.md](PLANS.md), [INFRASTRUCTURE.md](INFRASTRUCTURE.md) and [INSTALL_UPDATE.md](INSTALL_UPDATE.md). Safety, privacy, basic MFA, personal export, stop/leave/delete are not subscription upsells.
+
+## Explicit deployment contract
+
+Identity and Instance are separately installable/updatable applications, not one central bundle. CloudPanel/proxy, Identity, manager and Instance may be hosted separately later without code changes. Defaults: CloudPanel administration 8443 (existing), Identity HTTPS 9443, every Instance HTTPS 9444. Ports, listen address, public origin and backend/TLS identity are configuration. Remote instance2 upstream resolution must use the private backend, not public proxy IP. See [INFRASTRUCTURE.md](INFRASTRUCTURE.md) for the user's example map and verification requirements. These are planning defaults, not configured services.
