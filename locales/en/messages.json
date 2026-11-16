@@ -69,5 +69,6 @@
   "cli.updateChecked": "Update plan checked for {revision}; no services or application data were changed.",
   "cli.updateComplete": "Installed components are healthy after the update to {revision}; unchanged Identity deployments retain their own revision.",
   "cli.updateArchived": "An inactive staged update was preserved at {path}; retrying with a clean release directory.",
-  "cli.updatePrerequisite": "Protected migration/backup credentials are missing or unsafe for {component}. Complete the documented deployment preparation before updating; existing data was retained."
+  "cli.updatePrerequisite": "Protected migration/backup credentials are missing or unsafe for {component}. Complete the documented deployment preparation before updating; existing data was retained.",
+  "errors.commandConflict": "This operation conflicts with an earlier request. Refresh before trying again."
 }

@@ -10,7 +10,7 @@ Historical 0.1 empty-server bootstrap, including apt dependencies (upgrade to 0.
 
 A mobile-first platform for consenting-adult BDSM, SM and kink: Dom/sub and play-partner relationships, protocols, tasks, rituals, negotiated sessions, rewards/consequences and aftercare.
 
-**Status: connected-alpha foundations, 0.2.2-alpha.1.** The repository contains independently deployable Identity/Instance components, a central OIDC/session gateway, authorized household selection, reviewed PostgreSQL migrations and one-command updates for prepared installations. The connected alpha is not complete and is not ready for public onboarding. The confirmed product name is Pactaris.
+**Status: connected-alpha foundations, 0.2.3-alpha.1.** The repository contains independently deployable Identity/Instance components, a central OIDC/session gateway, authorized household selection, reviewed PostgreSQL migrations and one-command updates for prepared installations. [Private transactional create/self-leave commands](docs/PRIVATE_COMMANDS.md) now provide the Instance write boundary; public household creation/invitations remain pending central placement integration. The connected alpha is not complete and is not ready for public onboarding. The confirmed product name is Pactaris.
 
 Central-login rollout: [LOGIN_ROLLOUT.md](docs/LOGIN_ROLLOUT.md), with trust boundaries in [LOGIN_GATEWAY.md](docs/LOGIN_GATEWAY.md).
 

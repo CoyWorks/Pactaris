@@ -47,6 +47,9 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
     } else {
       await connection.query(`GRANT SELECT ON pactaris.households,pactaris.memberships,pactaris.household_entitlements TO ${role}`);
       await connection.query(`GRANT SELECT,INSERT,DELETE ON pactaris.delegation_uses TO ${role}`);
+      if(entries.some(m=>m.id==='0002_commands')) {
+        await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.create_household_command(uuid,uuid,uuid,uuid,text,text),pactaris.leave_household_command(uuid,uuid,uuid,uuid,text) TO ${role}`);
+      }
     }
     await connection.query(`GRANT USAGE ON SCHEMA pactaris,pactaris_meta TO "${backupRole}"`);
     await connection.query(`GRANT SELECT ON ALL TABLES IN SCHEMA pactaris,pactaris_meta TO "${backupRole}"`);
@@ -59,8 +62,9 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
 export async function requireSchema(pool: pg.Pool, component: Component) {
   const r = await pool.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user");
   if (r.rows[0]?.rolsuper || r.rows[0]?.rolbypassrls) throw Error('database.privileged_runtime');
-  const version = await pool.query('SELECT id FROM pactaris_meta.migrations WHERE component=$1 AND id=$2',[component,component==='gateway'?'0001_login':'0001_households']);
-  if (!version.rowCount) throw Error('database.schema_required');
+  const expected=(await migrations(process.cwd(),component)).map(m=>m.id);
+  const version = await pool.query('SELECT id FROM pactaris_meta.migrations WHERE component=$1 AND id=ANY($2::text[])',[component,expected]);
+  if (!expected.length||version.rowCount!==expected.length) throw Error('database.schema_required');
   const owner = await pool.query("SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('pactaris','pactaris_meta') AND c.relowner=(SELECT oid FROM pg_roles WHERE rolname=current_user) LIMIT 1");
   if (owner.rowCount) throw Error('database.runtime_owner');
 }

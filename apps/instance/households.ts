@@ -2,9 +2,13 @@ import type pg from 'pg';
 import type { InstanceConfig } from '../../packages/config/index.js';
 import { DelegationVerifier } from '../../packages/auth/delegation.js';
 import { permits } from '../../packages/auth/permissions.js';
+import { InstanceCommands } from './commands.js';
+import type { HouseholdAction } from '../../packages/auth/delegation.js';
 export class InstanceHouseholds {
   private verifier:DelegationVerifier;
-  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new DelegationVerifier(config);}
+  private commands:InstanceCommands;
+  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new DelegationVerifier(config);this.commands=new InstanceCommands(pool,config);}
+  command(token:string,householdId:string,action:HouseholdAction,body:Buffer){return this.commands.execute(token,householdId,action,body);}
   async summary(token:string,householdId:string) {
     const verified=await this.verifier.verify(token,householdId);
     const db=await this.pool.connect();

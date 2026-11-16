@@ -32,6 +32,14 @@ Email-bound acceptance additionally requires #6 verified email assertions. Curre
 
 The complete household creation/invite/leave UI and private mutation protocol have not shipped. No placeholder household is created by registering an Instance. Branding is scoped in #67 and not applied by this checkpoint.
 
+## Private write checkpoint — 0.2.3-alpha.1
+
+The Instance-side mutation protocol is now implemented for create/self-leave. It uses separate body-bound write JWTs, one-time transport IDs, immutable operation receipts, narrow transactional database functions and atomic domain/audit/outbox writes. Four-member departure pauses an ownerless group without evicting others or assigning technical ownership; the final departure closes it. Existing summary authorization immediately rejects departed members. See [PRIVATE_COMMANDS.md](PRIVATE_COMMANDS.md) for trust, retry, RLS, entitlement, audit and availability limits.
+
+This starts the domain-mutation part of #12/#8/#26. It does not expose a public creation/invitation/leave API or form. Central reservations, placement finalization and durable reconciliation must ship before that browser workflow; #53 quota reservations and #6 verified-email assertions remain invitation gates. Outbox delivery/activity UI/retention, full safety/consent, exports/deletion and owner recovery remain open. #67 branding is still scoped.
+
+The operator has also reported successful one-command update of gateway/Instance to 0.2.2-alpha.1 and a second no-op health-only execution, with Identity left unchanged/healthy. This is live update-path evidence, not proof of every recovery/private-source/brand/onboarding scenario.
+
 ## Household creation and invitation contract to implement next
 
 1. Authenticate the central account and require exact Origin plus session CSRF for each mutation. Rate-limit creation/invites and use a stable operation UUID.

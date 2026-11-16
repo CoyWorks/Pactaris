@@ -14,7 +14,7 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient } from '../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 const adminUrl=process.env.TEST_DATABASE_URL;
@@ -27,7 +27,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   for(const [role,flags] of [[runtime,'NOBYPASSRLS'],[migration,'NOBYPASSRLS'],[backup,'BYPASSRLS']])await root.query(`CREATE ROLE "${role}" LOGIN PASSWORD 'fixture-only-password' NOSUPERUSER NOCREATEDB NOCREATEROLE ${flags}`);
   await root.query(`CREATE DATABASE "${database}" OWNER postgres`);
   await root.query(`REVOKE ALL ON DATABASE "${database}" FROM PUBLIC;GRANT CONNECT ON DATABASE "${database}" TO "${runtime}","${migration}","${backup}";GRANT CREATE ON DATABASE "${database}" TO "${migration}"`);
-  const owner=new pg.Pool({connectionString:url(database),max:1}),migrator=new pg.Pool({connectionString:url(database,migration,'fixture-only-password'),max:3}),pool=new pg.Pool({connectionString:url(database,runtime,'fixture-only-password'),max:1});pools.push(owner,migrator,pool);
+  const owner=new pg.Pool({connectionString:url(database),max:1}),migrator=new pg.Pool({connectionString:url(database,migration,'fixture-only-password'),max:3}),pool=new pg.Pool({connectionString:url(database,runtime,'fixture-only-password'),max:4});pools.push(owner,migrator,pool);
   await migrate(migrator,process.cwd(),kind,runtime,backup);await migrate(migrator,process.cwd(),kind,runtime,backup);
   await requireSchema(pool,kind);
   await assert.rejects(requireSchema(owner,kind));
@@ -124,6 +124,67 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   // Backups have dedicated read access, including FORCE RLS tables; runtime does not gain BYPASSRLS.
   const backupPool=new pg.Pool({connectionString:url(a.database,a.backup,'fixture-only-password'),max:1});pools.push(backupPool);assert.equal((await backupPool.query('SELECT * FROM pactaris.households')).rowCount,2);
   await assert.rejects(a.pool.query("UPDATE pactaris.households SET display_name='unauthorized'"));
+  // Native transactional write path: every request uses real TLS, a fresh signed
+  // body-bound command, non-owner runtime credentials and a durable operation ID.
+  const commands=new PrivateCommandClient(signer),created=randomUUID(),operation=randomUUID(),name='Synthetic private dynamic';
+  const destination={...placement,householdId:created};
+  const replies=await Promise.all(Array.from({length:4},()=>commands.execute(account.id,destination,'create',operation,name)));
+  assert.ok(replies.every(result=>result.status==='created'&&result.householdId===created));
+  assert.ok(!JSON.stringify(replies).includes(name));
+  for(const table of ['households','household_command_receipts','audit_events','household_outbox','household_entitlements']){
+    const column=table==='households'?'id':'household_id';
+    assert.equal((await a.owner.query(`SELECT count(*)::int AS count FROM pactaris.${table} WHERE ${column}=$1`,[created])).rows[0].count,1);
+  }
+  assert.equal((await a.owner.query('SELECT display_name FROM pactaris.households WHERE id=$1',[created])).rows[0].display_name,name);
+  assert.equal((await a.owner.query("SELECT count(*)::int AS count FROM pactaris.memberships WHERE household_id=$1 AND account_id=$2 AND status='active' AND technical_role='owner'",[created,account.id])).rows[0].count,1);
+  assert.equal((await a.pool.query('SELECT pactaris.command_executor() AS privileged')).rows[0].privileged,false);
+  for(const table of ['household_command_receipts','household_outbox','audit_events'])await assert.rejects(a.pool.query(`DELETE FROM pactaris.${table}`));
+  await assert.rejects(commands.execute(account.id,destination,'create',operation,'Changed request'),{kind:'conflict'});
+  await assert.rejects(commands.execute(other.id,destination,'create',operation,name),{kind:'conflict'});
+  await assert.rejects(commands.execute(account.id,{...destination,householdId:randomUUID()},'create',operation,name),{kind:'conflict'});
+  await assert.rejects(commands.execute(account.id,destination,'leave',operation),{kind:'conflict'});
+  await assert.rejects(commands.execute(other.id,destination,'leave',randomUUID()),{kind:'denied'});
+  const destinationB=(await store.placement(account.id,households[2]!))!;
+  await assert.rejects(commands.execute(account.id,{...destination,endpoint:destinationB.endpoint},'create',randomUUID(),name),{kind:'denied'});
+  // A newly signed retry with equivalent JSON receives the same receipt, but an
+  // exact transport-token replay is rejected even when the operation is complete.
+  const raw=Buffer.from(JSON.stringify({name,operationId:operation},null,2));
+  const transport=await signer.signCommand(account.id,created,ids[0]!,'create',operation,raw.toString());
+  assert.equal((await services[0]!.command(transport,created,'create',raw)).status,'created');
+  await assert.rejects(services[0]!.command(transport,created,'create',raw));
+  await assert.rejects(services[0]!.command(await signer.sign(account.id,created,ids[0]!),created,'create',raw));
+  await assert.rejects(services[0]!.command(await signer.signCommand(account.id,created,ids[0]!,'create',operation,raw.toString()),created,'create',Buffer.from(raw.toString()+' ')));
+  // Failure after domain writes must roll back the household, receipt, audit,
+  // outbox AND replay marker; a retry with the same operation remains possible.
+  await a.owner.query("CREATE FUNCTION pactaris.fixture_outbox_failure() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RAISE EXCEPTION 'fixture failure'; END$$; CREATE TRIGGER fixture_outbox_failure BEFORE INSERT ON pactaris.household_outbox FOR EACH ROW EXECUTE FUNCTION pactaris.fixture_outbox_failure()");
+  const failed=randomUUID(),failedOperation=randomUUID(),failedDestination={...destination,householdId:failed};
+  await assert.rejects(commands.execute(account.id,failedDestination,'create',failedOperation,'Rollback fixture'),{kind:'unavailable'});
+  for(const table of ['households','household_command_receipts','audit_events','household_outbox']){
+    const column=table==='households'?'id':'household_id';assert.equal((await a.owner.query(`SELECT count(*)::int AS count FROM pactaris.${table} WHERE ${column}=$1`,[failed])).rows[0].count,0);
+  }
+  await a.owner.query('DROP TRIGGER fixture_outbox_failure ON pactaris.household_outbox; DROP FUNCTION pactaris.fixture_outbox_failure()');
+  assert.equal((await commands.execute(account.id,failedDestination,'create',failedOperation,'Rollback fixture')).status,'created');
+  // Four-member departure does not autoassign technical ownership or remove
+  // others. The last owner can leave; the remaining group pauses, then closes
+  // only when its final participant leaves. No agreement is autoaccepted.
+  const additional=[other.id,randomUUID(),randomUUID()];
+  for(const member of additional)await a.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[created,randomUUID(),member]);
+  const leaveOperation=randomUUID();
+  assert.equal((await commands.execute(account.id,destination,'leave',leaveOperation)).status,'left');
+  assert.equal((await commands.execute(account.id,destination,'leave',leaveOperation)).status,'left');
+  assert.equal(await client.summary(account.id,destination),undefined);
+  await assert.rejects(commands.execute(account.id,destination,'create',operation,name),{kind:'denied'});
+  assert.equal((await a.owner.query('SELECT status FROM pactaris.households WHERE id=$1',[created])).rows[0].status,'paused');
+  assert.equal((await client.summary(other.id,destination))?.name,name);
+  assert.equal((await a.owner.query("SELECT count(*)::int AS count FROM pactaris.memberships WHERE household_id=$1 AND status='active'",[created])).rows[0].count,3);
+  assert.equal((await a.owner.query("SELECT count(*)::int AS count FROM pactaris.memberships WHERE household_id=$1 AND status='active' AND technical_role='owner'",[created])).rows[0].count,0);
+  for(const member of additional)await commands.execute(member,destination,'leave',randomUUID());
+  assert.equal((await a.owner.query('SELECT status,safety_version FROM pactaris.households WHERE id=$1',[created])).rows[0].status,'closed');
+  for(const table of ['audit_events','household_outbox','household_command_receipts'])assert.equal((await a.owner.query(`SELECT count(*)::int AS count FROM pactaris.${table} WHERE household_id=$1`,[created])).rows[0].count,5);
+  const audit=(await a.owner.query('SELECT parameters FROM pactaris.audit_events WHERE household_id=$1',[created])).rows;
+  assert.ok(audit.every(row=>Object.keys(row.parameters).join(',')==='operationId'));
+  assert.equal((await a.owner.query('SELECT count(*)::int AS count FROM pactaris.consent_records WHERE household_id=$1',[created])).rows[0].count,0);
+  assert.equal((await backupPool.query('SELECT count(*)::int AS count FROM pactaris.household_outbox WHERE household_id=$1',[created])).rows[0].count,5);
  }finally{
   for(const server of servers){server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
   await Promise.all(pools.map(p=>p.end()));

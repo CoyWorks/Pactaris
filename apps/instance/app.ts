@@ -2,11 +2,12 @@ import express from 'express';
 import { join } from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 import type { InstanceConfig } from '../../packages/config/index.js';
-import { uuid, DelegationError } from '../../packages/auth/delegation.js';
+import { uuid, DelegationError,commandPath } from '../../packages/auth/delegation.js';
 import type { InstanceHouseholds } from './households.js';
+import { CommandError } from './commands.js';
 import manifest from '../../package.json' with { type: 'json' };
 
-export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web'), households?: Pick<InstanceHouseholds,'summary'>) {
+export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web'), households?: Pick<InstanceHouseholds,'summary'> & Partial<Pick<InstanceHouseholds,'command'>>) {
   const app = express();
   app.disable('x-powered-by');
   // Identity always comes from the future verified OIDC session, never proxy identity headers.
@@ -25,6 +26,18 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
     let ready = false; try { await probe(); ready = true; } catch { /* no driver details in response */ }
     res.json({ component: 'instance', version: manifest.version, readiness: ready ? 'ready' : 'unavailable', authentication: 'not_enabled', locale: config.locale });
   });
+  app.post('/internal/households/:householdId/commands/:action',express.raw({type:'application/json',limit:4096,inflate:false}),async(req,res)=>{
+    const id=req.params.householdId,action=req.params.action,authorization=req.get('authorization');
+    if(!config.delegation||!households?.command||!uuid(id)||(action!=='create'&&action!=='leave')||req.originalUrl!==commandPath(id,action)||!authorization?.startsWith('Bearer ')||!Buffer.isBuffer(req.body)){
+      res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;
+    }
+    try{res.json(await households.command(authorization.slice(7),id,action,req.body));}
+    catch(error){
+      if(error instanceof DelegationError||(error instanceof CommandError&&error.code==='denied'))res.status(403).json({code:'request_denied',messageKey:'errors.request'});
+      else if(error instanceof CommandError)res.status(error.code==='conflict'?409:400).json({code:'command_'+error.code,messageKey:error.code==='conflict'?'errors.commandConflict':'errors.request'});
+      else res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});
+    }
+  });
   app.get('/internal/households/:householdId/summary',async(req,res)=>{
     const id=req.params.householdId,authorization=req.get('authorization');
     if(!config.delegation||!households||!uuid(id)||!authorization?.startsWith('Bearer ')){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
@@ -41,6 +54,9 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
   });
   app.use((_req, res) => { res.status(404).json({ code: 'not_found', messageKey: 'errors.notFound' }); });
   app.use((_error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if(_error&&typeof _error==='object'&&'status' in _error&&[400,413,415].includes(Number(_error.status))){
+      res.status(Number(_error.status)).json({code:'request_denied',messageKey:'errors.request'});return;
+    }
     res.status(500).json({ code: 'unavailable', messageKey: 'errors.unavailable' });
   });
   return app;
