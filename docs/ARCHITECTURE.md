@@ -14,7 +14,15 @@ This ranking is a project-fit judgment, not a claim that one runtime is universa
 
 Keep the existing visual interaction patterns, not the Cloudflare hosting architecture. Moving from Vinext/Worker routes to Vite + a Node API is a deliberate backend port; it is not a deployment configuration change.
 
-## Initial service layout
+## Required product and infrastructure boundary
+
+The app is BDSM/SM/kink-first. Multiple relationship-scoped Dom/sub/top/bottom/switch roles and overlapping romantic links belong in M0 (#35), not a later optional enhancement. See [DOMAIN_MODEL.md](DOMAIN_MODEL.md).
+
+One logical hosted product spans independent operator-managed instances. Each owns its hosting, PostgreSQL, files, workers and backups and hosts multiple isolated households. A separate manager owns minimal registry/placement/health/lifecycle metadata and integrates platform identity and versioned entitlements. It does not own a shared tenant-content database. See [INFRASTRUCTURE.md](INFRASTRUCTURE.md), #55 and #58.
+
+Build entitlement hooks in M0 (#53), with paid checkout later. Commercial entitlement, technical permission and consent/safety are separate checks. See [PLANS.md](PLANS.md).
+
+## Per-instance service layout
 
 ```mermaid
 flowchart TD
@@ -29,7 +37,7 @@ flowchart TD
 
 Serve the frontend and API under one origin. Bind application ports to loopback; keep database ports private. CloudPanel manages the proxy/TLS boundary. PostgreSQL, workers, backups and application maintenance need their own operating procedures.
 
-Begin on one OCI VM if resources allow. This is a single point of failure. Backups provide recovery, not high availability. Confirm the actual target server, CPU architecture, RAM, free disk, competing workloads and supported OS before sizing. Do not infer the target from another project.
+Begin with one manager and one instance on OCI if resources allow. Co-location requires distinct processes, credentials and databases and provides no host-compromise isolation. This is a single point of failure. Backups provide recovery, not high availability. Confirm the actual target server, CPU architecture, RAM, free disk, competing workloads and supported OS before sizing. Do not infer the target from another project.
 
 Use either supervised host processes or loopback-bound application containers. A Docker-friendly project does not require running CloudPanel inside a container or replacing its public NGINX listener.
 
@@ -37,14 +45,16 @@ Use either supervised host processes or loopback-bound application containers. A
 
 | Entity | Scope | Key rule |
 | --- | --- | --- |
-| User, credentials, sessions, devices | Global account | Independent of any household owner |
-| Household | Tenant | Private workspace with explicit lifecycle |
+| Platform subject / credentials | Global identity boundary | Independent of household owner |
+| Local subject mapping / sessions / devices | Instance | Audience-bound sessions plus current local membership |
+| Household | Tenant with one home instance | Private BDSM dynamic with explicit lifecycle and placement version |
 | Membership | User + household | Unique per pair; active/revoked/left states |
 | Role and permission assignment | Household membership | Stable policy identifiers; titles do not grant rights |
-| Standing and relationship | Household membership | Optional domain concepts; no implicit permission inheritance |
+| Relationship/contextual roles | Relationship/session participants | Core multi-role BDSM model; no implicit technical authority |
+| Standing | Household membership | Optional status; no permission inheritance |
 | Task, protocol, ritual, ledger, file, audit | Household | Tenant key and resource visibility enforced together |
 | Notification preference | User/device and optional membership | No cross-household content leakage |
-| Subscription/entitlement | To be decided | Never controls access to basic safety/export/leave/delete |
+| Subscription/entitlement | Proposed household with account sponsor | Versioned to instance; basic rights stay free |
 
 Tenant-owned relations need composite foreign keys such as `(household_id, membership_id)`, not only a global ID reference. Distinguish global tables from tenant tables explicitly.
 
@@ -62,7 +72,7 @@ Authorize the signed-in user against active membership, then set transaction-loc
 - Inbox, delivery preferences and external notification adapters.
 - Audit, exports, deletion and operational tooling.
 
-Use one modular application with a separate worker entry point. Do not split into microservices for the MVP.
+Use one modular application per instance with a separate worker entry point and a distinct manager/agent contract. Keep these boundaries even during the first one-instance rollout; do not fragment each instance into microservices.
 
 ## Transactions and background work
 
@@ -77,6 +87,12 @@ Cache only public static assets. Authenticated HTML and API responses use no-sto
 Store files outside the public web root or in a private bucket. Authorize each parent object and download. Select quotas, streaming limits, validation, metadata stripping, quarantine/scanning and lifecycle cleanup before enabling uploads.
 
 TLS and storage/backup encryption are baseline hosting controls. End-to-end encryption is a separate research proposal ([#48](https://github.com/CoyWorks/Pactaris/issues/48)); no E2EE claim is made.
+
+## Identity, billing and management contracts
+
+Global subjects map to local instance memberships. The manager directory assigns exactly one active home instance per household. Use verified per-instance sessions/audiences and bounded account-revocation propagation. Local pause/stop/leave with valid sessions must not require fresh manager RPC. Each instance enforces its current resource policy and safety state.
+
+Recommended billing scope is household-sponsored, with authenticated versioned entitlements and local atomic usage tracking. Manager/provider outages must not erase entitlements or block basic rights. Exact identity provider, manager placement, agent bootstrap, session lifetimes and quotas remain open.
 
 ## Decisions deliberately left open
 
