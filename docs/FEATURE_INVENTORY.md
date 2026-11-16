@@ -4,9 +4,9 @@
 
 | Phase | Count |
 | --- | ---: |
-| M0 | 18 |
+| M0 | 19 |
 | M1 | 20 |
-| Launch | 12 |
+| Launch | 11 |
 | Later | 10 |
 | Good-to-have | 1 |
 | Wish | 4 |
@@ -16,7 +16,7 @@
 | Issue | Phase | Area | Scope |
 | --- | --- | --- | --- |
 | [#1](https://github.com/CoyWorks/Pactaris/issues/1) | M0 | Architecture | Choose the hosted application stack and record the deployment boundary |
-| [#2](https://github.com/CoyWorks/Pactaris/issues/2) | M0 | Migration | Audit and map the existing ChatGPT Site before porting |
+| [#2](https://github.com/CoyWorks/Pactaris/issues/2) | M0 | Reference | Map the existing Site as a reference for a clean new product |
 | [#3](https://github.com/CoyWorks/Pactaris/issues/3) | M0 | Foundation | Create the modular application scaffold and development environment |
 | [#4](https://github.com/CoyWorks/Pactaris/issues/4) | M0 | Tenancy | Design PostgreSQL users, households and membership-scoped records |
 | [#5](https://github.com/CoyWorks/Pactaris/issues/5) | M0 | Tenancy | Enforce tenant isolation in API, database, files and background jobs |
@@ -64,12 +64,12 @@
 | [#47](https://github.com/CoyWorks/Pactaris/issues/47) | Wish | Mobile | Evaluate a thin mobile wrapper after validating the PWA |
 | [#48](https://github.com/CoyWorks/Pactaris/issues/48) | Wish | Security | Assess end-to-end encryption for narrowly scoped private content |
 | [#49](https://github.com/CoyWorks/Pactaris/issues/49) | Wish | Integrations | Evaluate opt-in calendar, messaging and external app integrations |
-| [#50](https://github.com/CoyWorks/Pactaris/issues/50) | M0 | Governance | Choose the source license and contribution policy |
+| [#50](https://github.com/CoyWorks/Pactaris/issues/50) | M0 | Governance | Apply proprietary rights notice and review third-party rights |
 | [#52](https://github.com/CoyWorks/Pactaris/issues/52) | M1 | Play sessions | Add negotiated play sessions, check-ins and aftercare |
 | [#53](https://github.com/CoyWorks/Pactaris/issues/53) | M0 | Plans | Create versioned plan entitlements and atomic usage enforcement |
 | [#54](https://github.com/CoyWorks/Pactaris/issues/54) | Later | Plans | Validate the free and paid feature matrix against BDSM use cases |
 | [#55](https://github.com/CoyWorks/Pactaris/issues/55) | M0 | Infrastructure | Define the server-manager control plane and self-contained instance contract |
-| [#56](https://github.com/CoyWorks/Pactaris/issues/56) | Launch | Infrastructure | Build an idempotent instance installer with preflight and rollback |
+| [#56](https://github.com/CoyWorks/Pactaris/issues/56) | M0 | Infrastructure | Build GitHub installer, updater and status tooling for the first slice |
 | [#57](https://github.com/CoyWorks/Pactaris/issues/57) | Launch | Infrastructure | Implement secure instance enrollment and the server-manager inventory |
 | [#58](https://github.com/CoyWorks/Pactaris/issues/58) | M0 | Infrastructure | Design platform identity, household placement and instance routing |
 | [#59](https://github.com/CoyWorks/Pactaris/issues/59) | Launch | Infrastructure | Add instance maintenance, staged upgrades, drain and retirement |
@@ -92,3 +92,5 @@
 M1 is not a public-launch approval; complete applicable Launch gates and #62 before second-instance public onboarding. Entitlements belong in M0; prices remain undecided.
 
 No generic family/residence model, single-global Dom/sub field, automatic role-derived technical authority, hidden monitoring, coercion, punitive withdrawal, cross-household private sharing or device punishment. No public self-hosting/SQLite scope. Basic safety/consent/privacy/MFA/personal export/leave/delete remain free. Relationship diversity, translation/locale support and basic reference flows are not premium-only.
+
+#56 is now M0 and includes GitHub install/update/status in the first working slice. #2 is reference/provenance only: no legacy data migration. #50 records proprietary/all-rights-reserved rights, not open-source licensing. Google/Apple/local account requirements are in #6/#58. See [INSTALL_UPDATE.md](INSTALL_UPDATE.md).
