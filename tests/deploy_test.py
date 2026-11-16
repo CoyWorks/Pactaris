@@ -1,6 +1,8 @@
 import importlib.util
 import io
 import json
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -76,6 +78,76 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn('apps/instance/worker.js', worker)
         self.assertNotIn('/identity/', unit)
         self.assertNotEqual(deploy.service_identity(Path('/opt/a/instance')), deploy.service_identity(Path('/opt/b/instance')))
+
+    def test_command_progress_does_not_expose_arguments_or_child_output(self):
+        with patch('sys.stdout', new_callable=io.StringIO) as output:
+            result = deploy.run([sys.executable, '-c', 'print("private-database-url")'])
+        self.assertEqual(result, 'private-database-url')
+        self.assertNotIn('private-database-url', output.getvalue())
+        self.assertEqual(json.loads(output.getvalue())['messageKey'], 'cli.command')
+
+    def test_slow_commands_report_waiting_without_exposing_credentials(self):
+        with patch.object(deploy.subprocess, 'Popen') as process, patch('sys.stdout', new_callable=io.StringIO) as output:
+            child = process.return_value.__enter__.return_value
+            child.communicate.side_effect = [subprocess.TimeoutExpired('private-argument', 15), (b'private-output', b'')]
+            child.returncode = 0
+            result = deploy.run(['npm', 'private-argument'])
+        self.assertEqual(result, 'private-output')
+        self.assertIn('cli.waiting', output.getvalue())
+        self.assertNotIn('private-', output.getvalue())
+
+    def test_cancellation_terminates_the_child_process_group(self):
+        with patch.object(deploy.subprocess, 'Popen') as process, patch.object(deploy.os, 'killpg') as kill, patch('sys.stdout', new_callable=io.StringIO):
+            child = process.return_value.__enter__.return_value
+            child.pid = 12345
+            child.poll.return_value = None
+            child.communicate.side_effect = [KeyboardInterrupt(), (b'', b'')]
+            with self.assertRaises(KeyboardInterrupt):
+                deploy.run(['npm', 'ci'])
+            kill.assert_called_once_with(12345, deploy.signal.SIGTERM)
+
+    def test_identity_resume_preserves_secrets_and_only_records_success_after_health(self):
+        for healthy in (True, False):
+            with self.subTest(healthy=healthy), tempfile.TemporaryDirectory() as folder:
+                base = Path(folder) / 'identity'
+                revision = 'a' * 40
+                release = base / 'releases' / revision
+                (release / '.git').mkdir(parents=True)
+                (release / 'deploy').mkdir()
+                (release / 'deploy/release.json').write_text(json.dumps({'version': 'test', 'protocol': 1, 'migrations': []}))
+                config = base / 'config.json'
+                config.write_text(json.dumps(self.identity()))
+                secret = base / 'identity.env'; secret.write_text('PG_PASS=preserve-secret\n')
+                original = config.read_bytes(), secret.read_bytes()
+                deploy.activate_link(base, release)
+                def fake_run(args, **kwargs):
+                    return revision if args[-2:] == ['rev-parse', 'HEAD'] else ''
+                with patch.object(deploy, 'run', side_effect=fake_run) as run, patch.object(deploy, 'safe_root', side_effect=Path), patch.object(deploy, 'preflight'), patch.object(deploy, 'health', side_effect=None if healthy else RuntimeError('unhealthy')), patch.object(deploy.time, 'sleep'), patch('sys.stdout', new_callable=io.StringIO):
+                    code = deploy.main(['resume', '--component', 'identity', '--root', folder, '--revision', revision, '--apply'])
+                self.assertEqual(code, 0 if healthy else 1)
+                self.assertEqual(original, (config.read_bytes(), secret.read_bytes()))
+                self.assertEqual((base / 'state.json').exists(), healthy)
+                self.assertEqual((base / 'current').resolve(), release)
+                commands = [call.args[0] for call in run.call_args_list]
+                self.assertFalse(any('clone' in command or 'pull' in command for command in commands))
+
+    def test_resume_refuses_other_releases_missing_secrets_and_completed_installs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder) / 'identity'
+            release = base / 'releases' / ('a' * 40)
+            (release / '.git').mkdir(parents=True)
+            with self.assertRaises(deploy.DeployError):
+                deploy.validate_resume(base, release)
+            (base / 'config.json').write_text('{}')
+            (base / 'identity.env').write_text('preserve')
+            deploy.validate_resume(base, release)
+            deploy.activate_link(base, base / 'releases' / ('b' * 40))
+            with self.assertRaises(deploy.DeployError):
+                deploy.validate_resume(base, release)
+            (base / 'current').unlink()
+            (base / 'state.json').write_text('{}')
+            with self.assertRaises(deploy.DeployError):
+                deploy.validate_resume(base, release)
 
 if __name__ == '__main__':
     unittest.main()

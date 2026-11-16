@@ -13,6 +13,7 @@ from pathlib import Path
 import pwd
 import re
 import secrets
+import signal
 import shutil
 import socket
 import ssl
@@ -39,18 +40,41 @@ def emit(key, **params):
     message = MESSAGES[key]
     for name, value in params.items():
         message = message.replace('{' + name + '}', str(value))
-    print(json.dumps({'messageKey': key, 'message': message, **params}))
+    print(json.dumps({'messageKey': key, 'message': message, **params}), flush=True)
 
 def run(args, *, cwd=None, env=None, user=None, output=None):
     command = list(args)
     if user:
         command = ['runuser', '-u', user, '--', *command]
     # Child output is captured, not echoed: tools may include credential-bearing URLs.
-    result = subprocess.run(command, cwd=cwd, env=env, stdout=output or subprocess.PIPE,
-                            stderr=subprocess.PIPE, timeout=600, check=False)
-    if result.returncode:
-        fail('command:' + Path(args[0]).name)
-    return result.stdout.decode().strip() if result.stdout is not None else ''
+    tool = Path(args[0]).name
+    emit('cli.command', tool=tool)
+    started = time.monotonic()
+    with subprocess.Popen(command, cwd=cwd, env=env, stdout=output or subprocess.PIPE,
+                          stderr=subprocess.PIPE, start_new_session=True) as child:
+        try:
+            while True:
+                try:
+                    stdout, _ = child.communicate(timeout=15)
+                    break
+                except subprocess.TimeoutExpired:
+                    elapsed = int(time.monotonic() - started)
+                    emit('cli.waiting', tool=tool, seconds=elapsed)
+                    if elapsed >= 600:
+                        raise DeployError('cli.commandFailed', tool=tool, code='timeout')
+        except BaseException:
+            # Stop the command group on cancellation too; do not leave npm/builds running.
+            if child.poll() is None:
+                os.killpg(child.pid, signal.SIGTERM)
+                try:
+                    child.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    os.killpg(child.pid, signal.SIGKILL)
+                    child.communicate()
+            raise
+        if child.returncode:
+            raise DeployError('cli.commandFailed', tool=tool, code=child.returncode)
+    return stdout.decode().strip() if stdout is not None else ''
 
 def public_origin(value):
     if not isinstance(value, str):
@@ -247,6 +271,22 @@ def activate_link(base, release):
     temp.symlink_to(release)
     os.replace(temp, base / 'current')
 
+def validate_resume(base, release):
+    # Resume only a staged first installation, never an update or a different release.
+    if (base / 'state.json').exists():
+        raise DeployError('cli.exists')
+    if not release.is_dir() or release.is_symlink() or not (release / '.git').is_dir():
+        fail('resume_staged_release_missing')
+    current = base / 'current'
+    if current.exists() or current.is_symlink():
+        if not current.is_symlink() or current.resolve() != release.resolve():
+            fail('resume_current_revision_mismatch')
+    if base.name == 'identity':
+        if not (base / 'config.json').is_file() or not (base / 'identity.env').is_file():
+            fail('resume_identity_secrets_missing')
+        if (base / 'identity.env').is_symlink():
+            fail('resume_identity_secrets_symlink')
+
 def deploy(args):
     if args.component not in COMPONENTS:
         fail('component')
@@ -255,6 +295,8 @@ def deploy(args):
     existing = read_json(base / 'state.json') if (base / 'state.json').exists() else None
     if args.action == 'status':
         if not existing:
+            if (base / 'config.json').exists() or (base / 'releases').is_dir():
+                raise DeployError('cli.incomplete')
             raise DeployError('cli.missing')
         cfg = validate_config(args.component, read_json(base / 'config.json'))
         ready = True
@@ -266,15 +308,20 @@ def deploy(args):
         return 0 if ready else 1
     if args.action == 'install' and existing:
         raise DeployError('cli.exists')
+    if args.action == 'resume' and existing:
+        raise DeployError('cli.exists')
     if args.action == 'update' and not existing:
         raise DeployError('cli.missing')
     if args.action == 'update' and args.config:
         fail('update_preserves_existing_config')
-    cfg_path = base / 'config.json' if existing else Path(args.config or '')
+    stored_config = args.action == 'resume' and (base / 'config.json').exists()
+    cfg_path = base / 'config.json' if existing or stored_config else Path(args.config or '')
     cfg = validate_config(args.component, read_json(cfg_path))
     repo = repository(args.repository)
     if not re.fullmatch(r'[a-f0-9]{40}', args.revision or ''):
         fail('full_commit_sha_required')
+    if args.action == 'resume':
+        validate_resume(base, base / 'releases' / args.revision)
     if not args.apply:
         emit('cli.plan', component=args.component, revision=args.revision, publicOrigin=cfg['publicOrigin'], port=cfg['listen']['port'])
         return 0
@@ -291,15 +338,26 @@ def deploy(args):
         # Recheck under the lock; two installers must not overwrite a freshly created config.
         if args.action == 'install' and ((base / 'config.json').exists() or (base / 'state.json').exists()):
             raise DeployError('cli.exists')
+        if args.action == 'resume':
+            validate_resume(base, base / 'releases' / args.revision)
+            if stored_config:
+                cfg = validate_config(args.component, read_json(base / 'config.json'))
         if existing and read_json(base / 'state.json') != existing:
             fail('state_changed')
         release = base / 'releases' / args.revision
-        if release.exists():
+        if release.exists() and args.action != 'resume':
             fail('release_exists')
         release.parent.mkdir(mode=0o755, exist_ok=True)
         try:
-            run(['git', 'clone', '--no-checkout', '--', repo, str(release)])
-            run(['git', '-C', str(release), 'checkout', '--detach', args.revision])
+            if args.action == 'resume':
+                emit('cli.resuming', component=args.component, revision=args.revision)
+                # An interrupted unprivileged build may still own the staged checkout.
+                run(['chown', '-R', 'root:root', str(release)])
+                run(['git', '-C', str(release), 'diff', '--quiet', 'HEAD', '--'])
+                run(['git', '-C', str(release), 'diff', '--cached', '--quiet', 'HEAD', '--'])
+            else:
+                run(['git', 'clone', '--no-checkout', '--', repo, str(release)])
+                run(['git', '-C', str(release), 'checkout', '--detach', args.revision])
             if run(['git', '-C', str(release), 'rev-parse', 'HEAD']) != args.revision:
                 fail('revision_mismatch')
             release_meta = read_json(release / 'deploy/release.json')
@@ -314,7 +372,7 @@ def deploy(args):
                 run(['chown', '-R', str(info.pw_uid) + ':' + str(info.pw_gid), str(release)])
                 build_env = {**os.environ, 'npm_config_cache': str(base / 'data/npm-cache'), 'HOME': str(base / 'data')}
                 run(['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], cwd=release, env=build_env, user=info.pw_name)
-                run(['npm', 'run', 'build'], cwd=release, user=info.pw_name)
+                run(['npm', 'run', 'build'], cwd=release, env=build_env, user=info.pw_name)
                 run(['chown', '-R', 'root:root', str(release)])
             if args.component == 'identity' and existing:
                 # authentik performs its own migrations; do not silently roll provider versions back.
@@ -322,10 +380,11 @@ def deploy(args):
                 image_lines = lambda p: [line.strip() for line in p.read_text().splitlines() if line.strip().startswith('image:')]
                 if image_lines(old_compose) != image_lines(release / 'apps/identity/compose.yaml'):
                     fail('provider_image_upgrade_requires_reviewed_runbook')
-            if not existing:
+            if not existing and not stored_config:
                 if args.component == 'instance':
                     tls_dir = base / 'tls'
-                    tls_dir.mkdir(mode=0o750)
+                    safe_root(str(tls_dir))
+                    tls_dir.mkdir(mode=0o750, exist_ok=True)
                     shutil.chown(tls_dir, 0, info.pw_gid)
                     for key in ('certFile', 'keyFile', 'caFile'):
                         target = tls_dir / key
@@ -348,10 +407,11 @@ def deploy(args):
             checkpoint(base, cfg, existing)
             if args.component == 'identity':
                 run(compose(base, release) + ['config', '--quiet'])
-                run(compose(base, release) + ['pull'])
+                if args.action != 'resume':
+                    run(compose(base, release) + ['pull'])
             activate_link(base, release)
             if args.component == 'identity':
-                run(compose(base, release) + ['up', '-d', '--wait', '--wait-timeout', '180'])
+                run(compose(base, release) + ['up', '-d', '--wait', '--wait-timeout', '540'])
             else:
                 node = shutil.which('node')
                 if not node or not re.fullmatch(r'/[A-Za-z0-9_./-]+', node):
@@ -373,7 +433,7 @@ def deploy(args):
             atomic_json(base / 'state.json', {'revision': args.revision, 'version': release_meta['version'], 'protocol': PROTOCOL, 'release': str(release)})
             emit('cli.installed', component=args.component, revision=args.revision)
             return 0
-        except Exception:
+        except Exception as error:
             if existing and (base / 'current').is_symlink() and (base / 'current').resolve() == release:
                 activate_link(base, Path(existing['release']))
                 try:
@@ -386,6 +446,8 @@ def deploy(args):
                     emit('cli.recovery', component=args.component)
                 except Exception:
                     raise DeployError('cli.failedRecovery')
+            if isinstance(error, DeployError):
+                raise
             raise DeployError('cli.failed')
 
 class Parser(argparse.ArgumentParser):
@@ -394,7 +456,7 @@ class Parser(argparse.ArgumentParser):
 
 def main(argv=None):
     parser = Parser(add_help=False)
-    parser.add_argument('action', choices=('install', 'update', 'status'))
+    parser.add_argument('action', choices=('install', 'update', 'status', 'resume'))
     parser.add_argument('--component', choices=COMPONENTS, required=True)
     parser.add_argument('--root', required=True)
     parser.add_argument('--config')
@@ -407,6 +469,9 @@ def main(argv=None):
         return 0
     try:
         return deploy(parser.parse_args(argsv))
+    except KeyboardInterrupt:
+        emit('cli.interrupted')
+        return 130
     except DeployError as e:
         emit(e.key, **e.params)
         return 1

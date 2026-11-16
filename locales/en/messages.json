@@ -15,7 +15,7 @@
   "errors.unavailable": "The service is temporarily unavailable.",
   "errors.notFound": "The requested endpoint is unavailable.",
   "errors.authenticationRequired": "Sign in is required.",
-  "cli.help": "Usage: install.sh|update.sh|status.sh --component identity|instance --root PATH [--config FILE] [--repository URL --revision FULL_SHA] [--apply]. Without --apply, install/update only show a plan. See docs/DEVELOPMENT.md for prerequisites and limits.",
+  "cli.help": "Usage: install.sh|update.sh|status.sh|resume.sh --component identity|instance --root PATH [--config FILE] [--repository URL --revision FULL_SHA] [--apply]. Without --apply, install/update/resume only show a plan. See docs/DEVELOPMENT.md for prerequisites and limits.",
   "cli.arguments": "Invalid command arguments. Use --help for usage.",
   "cli.preflight": "A required prerequisite or configuration check failed ({check}).",
   "cli.exists": "This component is already installed; use update.sh.",
@@ -26,5 +26,11 @@
   "cli.installed": "The component was activated and passed its local health check.",
   "cli.status": "Component status",
   "cli.recovery": "The previous application release was restored. Database rollback is not performed automatically.",
-  "cli.failedRecovery": "Activation and automatic application recovery failed. Operator intervention is required; configuration and data were retained."
+  "cli.failedRecovery": "Activation and automatic application recovery failed. Operator intervention is required; configuration and data were retained.",
+  "cli.command": "Running {tool}; command arguments and child output are kept private.",
+  "cli.waiting": "Still waiting for {tool} ({seconds} seconds).",
+  "cli.commandFailed": "Command {tool} failed ({code}); configuration and data were retained.",
+  "cli.resuming": "Resuming the staged first installation of {component} at {revision}; existing configuration and secrets are preserved.",
+  "cli.interrupted": "Operation interrupted; configuration and data were retained. Use resume.sh for a staged first installation; do not delete volumes or secrets.",
+  "cli.incomplete": "A staged installation exists without a successful completion record. Use resume.sh with the original full release SHA; preserve configuration, secrets and volumes."
 }

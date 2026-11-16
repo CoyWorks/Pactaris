@@ -179,7 +179,7 @@ systemctl list-units --all 'pactaris-instance-*.service'
 docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 ```
 
-Both status commands should report `ready: true`; Instance readiness should return HTTP 200. This proves local foundation health, not login, tenant isolation or external ingress. If first installation fails, stop and inspect the retained configuration/staged release. Automatic resume/repair is not implemented. Do not remove volumes, overwrite credentials or delete state to retry.
+Both status commands should report `ready: true`; Instance readiness should return HTTP 200. This proves local foundation health, not login, tenant isolation or external ingress. If first installation fails, stop and inspect the retained configuration/staged release. For a staged first installation, follow [RECOVERY.md](RECOVERY.md) using the original release SHA. Do not remove volumes, overwrite credentials or delete state to retry.
 
 ## 8. CloudPanel ingress and remaining Identity setup
 

@@ -66,7 +66,7 @@ Update without `--apply` only prints a plan. A repeated install of an installed 
 
 No migrations are supported yet: the deployer accepts only release manifests with protocol 1 and an empty migration list. The Instance DB is checkpointed with pg_dump before activation. Identity updates checkpoint PostgreSQL but reject changed provider/database image versions until a reviewed migration/restore runbook exists. Media-volume backup and off-host recovery still belong to #29 and are not claimed complete here. Source commits are operator-approved trust inputs; signed-release verification automation is still pending.
 
-Application failure after an update switches back to the prior release and checks it when possible; this never claims a database rollback. A failed first install retains protected configuration/secrets and staged files for diagnosis; automated resume/repair is pending. Do not delete provider volumes or overwrite secrets to retry. Component systemd unit templates are recreated when an Instance release is activated; review changes before approving the commit.
+Application failure after an update switches back to the prior release and checks it when possible; this never claims a database rollback. A failed first install retains protected configuration/secrets and staged files for diagnosis. `resume.sh` can finish a staged first installation at the original exact SHA; see [RECOVERY.md](RECOVERY.md). It does not repair incomplete source clones, missing Identity secrets or interrupted updates. Do not delete provider volumes or overwrite secrets to retry. Component systemd unit templates are recreated when an Instance release is activated; review changes before approving the commit.
 
 ## Verification limits
 
