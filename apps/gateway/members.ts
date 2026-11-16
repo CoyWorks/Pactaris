@@ -30,7 +30,7 @@ export class GatewayMembers{
  async list(accountId:string,householdId:string,after?:string){
   const own=await this.own(accountId,householdId);
   const r=await this.client.execute(accountId,own.placement,'memberList',{operationId:randomUUID(),membershipId:own.membershipId,...(after?{after}:{})});
-  return {actorMembershipId:r.actorMembershipId,members:r.members,offers:r.offers,nextCursor:r.nextCursor??null};
+  return {actorMembershipId:r.actorMembershipId,members:r.members,offers:r.offers,nextCursor:r.nextCursor??null,...await this.operations(accountId,householdId)};
  }
  async change(accountId:string,sessionToken:string,householdId:string,action:Mutation,input:{operationId:string;name?:string;targetMembershipId?:string;offerId?:string}){
   const canonical=Object.fromEntries(Object.keys(input).sort().map(k=>[k,input[k as keyof typeof input]]));

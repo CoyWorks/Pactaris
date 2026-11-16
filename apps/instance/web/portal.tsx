@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import {InvitationManager,InvitationJoin} from './invitations.js';
+import {MemberAdministration} from './members.js';
 type Session={account:{id:string;displayName:string};csrfToken:string};
 type Summary={id:string;name:string};
 type Listing={households:Summary[];partial:boolean;nextCursor:string|null};
@@ -85,7 +86,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
       <p>{session.account.displayName||t('portal.account')}</p>
       {error&&<p role="alert">{t(error)}</p>}
       {selectedId?<section>{selected&&<><h2>{selected.name}</h2><p>{t('portal.workspacePending')}</p><InvitationManager key={session.account.id+':'+selectedId} householdId={selectedId} session={session} language={language} format={format} timeZone={timeZone}/>
-        <button type="button" onClick={()=>setConfirmLeave(true)} disabled={busy}>{t('onboarding.leave')}</button>
+        <MemberAdministration key={session.account.id+':'+selectedId} householdId={selectedId} session={session} language={language} format={format} timeZone={timeZone}/><button type="button" onClick={()=>setConfirmLeave(true)} disabled={busy}>{t('onboarding.leave')}</button>
         {confirmLeave&&<div className="notice"><p>{t('onboarding.leaveConfirm')}</p><button type="button" onClick={()=>{void leave();}} disabled={busy}>{t('onboarding.leaveConfirmButton')}</button><button type="button" onClick={()=>setConfirmLeave(false)} disabled={busy}>{t('onboarding.cancel')}</button></div>}
       </>}{leavePending&&<div role="status"><p>{t('onboarding.leavePending')}</p><button type="button" onClick={()=>{void leave();}} disabled={busy}>{t('onboarding.retry')}</button></div>}<p><a href="/">{t('portal.back')}</a></p></section>:<>{listing&&<section aria-live="polite">
         {listing.partial&&<p role="status">{t('portal.partial')}</p>}

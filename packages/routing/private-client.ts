@@ -112,7 +112,7 @@ export class PrivateMemberClient{
    if(response.status!==200||!result||result.householdId!==placement.householdId||result.operationId!==input.operationId||
      !['listed','applied','missing'].includes(result.status)||['actorMembershipId','targetMembershipId','targetAccountId','endingId','offerId'].some(k=>k in result&&!uuid((result as unknown as Record<string,unknown>)[k])))throw Error('routing.response');
    if(result.status==='applied'&&(!result.action||!['memberAlias','memberRemove','ownerOffer','ownerAccept','ownerDecline','ownerCancel'].includes(result.action)||!uuid(result.actorMembershipId)))throw Error('routing.response');
-   if(result.status==='listed'&&(!uuid(result.actorMembershipId)||!Array.isArray(result.members)||result.members.length>25||!Array.isArray(result.offers)||result.offers.length>20||
+   if(result.status==='listed'&&(!uuid(result.actorMembershipId)||!Array.isArray(result.members)||result.members.length>20||!Array.isArray(result.offers)||result.offers.length>20||
      (result.nextCursor!==null&&!uuid(result.nextCursor))||result.members.some(m=>!uuid(m.membershipId)||typeof m.displayName!=='string'||[...m.displayName].length>80||
        !['owner','admin','participant'].includes(m.technicalRole)||typeof m.isSelf!=='boolean'||typeof m.canRemove!=='boolean'||typeof m.canOffer!=='boolean')||
      result.offers.some(o=>!uuid(o.offerId)||!uuid(o.fromMembershipId)||!uuid(o.toMembershipId)||!['pending','accepted','declined','cancelled','expired','invalidated'].includes(o.status)||!Number.isFinite(Date.parse(o.expiresAt)))))throw Error('routing.response');

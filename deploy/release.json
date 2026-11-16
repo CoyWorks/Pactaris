@@ -90,7 +90,7 @@
       "component": "instance",
       "id": "0006_member_administration",
       "path": "migrations/instance/0006_member_administration.sql",
-      "sha256": "35bba8ea88390badc067e2c45cba595c8035483380255b57e6d7af69710c0be6",
+      "sha256": "52969ecf825efa17630f87439189ca027085df4b0e2d36edaa2db3ea89fe0f87",
       "backwardCompatible": true
     }
   ]

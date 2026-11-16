@@ -14,9 +14,10 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient } from '../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
+import {GatewayMembers} from '../apps/gateway/members.js';
 import { GatewayInvitations } from '../apps/gateway/invitations.js';
 import { hash } from '../apps/gateway/store.js';
 import { PgOnboardingStore,OnboardingService } from '../apps/gateway/onboarding.js';
@@ -173,7 +174,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await store.createSession('a'.repeat(43),account,'csrf',60,120);
   const onboardingStore=new PgOnboardingStore(gatewayDb.pool,1,client),onboarding=new OnboardingService(onboardingStore,new PrivateCommandClient(signer));
   const inviteClient=new PrivateInvitationClient(signer),invites=new GatewayInvitations(gatewayDb.pool,store,client,inviteClient);
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites);
+  const memberClient=new PrivateMemberClient(signer),memberService=new GatewayMembers(gatewayDb.pool,store,client,memberClient);
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -463,6 +465,116 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const invitationBackup=new pg.Pool({connectionString:url(inviteDb.database,inviteDb.backup,'fixture-only-password'),max:1});pools.push(invitationBackup);
   assert.ok((await invitationBackup.query('SELECT * FROM pactaris.invitations')).rowCount!>=3);
   await assert.rejects(invitationBackup.query('SELECT pactaris.invitation_command($1,$2,$3,$4,$5,$6,$7)',[inviteHousehold.householdId,invitePlacement.instanceId,inviteOwner.id,randomUUID(),'inviteList',{},'a'.repeat(64)]));
+
+  // Current members expose only household aliases/technical rights, never
+  // global identities. Fixtures below use four contextual participants.
+  const manageOwner=await store.account('https://idp.fixture.invalid/','manage-owner','Global owner identity','manage-owner@example.invalid');
+  const manageSession=randomBytes(32).toString('base64url');await store.createSession(manageSession,manageOwner,'registration-csrf',60,120,'manage-owner@example.invalid');
+  const manageHousehold=await onboarding.create(manageOwner.id,randomUUID(),'Member administration fixture');
+  const managePlacement=(await store.placement(manageOwner.id,manageHousehold.householdId))!,manageDb=managePlacement.instanceId===ids[0]?a:b;
+  const managePath='/api/households/'+manageHousehold.householdId+'/members';
+  const manageOwnerMember=(await client.summary(manageOwner.id,managePlacement))!.membershipId!;
+  async function seedMember(role:string,label:string){
+   const email=label+'@example.invalid',account=await store.account('https://idp.fixture.invalid/',label,'Global '+label,email),member=randomUUID(),session=randomBytes(32).toString('base64url');
+   await manageDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role) VALUES($1,$2,$3,'active',$4)",[manageHousehold.householdId,member,account.id,role]);
+   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[account.id,manageHousehold.householdId,member]);
+   await store.createSession(session,account,'registration-csrf',60,120,email);return {account,member,session,email};
+  }
+  const manageAdmin=await seedMember('admin','manage-admin'),manageA=await seedMember('participant','manage-a'),manageB=await seedMember('participant','manage-b');
+  const change=(action:string,payload:Record<string,unknown>,session=manageSession)=>api(managePath+'/'+action,'POST',{operationId:randomUUID(),...payload},session);
+  const memberList=await api(managePath,'GET',undefined,manageSession);assert.equal(memberList.status,200);assert.equal(memberList.data.members.length,4);
+  assert.ok(!memberList.body.includes(manageOwner.id));assert.ok(!memberList.body.includes(manageA.account.id));assert.ok(!memberList.body.includes(manageA.email));assert.ok(!memberList.body.includes('Global owner'));
+  assert.equal((await api(managePath,'GET',undefined,'w'.repeat(43))).status,404);
+  const aliasId=randomUUID(),aliasInput={operationId:aliasId,name:'Household-only alias'};
+  assert.equal((await api(managePath+'/alias','POST',aliasInput,manageA.session)).status,200);
+  assert.equal((await api(managePath+'/alias','POST',aliasInput,manageA.session)).status,200);
+  assert.equal((await api(managePath+'/alias','POST',{...aliasInput,name:'Conflicting alias'},manageA.session)).status,409);
+  assert.equal((await api(managePath+'/alias','POST',{...aliasInput,targetMembershipId:manageB.member},manageA.session)).status,400);
+  assert.equal((await change('remove',{targetMembershipId:manageOwnerMember},manageA.session)).status,404);
+  assert.equal((await change('remove',{targetMembershipId:manageOwnerMember},manageAdmin.session)).status,404);
+  assert.equal((await change('remove',{targetMembershipId:manageOwnerMember})).status,404);
+  assert.equal((await change('remove',{targetMembershipId:members[1]})).status,404);
+  assert.equal((await change('offer',{targetMembershipId:manageA.member},manageAdmin.session)).status,404);
+  await manageDb.owner.query("UPDATE pactaris.memberships SET technical_role='admin' WHERE household_id=$1 AND id=$2",[manageHousehold.householdId,manageB.member]);
+  assert.equal((await change('remove',{targetMembershipId:manageB.member},manageAdmin.session)).status,404);
+  await manageDb.owner.query("UPDATE pactaris.memberships SET technical_role='participant' WHERE household_id=$1 AND id=$2",[manageHousehold.householdId,manageB.member]);
+  await gatewayDb.owner.query("UPDATE pactaris.sessions SET created_at=now()-interval '16 minutes' WHERE token_hash=$1",[hash(manageSession)]);
+  assert.equal((await api(managePath,'GET',undefined,manageSession)).status,200);
+  assert.equal((await change('offer',{targetMembershipId:manageA.member})).status,403);
+  assert.equal((await change('alias',{name:'Owner alias'})).status,200);
+  await gatewayDb.owner.query('UPDATE pactaris.sessions SET created_at=now() WHERE token_hash=$1',[hash(manageSession)]);
+  // Give this synthetic household one extra reservation to check demotion cleanup.
+  await manageDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"members.active.max\":5}'::jsonb WHERE household_id=$1",[manageHousehold.householdId]);
+  const ownerToken=randomBytes(32).toString('base64url'),ownerInvitation=await invites.create(manageOwner.id,manageHousehold.householdId,randomUUID(),ownerToken,'managed-invite@example.invalid');
+  const declinedOffer=randomUUID();assert.equal((await change('offer',{operationId:declinedOffer,targetMembershipId:manageA.member})).status,200);
+  assert.equal((await change('accept',{offerId:declinedOffer})).status,404);
+  assert.equal((await change('accept',{offerId:declinedOffer},manageB.session)).status,404);
+  assert.equal((await api(managePath,'GET',undefined,manageB.session)).data.offers.length,0);
+  assert.equal((await change('decline',{offerId:declinedOffer},manageA.session)).status,200);
+  assert.equal((await manageDb.owner.query('SELECT technical_role FROM pactaris.memberships WHERE household_id=$1 AND id=$2',[manageHousehold.householdId,manageOwnerMember])).rows[0].technical_role,'owner');
+  const cancelledOffer=randomUUID();assert.equal((await change('offer',{operationId:cancelledOffer,targetMembershipId:manageA.member})).status,200);
+  assert.equal((await change('cancel',{offerId:cancelledOffer})).status,200);
+  const expiredOffer=randomUUID();assert.equal((await change('offer',{operationId:expiredOffer,targetMembershipId:manageA.member})).status,200);
+  await manageDb.owner.query("UPDATE pactaris.ownership_offers SET expires_at=now()-interval '1 second' WHERE id=$1",[expiredOffer]);
+  assert.equal((await change('accept',{offerId:expiredOffer},manageA.session)).status,409);
+  const staleOffer=randomUUID();assert.equal((await change('offer',{operationId:staleOffer,targetMembershipId:manageA.member})).status,200);
+  await manageDb.owner.query("UPDATE pactaris.memberships SET technical_role='admin' WHERE household_id=$1 AND id=$2",[manageHousehold.householdId,manageA.member]);
+  await manageDb.owner.query("UPDATE pactaris.memberships SET technical_role='participant' WHERE household_id=$1 AND id=$2",[manageHousehold.householdId,manageA.member]);
+  assert.equal((await change('accept',{offerId:staleOffer},manageA.session)).status,409);
+  const acceptedOffer=randomUUID();assert.equal((await change('offer',{operationId:acceptedOffer,targetMembershipId:manageA.member})).status,200);
+  const offersForA=await api(managePath,'GET',undefined,manageA.session);assert.ok(offersForA.data.offers.some((o:any)=>o.offerId===acceptedOffer&&o.status==='pending'));
+  await manageDb.owner.query("UPDATE pactaris.households SET status='paused' WHERE id=$1",[manageHousehold.householdId]);
+  const acceptanceId=randomUUID(),acceptedOwner=await change('accept',{operationId:acceptanceId,offerId:acceptedOffer},manageA.session);assert.equal(acceptedOwner.status,200);
+  assert.equal((await change('accept',{operationId:acceptanceId,offerId:acceptedOffer},manageA.session)).status,200);
+  const roleAfter=(await manageDb.owner.query('SELECT id,technical_role FROM pactaris.memberships WHERE household_id=$1',[manageHousehold.householdId])).rows;
+  assert.equal(roleAfter.find(r=>r.id===manageA.member).technical_role,'owner');assert.equal(roleAfter.find(r=>r.id===manageOwnerMember).technical_role,'participant');
+  assert.equal((await manageDb.owner.query('SELECT status FROM pactaris.households WHERE id=$1',[manageHousehold.householdId])).rows[0].status,'paused');
+  assert.equal((await manageDb.owner.query('SELECT status FROM pactaris.invitations WHERE id=$1',[ownerInvitation.invitationId])).rows[0].status,'revoked');
+  assert.equal((await change('remove',{targetMembershipId:manageB.member})).status,404);
+  await manageDb.owner.query("UPDATE pactaris.households SET status='active' WHERE id=$1",[manageHousehold.householdId]);
+  assert.equal((await change('alias',{name:'Removed profile'},manageB.session)).status,200);
+  const offerToB=randomUUID();assert.equal((await change('offer',{operationId:offerToB,targetMembershipId:manageB.member},manageA.session)).status,200);
+  const removalId=randomUUID();
+  assert.equal((await change('remove',{operationId:removalId,targetMembershipId:manageB.member},manageAdmin.session)).status,200);
+  assert.equal((await api('/api/households/'+manageHousehold.householdId,'GET',undefined,manageB.session)).status,404);
+  const removedB=(await manageDb.owner.query('SELECT status,display_name,ended_at FROM pactaris.memberships WHERE household_id=$1 AND id=$2',[manageHousehold.householdId,manageB.member])).rows[0];
+  assert.equal(removedB.status,'revoked');assert.equal(removedB.display_name,'');assert.ok(removedB.ended_at instanceof Date);
+  assert.equal((await manageDb.owner.query('SELECT status FROM pactaris.ownership_offers WHERE id=$1',[offerToB])).rows[0].status,'invalidated');
+  assert.equal((await manageDb.owner.query('SELECT count(*)::int AS n FROM pactaris.membership_endings WHERE household_id=$1 AND membership_id=$2',[manageHousehold.householdId,manageB.member])).rows[0].n,1);
+  const adminInvitation=await invites.create(manageAdmin.account.id,manageHousehold.householdId,randomUUID(),randomBytes(32).toString('base64url'),'admin-pending@example.invalid');
+  assert.equal((await change('remove',{targetMembershipId:manageAdmin.member},manageA.session)).status,200);
+  assert.equal((await manageDb.owner.query('SELECT status FROM pactaris.invitations WHERE id=$1',[adminInvitation.invitationId])).rows[0].status,'revoked');
+  // Real invitation rejoin; old completed removal can never remove this new hint.
+  const rejoinBToken=randomBytes(32).toString('base64url'),rejoinB=await invites.create(manageA.account.id,manageHousehold.householdId,randomUUID(),rejoinBToken,manageB.email);
+  const rejoinBPreview=await invites.respond(manageB.account.id,manageB.session,rejoinB.invitationId,'invitePreview',rejoinBToken,randomUUID());
+  assert.equal((await invites.respond(manageB.account.id,manageB.session,rejoinB.invitationId,'inviteAccept',rejoinBToken,randomUUID(),rejoinBPreview.termsVersion)).status,'accepted');
+  const newB=(await client.summary(manageB.account.id,managePlacement))!.membershipId!;assert.notEqual(newB,manageB.member);
+  assert.equal((await change('remove',{operationId:removalId,targetMembershipId:manageB.member},manageAdmin.session)).status,200);
+  assert.equal((await gatewayDb.pool.query('SELECT membership_id FROM pactaris.account_households WHERE account_id=$1 AND household_id=$2',[manageB.account.id,manageHousehold.householdId])).rows[0].membership_id,newB);
+  assert.equal((await manageDb.owner.query('SELECT display_name FROM pactaris.memberships WHERE household_id=$1 AND id=$2',[manageHousehold.householdId,newB])).rows[0].display_name,'');
+  // Removal commits locally, then both the reply and immediate receipt are lost.
+  const lossyMembers=new GatewayMembers(gatewayDb.pool,store,client,{execute:async(...args)=>{
+   if(args[2]==='memberRemove')await memberClient.execute(...args);throw Error('fixture response lost');
+  }});
+  const lostRemovalId=randomUUID(),lostRemoval=await lossyMembers.change(manageA.account.id,manageA.session,manageHousehold.householdId,'memberRemove',{operationId:lostRemovalId,targetMembershipId:manageOwnerMember});
+  assert.equal(lostRemoval.status,'pending');assert.ok(await store.placement(manageOwner.id,manageHousehold.householdId));
+  assert.equal(await client.summary(manageOwner.id,managePlacement),undefined);
+  // A new membership is published before the old removal acknowledgement arrives.
+  const returnToken=randomBytes(32).toString('base64url'),returnInvite=await invites.create(manageA.account.id,manageHousehold.householdId,randomUUID(),returnToken,'manage-owner@example.invalid');
+  const returnPreview=await invites.respond(manageOwner.id,manageSession,returnInvite.invitationId,'invitePreview',returnToken,randomUUID());
+  await invites.respond(manageOwner.id,manageSession,returnInvite.invitationId,'inviteAccept',returnToken,randomUUID(),returnPreview.termsVersion);
+  const returnedOwnerMember=(await client.summary(manageOwner.id,managePlacement))!.membershipId!;
+  await new GatewayMembers(gatewayDb.pool,store,client,memberClient).reconcile();
+  assert.equal((await gatewayDb.pool.query('SELECT membership_id FROM pactaris.account_households WHERE account_id=$1 AND household_id=$2',[manageOwner.id,manageHousehold.householdId])).rows[0].membership_id,returnedOwnerMember);
+  assert.equal((await memberService.operations(manageA.account.id,manageHousehold.householdId)).operations.find(o=>o.operationId===lostRemovalId)!.status,'complete');
+  assert.equal((await memberService.operations(manageB.account.id,manageHousehold.householdId)).operations.some(o=>o.operationId===lostRemovalId),false);
+  // Restoration/cleanup foundations remain tenant-local, audited and inaccessible to runtime.
+  await assert.rejects(manageDb.pool.query('SELECT * FROM pactaris.membership_endings'));
+  await assert.rejects(manageDb.pool.query("UPDATE pactaris.memberships SET technical_role='owner'"));
+  assert.equal((await manageDb.owner.query('SELECT count(*)::int AS n FROM pactaris.membership_receipts WHERE operation_id=$1',[acceptanceId])).rows[0].n,1);
+  const cancelRaceOffer=randomUUID();assert.equal((await change('offer',{operationId:cancelRaceOffer,targetMembershipId:newB},manageA.session)).status,200);
+  const cancelRace=await Promise.all([change('accept',{offerId:cancelRaceOffer},manageB.session),change('cancel',{offerId:cancelRaceOffer},manageA.session)]);
+  assert.equal(cancelRace.filter(r=>r.status===200).length,1);assert.equal(cancelRace.filter(r=>r.status===409).length,1);
   // Separate concurrent creation IDs are budgeted under the same account lock.
   const racer=await store.account('https://idp.fixture.invalid/','registration-racer','Racer fixture');await store.createSession('s'.repeat(43),racer,'registration-csrf',60,120);
   const races=await Promise.all(Array.from({length:4},()=>api('/api/households','POST',{operationId:randomUUID(),name:'Race fixture'},'s'.repeat(43))));

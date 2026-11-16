@@ -106,9 +106,9 @@ BEGIN
    SELECT coalesce(jsonb_agg(jsonb_build_object('membershipId',m.id,'displayName',m.display_name,'technicalRole',m.technical_role,'isSelf',m.id=member.id,
       'canRemove',m.id<>member.id AND ((member.technical_role='owner' AND m.technical_role<>'owner') OR (member.technical_role='admin' AND m.technical_role='participant')),
       'canOffer',member.technical_role='owner' AND m.id<>member.id AND m.technical_role<>'owner') ORDER BY m.id),'[]'::jsonb)
-    INTO rows FROM (SELECT * FROM pactaris.memberships WHERE household_id=target AND status='active' AND (after_id IS NULL OR id>after_id) ORDER BY id LIMIT 25) m;
-   IF jsonb_array_length(rows)=25 AND EXISTS(SELECT 1 FROM pactaris.memberships WHERE household_id=target AND status='active'
-      AND id>(rows->24->>'membershipId')::uuid) THEN next_id=(rows->24->>'membershipId')::uuid; END IF;
+    INTO rows FROM (SELECT * FROM pactaris.memberships WHERE household_id=target AND status='active' AND (after_id IS NULL OR id>after_id) ORDER BY id LIMIT 20) m;
+   IF jsonb_array_length(rows)=20 AND EXISTS(SELECT 1 FROM pactaris.memberships WHERE household_id=target AND status='active'
+      AND id>(rows->19->>'membershipId')::uuid) THEN next_id=(rows->19->>'membershipId')::uuid; END IF;
    SELECT coalesce(jsonb_agg(jsonb_build_object('offerId',o.id,'fromMembershipId',o.from_membership_id,'toMembershipId',o.to_membership_id,
       'status',CASE WHEN o.status='pending' AND o.expires_at<=now() THEN 'expired' WHEN o.status='pending' AND o.safety_version<>h.safety_version THEN 'invalidated' ELSE o.status END,
       'expiresAt',o.expires_at) ORDER BY o.created_at DESC),'[]'::jsonb)
