@@ -44,3 +44,7 @@ Lists poll only while visible/online at 60 seconds; detail and creation choices 
 Input/keyed UI tests cover strict scope, identity, current versions, required submission and safe refusal. Native PostgreSQL/HTTPS tests cover pair/four-person audience and role boundaries, full review/reopen history, duplicate intent, stale actor/counterpart safety packets, concurrent review and capacity, limits/expiry, combined private/shared quotas and downgrade, final-write rollback/replay, tenant/Instance/CSRF boundaries, runtime/backup permissions and departure/rejoin fencing. Broader mobile/operator acceptance remains separate.
 
 Optional third-party review, proof uploads #21, dispute resolution, editing/re-negotiating an existing offer, reminders/recurrence #18/#22, audit/export/deletion/retention and reward/ledger effects #20/#64 remain open. No automatic punishment, tracking or device action is introduced. Full off-host restore/revocation replay remains a release gate.
+
+## Standing authority implementation checkpoint
+
+Current source adds explicitly adopted, versioned directional task authority, direct one-off assignment and optional per-task acceptance while preserving existing offers. See [STANDING_TASK_AUTHORITY.md](STANDING_TASK_AUTHORITY.md) for the API, lifecycle, migration, verification limits and remaining scope. The earlier 0.12 state table/checkpoint is historical; scheduled series and rewards remain follow-up work.

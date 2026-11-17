@@ -1299,6 +1299,62 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    const offer=async(p:Person=A,to:Person=B,agreementId=pair.agreementId)=>{const body=await offerBody(p,to,agreementId),r=await post(p,'partnerOffer',body);assert.equal(r.status,200,JSON.stringify(r.data));assert.ok(!r.body.includes(fields.title));assert.ok(!r.body.includes('instance'));return r.data.taskId as string;};
    const transitionBody=(d:any,action:string,extra:Record<string,unknown>={})=>({operationId:randomUUID(),taskId:d.taskId,version:d.version,...(!['partnerCancel','partnerDecline'].includes(action)?{epoch:d.epoch,safetyVersion:d.safetyVersion}:{}),...extra});
    const move=async(p:Person,action:string,id:string,extra:Record<string,unknown>={})=>post(p,action,transitionBody(await read(p,id),action,extra));
+   let departurePolicyId:string|undefined;
+   await (async function verifyStandingAssignment(){
+    const policies=async(p:Person)=>(await post(p,'partnerPolicyList')).data.policies;
+    const propose=async(from:Person,to:Person,mode='direct',agreementId=pair.agreementId)=>{
+     const {fields:unused,...scope}=await offerBody(from,to,agreementId),body={...scope,mode};
+     const r=await post(from,'partnerPolicyPropose',body);assert.equal(r.status,200,JSON.stringify(r.data));
+     assert.equal((await post(from,'partnerPolicyPropose',body)).status,200);
+     assert.equal((await post(from,'partnerPolicyPropose',{...body,mode:mode==='direct'?'explicit':'direct'})).status,409);
+     return (await policies(to)).find((p:any)=>p.policyId===r.data.policyId);
+    };
+    const adopt=async(p:Person,policy:any)=>post(p,'partnerPolicyAccept',{policyId:policy.policyId,version:policy.version,epoch:policy.epoch,safetyVersion:policy.safetyVersion});
+    const revoke=async(p:Person,policy:any)=>post(p,'partnerPolicyRevoke',{policyId:policy.policyId,version:policy.version});
+    // A pre-policy offer is never silently converted by adoption.
+    const legacy=await offer();
+    const {fields:unusedRollbackFields,...rollbackScope}=await offerBody(A,B),rollbackBody={...rollbackScope,mode:'direct'};
+    await db.owner.query("CREATE FUNCTION pactaris.fixture_policy_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture policy outbox failure'; END $$; CREATE TRIGGER fixture_policy_failure BEFORE INSERT ON pactaris.partner_outbox FOR EACH ROW EXECUTE FUNCTION pactaris.fixture_policy_failure()");
+    assert.equal((await post(A,'partnerPolicyPropose',rollbackBody)).status,503);
+    assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.assignment_policies WHERE id=$1',[rollbackBody.operationId])).rows[0].n,0);
+    assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.partner_receipts WHERE operation_id=$1',[rollbackBody.operationId])).rows[0].n,0);
+    await db.owner.query('DROP TRIGGER fixture_policy_failure ON pactaris.partner_outbox; DROP FUNCTION pactaris.fixture_policy_failure()');
+    const policy=await propose(A,B);
+    assert.equal((await policies(C)).length,0);assert.equal((await adopt(A,policy)).status,404);assert.equal((await adopt(C,policy)).status,404);
+    let body={...await offerBody(A,B),policyId:policy.policyId,policyVersion:policy.version};
+    assert.equal((await post(A,'partnerAssign',body)).status,404);
+    assert.equal((await adopt(B,policy)).status,200);
+    const active=(await policies(A)).find((p:any)=>p.policyId===policy.policyId);assert.equal(active.version,'2');
+    assert.equal((await read(B,legacy)).state,'offered');assert.equal((await read(B,legacy)).assignmentMode,'offer');assert.equal((await move(B,'partnerDecline',legacy)).status,200);
+    body={...await offerBody(A,B),policyId:active.policyId,policyVersion:active.version};
+    const direct=await post(A,'partnerAssign',body);assert.equal(direct.status,200,JSON.stringify(direct.data));
+    assert.equal((await post(A,'partnerAssign',body)).status,200);
+    const task=direct.data.taskId,d=await read(B,task);assert.equal(d.state,'assigned');assert.equal(d.assignmentMode,'direct');assert.equal(d.policyVersion,'2');assert.equal(d.events[0].action,'partnerAssign');assert.ok(!d.events.some((e:any)=>e.action==='partnerAccept'));
+    assert.ok((await post(B,'partnerList',{filter:'active'})).data.tasks.some((t:any)=>t.taskId===task&&t.state==='assigned'));
+    await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','0') WHERE household_id=$1",[home.householdId]);
+    assert.equal((await post(A,'partnerAssign',{...body,operationId:randomUUID()})).data.code,'partner_capacity');
+    assert.equal((await read(B,task)).state,'assigned');
+    await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','25') WHERE household_id=$1",[home.householdId]);
+    assert.equal((await move(B,'partnerAccept',task)).status,409);assert.equal((await post(C,'partnerRead',{taskId:task})).status,404);
+    assert.equal((await post(B,'partnerAssign',{...await offerBody(B,A),policyId:active.policyId,policyVersion:active.version})).status,404);
+    assert.equal((await move(B,'partnerStart',task)).status,200);assert.equal((await move(B,'partnerSubmit',task,{note:'Direct work'})).status,200);assert.equal((await move(A,'partnerApprove',task)).status,200);
+    assert.equal((await move(A,'partnerReopen',task)).status,200);assert.equal((await read(B,task)).state,'assigned');
+    // Direct assignments obey pauses, exact versions, capacity and revocation.
+    assert.equal((await consent(B,'selfPause')).status,200);assert.equal((await move(B,'partnerStart',task)).data.code,'partner_paused');
+    assert.equal((await revoke(B,active)).status,200);assert.equal((await read(B,task)).eligible,false);assert.equal((await move(B,'partnerCancel',task)).status,200);
+    const safety=await state(B);assert.equal((await consent(B,'selfResume',{epoch:safety.epoch,memberEpoch:safety.memberEpoch})).status,200);await acceptAgreement(B,pair.agreementId,pair.relationshipId);
+    assert.equal((await post(A,'partnerAssign',body)).status,200); // Historical receipt cannot recreate cancelled work.
+    assert.equal((await post(A,'partnerAssign',{...body,...await offerBody(A,B)})).status,404);
+    const explicit=await propose(A,B,'explicit');assert.equal((await adopt(B,explicit)).status,200);
+    const exp=(await policies(A)).find((p:any)=>p.policyId===explicit.policyId);
+    const r=await post(A,'partnerAssign',{...await offerBody(A,B),policyId:exp.policyId,policyVersion:exp.version});assert.equal(r.status,200);assert.equal((await read(B,r.data.taskId)).state,'offered');assert.equal((await move(B,'partnerStart',r.data.taskId)).status,409);assert.equal((await move(B,'partnerAccept',r.data.taskId)).status,200);assert.equal((await move(B,'partnerCancel',r.data.taskId)).status,200);
+    // Revocation and adoption serialize; no stale adoption restores authority.
+    const raced=await propose(A,B),race=await Promise.all([adopt(B,raced),revoke(A,raced)]);assert.ok(race.some(r=>r.status===200));
+    const remaining=(await policies(A)).find((p:any)=>p.policyId===raced.policyId);if(remaining)assert.equal((await revoke(A,remaining)).status,200);
+    assert.equal((await adopt(B,raced)).status,409);departurePolicyId=exp.policyId;
+    for(const table of ['assignment_policies','assignment_policy_events'])await assert.rejects(db.pool.query('SELECT * FROM pactaris.'+table),{code:'42501'});
+    await assert.rejects(db.pool.query('SELECT pactaris.assignment_policy_current($1,$2,2)',[home.householdId,active.policyId]));
+   })();
    const offered=await offerBody(A,B),initial=await post(A,'partnerOffer',offered);assert.equal(initial.status,200);const id=initial.data.taskId;
    assert.equal((await post(A,'partnerOffer',offered)).status,200);assert.equal((await post(A,'partnerOffer',{...offered,fields:{...fields,title:'Different intent'}})).status,409);
    assert.equal((await read(B,id)).state,'offered');assert.equal((await read(B,id)).role,'assignee');assert.equal((await read(A,id)).role,'creator');
@@ -1314,6 +1370,16 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    const group=await agreement([A,B,C,D]),groupTask=await offer(D,A,group.agreementId);
    assert.equal((await post(C,'partnerRead',{taskId:groupTask})).status,404);assert.equal((await post(B,'partnerRead',{taskId:groupTask})).status,404);
    assert.equal((await move(A,'partnerAccept',groupTask)).status,200);assert.equal((await move(A,'partnerStart',groupTask)).status,200);assert.equal((await move(A,'partnerSubmit',groupTask,{note:'My own submission'})).status,200);assert.equal((await move(D,'partnerApprove',groupTask)).status,200);
+   await (async function verifyContextualStandingScope(){
+    const proposed=await post(D,'partnerPolicyPropose',{...Object.fromEntries(Object.entries(await offerBody(D,A,group.agreementId)).filter(([key])=>key!=='fields')),mode:'direct'});assert.equal(proposed.status,200);
+    const policy=(await post(A,'partnerPolicyList')).data.policies.find((p:any)=>p.policyId===proposed.data.policyId);assert.ok(policy);
+    assert.equal((await post(A,'partnerPolicyAccept',{policyId:policy.policyId,version:policy.version,epoch:policy.epoch,safetyVersion:policy.safetyVersion})).status,200);
+    assert.ok(!(await post(B,'partnerPolicyList')).data.policies.some((p:any)=>p.policyId===policy.policyId));
+    const assigned=await post(D,'partnerAssign',{...await offerBody(D,A,group.agreementId),policyId:policy.policyId,policyVersion:'2'});assert.equal(assigned.status,200);assert.equal((await read(A,assigned.data.taskId)).state,'assigned');assert.equal((await post(C,'partnerRead',{taskId:assigned.data.taskId})).status,404);
+    assert.equal((await post(D,'partnerAssign',{...await offerBody(D,B,group.agreementId),policyId:policy.policyId,policyVersion:'2'})).status,404);
+    assert.equal((await move(A,'partnerCancel',assigned.data.taskId)).status,200);
+    assert.equal((await post(A,'partnerPolicyRevoke',{policyId:policy.policyId,version:'2'})).status,200);
+   })();
    const rewardScope=await agreement([A,C],['reward']);assert.ok(!(await options(A)).some((c:any)=>c.agreementId===rewardScope.agreementId));
    const rejectedScope={...await offerBody(A,B),assigneeId:C.member,agreementId:rewardScope.agreementId,safetyVersion:(await db.owner.query('SELECT pactaris.partner_snapshot($1,$2,1) AS v',[home.householdId,rewardScope.agreementId])).rows[0].v};assert.equal((await post(A,'partnerOffer',rejectedScope)).data.code,'partner_paused');
    // Both actor and counterpart pause/re-consent cycles fence old progress packets.
@@ -1356,8 +1422,9 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    // Stop blocks protected review; cancellation and decline remain available.
    const refusal=await offer();assert.equal((await consent(A,'householdStop')).status,200);assert.equal((await read(A,atomicTask)).eligible,false);assert.equal((await move(A,'partnerApprove',atomicTask)).data.code,'partner_paused');assert.equal((await move(B,'partnerDecline',refusal)).status,200);
    assert.equal((await commands.execute(B.account.id,place,'leave',randomUUID(),undefined,B.member)).status,'left');assert.equal((await read(A,atomicTask)).state,'cancelled');
+   assert.equal((await db.owner.query('SELECT state FROM pactaris.assignment_policies WHERE id=$1',[departurePolicyId])).rows[0].state,'revoked');
    assert.ok((await read(A,atomicTask)).events.some((e:any)=>e.action==='membershipEnded'));
-   const rejoined=randomUUID();await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[home.householdId,rejoined,B.account.id]);await gatewayDb.owner.query('UPDATE pactaris.account_households SET membership_id=$1 WHERE household_id=$2 AND account_id=$3',[rejoined,home.householdId,B.account.id]);assert.equal((await post(B,'partnerRead',{taskId:atomicTask})).status,404);assert.equal((await post(B,'partnerList',{filter:'closed'})).data.tasks.length,0);
+   const rejoined=randomUUID();await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[home.householdId,rejoined,B.account.id]);await gatewayDb.owner.query('UPDATE pactaris.account_households SET membership_id=$1 WHERE household_id=$2 AND account_id=$3',[rejoined,home.householdId,B.account.id]);assert.equal((await post(B,'partnerRead',{taskId:atomicTask})).status,404);assert.equal((await post(B,'partnerList',{filter:'closed'})).data.tasks.length,0);assert.equal((await post(B,'partnerPolicyList')).data.policies.length,0);
   })();
 
   // Separate concurrent creation IDs are budgeted under the same account lock.
