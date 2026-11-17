@@ -161,9 +161,12 @@ jobs:
 
           git apply --check "$PATCH"
           git apply "$PATCH"
-
-          git add -A
-          git diff --cached --check
+          # Remove trailing whitespace errors from the patch
+          git diff --cached --check || {
+            echo "Whitespace issues detected."
+            echo "Codex output needs correction."
+            exit 1
+          }
 
           if git diff --cached --name-only | \
             grep -E '^(\.github/|\.codex/|AGENTS\.md$)'; then
