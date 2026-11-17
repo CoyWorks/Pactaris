@@ -83,3 +83,42 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 - Read docs/LOGIN_GATEWAY.md and docs/LOGIN_ROLLOUT.md before authentication, gateway, migration, delegation or setup changes. Gateway owns the browser session; no browser cookies or IdP tokens are passed to Instances. Keep per-request signed instance/household/method/path/purpose validation, replay rejection and live local membership/RLS enforcement.
 - Preserve separate non-owner runtime, schema-migration and read-only BYPASSRLS backup roles. Migration/backup credential files remain root-only and must never be copied into service-readable secrets.
 - The old direct-Instance OIDC blueprint is a historical test setup. The new pactaris-gateway blueprint is for fresh central clients; never reimport either over a working client without reviewing issuer/slug/callback/secret preservation.
+
+
+
+## Documentation discovery and usage
+
+Before implementing any GitHub issue or changing code:
+
+1. Always read `AGENTS.md` and `README.md`.
+2. Inventory the available Markdown documentation,
+   including files in `docs/` and relevant subdirectories.
+3. Identify documentation relevant to the requested
+   feature, affected components and dependencies.
+4. Read all relevant documents before making changes.
+   Do not rely only on filenames or summaries.
+5. Follow established architecture, product requirements,
+   security rules and development conventions.
+6. Prefer newer, explicitly confirmed decisions over
+   historical plans, while respecting higher-priority
+   project instructions.
+7. If documentation conflicts or is ambiguous, investigate
+   the related code, issues and decision history.
+   Do not silently invent requirements.
+8. Update relevant documentation when implementing
+   features, changing behavior or resolving outdated plans.
+9. In every pull request, include:
+   - Documentation consulted.
+   - Summary of implementation.
+   - Tests performed and results.
+   - Documentation updated.
+   - Remaining limitations or unresolved conflicts.
+10. Do not read unrelated documentation unnecessarily.
+    Select documents based on relevance to the task.
+
+The repository and its current documented decisions are
+the source of truth. Existing code must be inspected
+before changing behavior.
+
+Never weaken consent, privacy, authorization, tenant
+isolation or safety requirements to satisfy a task.
