@@ -51,7 +51,7 @@ BEGIN
 END $$;
 CREATE TRIGGER document_departure AFTER UPDATE OF status ON pactaris.memberships FOR EACH ROW EXECUTE FUNCTION pactaris.document_departure();
 REVOKE ALL ON FUNCTION pactaris.document_departure() FROM PUBLIC;
-CREATE FUNCTION pactaris.document_command(target uuid,instance uuid,actor uuid,operation uuid,action text,body jsonb,fingerprint text)
+CREATE FUNCTION pactaris.document_command(target uuid,instance uuid,actor uuid,operation uuid,action text,payload jsonb,fingerprint text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pactaris,pg_temp AS $$
 DECLARE h pactaris.households;m pactaris.memberships;d pactaris.documents;v pactaris.document_versions;receipt pactaris.document_receipts;
  answer jsonb;items jsonb;acks jsonb;fields jsonb;new_state text;recipient uuid;more_acks boolean:=false;next_cursor text;requested_version bigint;
@@ -61,32 +61,32 @@ BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended('pactaris.household.'||target::text,0));
  SELECT * INTO h FROM pactaris.households WHERE id=target AND instance_id=instance FOR UPDATE;
  IF NOT FOUND OR h.status='closed' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.denied';END IF;
- SELECT * INTO m FROM pactaris.memberships WHERE household_id=target AND account_id=actor AND status='active' AND id=(body->>'membershipId')::uuid;
+ SELECT * INTO m FROM pactaris.memberships WHERE household_id=target AND account_id=actor AND status='active' AND id=(payload->>'membershipId')::uuid;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.denied';END IF;
  SELECT * INTO receipt FROM pactaris.document_receipts WHERE operation_id=operation;
  IF FOUND THEN
   IF receipt.household_id<>target OR receipt.actor_membership_id<>m.id OR receipt.request_hash<>fingerprint THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.conflict';END IF;RETURN receipt.result;
  END IF;
  IF action='documentList' THEN
-  IF body->>'kind' IS NULL OR body->>'kind' NOT IN ('rule','protocol','note') OR body->>'filter' IS NULL OR body->>'filter' NOT IN ('active','archived') OR body->>'query' IS NULL OR char_length(body->>'query')>80 THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.invalid';END IF;
+  IF payload->>'kind' IS NULL OR payload->>'kind' NOT IN ('rule','protocol','note') OR payload->>'filter' IS NULL OR payload->>'filter' NOT IN ('active','archived') OR payload->>'query' IS NULL OR char_length(payload->>'query')>80 THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.invalid';END IF;
   SELECT coalesce(jsonb_agg(jsonb_build_object('documentId',x.id,'kind',x.kind,'title',x.title,'category',x.category,'position',x.position,'version',x.version::text,'state',x.state,'visibility',x.visibility,
    'canEdit',x.creator_membership_id=m.id,'creatorMembershipId',x.creator_membership_id,'acknowledged',EXISTS(SELECT 1 FROM pactaris.document_acknowledgements a WHERE a.household_id=target AND a.document_id=x.id AND a.version=x.version AND a.membership_id=m.id)) ORDER BY x.position,x.id),'[]'::jsonb) INTO items
    FROM (SELECT doc.*,dv.title,dv.category,dv.position,dv.visibility FROM pactaris.documents doc JOIN pactaris.document_versions dv ON dv.household_id=doc.household_id AND dv.document_id=doc.id AND dv.version=doc.version
-    WHERE doc.household_id=target AND doc.kind=body->>'kind' AND pactaris.document_visible(target,doc.id,m.id)
-     AND (CASE WHEN body->>'filter'='archived' THEN doc.state='archived' ELSE doc.state IN ('draft','published') END)
-     AND strpos(lower(dv.title||' '||dv.category||' '||dv.body),lower(body->>'query'))>0
-     AND (body->>'after' IS NULL OR (dv.position,doc.id)>(split_part(body->>'after',':',1)::int,split_part(body->>'after',':',2)::uuid)) ORDER BY dv.position,doc.id LIMIT 11) x;
+    WHERE doc.household_id=target AND doc.kind=payload->>'kind' AND pactaris.document_visible(target,doc.id,m.id)
+     AND (CASE WHEN payload->>'filter'='archived' THEN doc.state='archived' ELSE doc.state IN ('draft','published') END)
+     AND strpos(lower(dv.title||' '||dv.category||' '||dv.body),lower(payload->>'query'))>0
+     AND (payload->>'after' IS NULL OR (dv.position,doc.id)>(split_part(payload->>'after',':',1)::int,split_part(payload->>'after',':',2)::uuid)) ORDER BY dv.position,doc.id LIMIT 11) x;
   IF jsonb_array_length(items)=11 THEN next_cursor=(items->9->>'position')||':'||(items->9->>'documentId');items=items-10;END IF;
   RETURN jsonb_build_object('householdId',target,'operationId',operation,'actorMembershipId',m.id,'status','listed','documents',items,'nextCursor',next_cursor);
  END IF;
  IF action='documentCreate' THEN
-  IF body->>'kind' IS NULL OR body->>'kind' NOT IN ('rule','protocol','note') THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.invalid';END IF;
-  INSERT INTO pactaris.documents(household_id,id,creator_membership_id,kind) VALUES(target,operation,m.id,body->>'kind') RETURNING * INTO d;
+  IF payload->>'kind' IS NULL OR payload->>'kind' NOT IN ('rule','protocol','note') THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.invalid';END IF;
+  INSERT INTO pactaris.documents(household_id,id,creator_membership_id,kind) VALUES(target,operation,m.id,payload->>'kind') RETURNING * INTO d;
  ELSE
-  SELECT * INTO d FROM pactaris.documents WHERE household_id=target AND id=(body->>'documentId')::uuid;
+  SELECT * INTO d FROM pactaris.documents WHERE household_id=target AND id=(payload->>'documentId')::uuid;
   IF NOT FOUND OR NOT pactaris.document_visible(target,d.id,m.id) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.denied';END IF;
   IF action='documentRead' THEN
-   requested_version=coalesce((body->>'version')::bigint,d.version);
+   requested_version=coalesce((payload->>'version')::bigint,d.version);
    IF requested_version<>d.version AND d.creator_membership_id<>m.id THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.denied';END IF;
    SELECT * INTO v FROM pactaris.document_versions WHERE household_id=target AND document_id=d.id AND version=requested_version;
    IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.denied';END IF;
@@ -99,7 +99,7 @@ BEGIN
     'creatorMembershipId',d.creator_membership_id,'historical',v.version<>d.version,'acknowledged',EXISTS(SELECT 1 FROM pactaris.document_acknowledgements WHERE household_id=target AND document_id=d.id AND version=v.version AND membership_id=m.id),
     'acknowledgements',acks,'moreAcknowledgements',more_acks));
   END IF;
-  IF d.version::text IS DISTINCT FROM body->>'version' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.conflict';END IF;
+  IF d.version::text IS DISTINCT FROM payload->>'version' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.conflict';END IF;
   IF action='documentAcknowledge' THEN
    IF d.kind='note' OR d.state<>'published' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.conflict';END IF;
    INSERT INTO pactaris.document_acknowledgements(household_id,document_id,version,membership_id) VALUES(target,d.id,d.version,m.id) ON CONFLICT DO NOTHING;
@@ -123,7 +123,7 @@ BEGIN
   END IF;
  END IF;
  IF action IN ('documentCreate','documentUpdate') THEN
-  fields=body->'fields';
+  fields=payload->'fields';
   IF fields->>'title' IS NULL OR char_length(fields->>'title') NOT BETWEEN 1 AND 120 OR fields->>'body' IS NULL OR char_length(fields->>'body')>2000 OR fields->>'category' IS NULL OR char_length(fields->>'category')>60 OR
    (fields->>'position')::int NOT BETWEEN 0 AND 999999 OR fields->>'position' IS NULL OR fields->>'visibility' IS NULL OR fields->>'visibility' NOT IN ('private','participants','household') OR jsonb_typeof(fields->'recipients') IS DISTINCT FROM 'array' OR jsonb_array_length(fields->'recipients')>8 THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='library.invalid';END IF;
   IF fields->>'visibility'='participants' THEN

@@ -118,7 +118,7 @@
       "component": "instance",
       "id": "0010_library_notes",
       "path": "migrations/instance/0010_library_notes.sql",
-      "sha256": "820b2503b11eba677da9aa6a7d6cbf64e70f79b01a388b10fb20aff8170c2a5e",
+      "sha256": "a3172b51731827b17f2134a984b5e2c69eb81f4031d1ec875a0f4a39781335a2",
       "backwardCompatible": true
     }
   ]

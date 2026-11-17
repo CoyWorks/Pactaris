@@ -1004,7 +1004,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const libHome=await onboarding.create(libOwner.id,randomUUID(),'Solo library'),libPlacement=(await store.placement(libOwner.id,libHome.householdId))!,libDb=libPlacement.instanceId===ids[0]?a:b;
   const libMember=(await client.summary(libOwner.id,libPlacement))!.membershipId!,libBase='/api/households/'+libHome.householdId+'/library';
   const libPost=(action:string,input:Record<string,unknown>={},session=libSession)=>api(libBase+'/'+action,'POST',{operationId:randomUUID(),...input},session);
-  const libList=(kind='rule',session=libSession,extra:Record<string,unknown>={})=>libPost('documentList',{kind,filter:'active',query:'',...extra},session);
+  const libList=async(kind='rule',session=libSession,extra:Record<string,unknown>={})=>{const result=await libPost('documentList',{kind,filter:'active',query:'',...extra},session);assert.equal(result.status,200);return result;};
   const libRead=(documentId:string,session=libSession,version?:string)=>libPost('documentRead',{documentId,...(version?{version}:{})},session);
   const libFields={title:'Private protocol planning',body:'Private original wording\nSecond line',category:'Protocols',position:10,visibility:'private',recipients:[] as string[]};
   const ruleId=randomUUID(),noteId=randomUUID();
