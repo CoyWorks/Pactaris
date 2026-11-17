@@ -4,6 +4,8 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 
 ## Current scope
 
+- Instances may run across different LANs/providers. Follow docs/INSTANCE_MANAGER.md for the planned separate operator portal, minimal household inventory, authenticated cross-network connectivity and fenced migration; never expose Instance destinations to end users. Personal-first standalone relationships are later #71 scope.
+
 - One logical public product on OCI behind CloudPanel, with a manager and self-contained operator-managed instances. Each instance owns hosting, PostgreSQL, private storage, workers and backups and hosts multiple isolated households.
 - A household is a private dynamic space, not a family/residence model. Support pairs and groups, multiple simultaneous contextual roles and overlapping relations; no global Dom/sub enum or automatic all-to-all graph.
 - A person can be Dom to A and sub/bottom to B. Technical RBAC, dynamic role, standing, billing sponsorship and platform authority are separate.

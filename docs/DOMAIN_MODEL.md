@@ -78,3 +78,7 @@ Basic negotiation, limits, stop controls and aftercare check-ins are available f
 ## Verification
 
 Exercise every example above through the actual API and database. Add malformed cross-household references, unauthorized graph views, concurrent consent changes, pause during queued execution and free-plan role diversity to the test matrix.
+
+## Later personal-first relationship workspace
+
+Owner request, 17 November 2026: #71 will provide a standalone personal relationship/agreements view, without making household administration the primary experience. A household never implies an all-to-all graph. Personal views must aggregate only the current person's authorized relationships across private home Instances, preserving partner privacy, distinct contextual roles and explicit consent. Tenant/container creation and any independent relationship relocation require later design; do not duplicate records or add a second identity system. See [INSTANCE_MANAGER.md](INSTANCE_MANAGER.md). Owner-only household basics remain first.

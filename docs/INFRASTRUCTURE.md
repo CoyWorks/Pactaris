@@ -1,5 +1,7 @@
 # Managed instances and server manager
 
+**Distributed-network clarification — 17 November 2026:** Instances need not share a LAN. The planned platform-operator portal, cross-network connectivity, minimal household inventory and controlled relocation are specified in [INSTANCE_MANAGER.md](INSTANCE_MANAGER.md). End users remain on one canonical product origin; per-Instance browser origins in historical topology examples are superseded. Everyday household basics remain the current implementation priority.
+
 Status: architecture proposal, 16 November 2026. Requirements: independent app instances, each with its own hosting, database, files, worker and lifecycle; multiple isolated households per instance. This is infrastructure for the public hosted product, not a return to public self-hosted editions.
 
 ## Identity and Instance are separate applications
