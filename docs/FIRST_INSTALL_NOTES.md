@@ -91,3 +91,7 @@ Additive Instance 0010 introduces document versions, selected/current-household 
 ## Habits/check-ins checkpoint — 0.10.0-alpha.1
 
 Additive Instance 0011 adds private routine definitions/configuration revisions/progress/receipts/outbox and departure archival. Activate Instance before gateway through the preserving updater. Keep all existing migration checksums, data/config/secrets, separate runtime/migration/backup credentials and Identity issuer/client/flows/Brand/web certificate, domains, backend TLS and proxies. No new operator inputs are needed. Code fallback cannot recreate ended membership authority or roll back saved progress/schema. See [HABITS_CHECKINS.md](HABITS_CHECKINS.md).
+
+## Private reward catalog checkpoint — 0.11.0-alpha.1
+
+Additive Instance 0012 adds private catalog versions/receipts/outbox and exact-membership departure archival. Use the preserving updater with Instance before gateway. No new configuration, credentials, Identity issuer/client/flows/Brand/web certificate, TLS/proxy/domain changes are needed. Keep old migration checksums and separate runtime/migrator/backup roles. Preserve the production tsconfig/test separation and reduced-stack CI introduced by #72. See [REWARD_CATALOG.md](REWARD_CATALOG.md).

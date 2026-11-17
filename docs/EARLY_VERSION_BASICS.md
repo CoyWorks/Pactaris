@@ -53,3 +53,7 @@ Rules/protocols and personal notes now have an owner-only draft workflow, explic
 ## Habits/check-ins checkpoint — 0.10.0-alpha.1
 
 Private daily/weekly habits and daily/weekly/single-date ritual/check-in definitions now support drafts, explicit activation, personal progress, bounded history, saved configuration revisions and reversal. Owner-only setup needs no partner or agreement. See [HABITS_CHECKINS.md](HABITS_CHECKINS.md) for calendar/DST, safety, privacy and remaining #63/#19 criteria. Next: private reward catalog preparation #64.
+
+## Reward preparation checkpoint — 0.11.0-alpha.1
+
+The first #64 slice provides personal-private reward drafts with title/description/category/order, optional proposed point cost, saved versions, archive and restore. It works without partners, a balance or agreement and runs no reward/consequence. See [REWARD_CATALOG.md](REWARD_CATALOG.md). Next: partner task flow #17 and a reviewed sharing/redemption/ledger slice #64/#20; privacy/operations gates remain open.

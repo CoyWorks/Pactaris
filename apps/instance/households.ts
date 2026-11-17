@@ -1,3 +1,5 @@
+import {InstanceCatalog} from './catalog.js';
+import type {CatalogAction} from '../../packages/auth/catalog.js';
 import {InstanceRoutines} from './routines.js';
 import type {RoutineAction} from '../../packages/auth/routines.js';
 import {InstanceLibrary} from './library.js';
@@ -27,8 +29,9 @@ export class InstanceHouseholds {
   private consentService:InstanceConsent;
   private workspaceService:InstanceWorkspace;
   private libraryService:InstanceLibrary;
+  private catalogService:InstanceCatalog;
   private routineService:InstanceRoutines;
-  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new DelegationVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);this.members=new InstanceMembers(pool,config);this.relationships=new InstanceRelationships(pool,config);this.consentService=new InstanceConsent(pool,config);this.workspaceService=new InstanceWorkspace(pool,config);this.libraryService=new InstanceLibrary(pool,config);this.routineService=new InstanceRoutines(pool,config);}
+  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new DelegationVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);this.members=new InstanceMembers(pool,config);this.relationships=new InstanceRelationships(pool,config);this.consentService=new InstanceConsent(pool,config);this.workspaceService=new InstanceWorkspace(pool,config);this.libraryService=new InstanceLibrary(pool,config);this.routineService=new InstanceRoutines(pool,config);this.catalogService=new InstanceCatalog(pool,config);}
   command(token:string,householdId:string,action:HouseholdAction,body:Buffer){return this.commands.execute(token,householdId,action,body);}
   invitation(token:string,householdId:string,action:InvitationAction,body:Buffer){return this.invitations.execute(token,householdId,action,body);}
   membership(token:string,householdId:string,action:MembershipAction,body:Buffer){return this.members.execute(token,householdId,action,body);}
@@ -36,6 +39,7 @@ export class InstanceHouseholds {
   consent(token:string,householdId:string,action:ConsentAction,body:Buffer){return this.consentService.execute(token,householdId,action,body);}
   workspace(token:string,householdId:string,action:WorkspaceAction,body:Buffer){return this.workspaceService.execute(token,householdId,action,body);}
   library(token:string,householdId:string,action:LibraryAction,body:Buffer){return this.libraryService.execute(token,householdId,action,body);}
+  catalog(token:string,householdId:string,action:CatalogAction,body:Buffer){return this.catalogService.execute(token,householdId,action,body);}
   routine(token:string,householdId:string,action:RoutineAction,body:Buffer){return this.routineService.execute(token,householdId,action,body);}
   async summary(token:string,householdId:string) {
     const verified=await this.verifier.verify(token,householdId);

@@ -1,3 +1,4 @@
+import {GatewayCatalog} from '../apps/gateway/catalog.js';
 import {GatewayRoutines} from '../apps/gateway/routines.js';
 import {GatewayLibrary} from '../apps/gateway/library.js';
 import {GatewayWorkspace} from '../apps/gateway/workspace.js';
@@ -19,7 +20,7 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient } from '../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient,PrivateCatalogClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
@@ -185,7 +186,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const workspaceService=new GatewayWorkspace(store,client,new PrivateWorkspaceClient(signer));
   const libraryService=new GatewayLibrary(store,client,new PrivateLibraryClient(signer));
   const routineService=new GatewayRoutines(store,client,new PrivateRoutineClient(signer));
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService);
+  const catalogService=new GatewayCatalog(store,client,new PrivateCatalogClient(signer));
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -1211,6 +1213,68 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    assert.equal((await db.owner.query('SELECT state FROM pactaris.routines WHERE household_id=$1 AND id=$2',[home.householdId,habit])).rows[0].state,'archived');
    const rejoined=randomUUID();await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[home.householdId,rejoined,person.id]);
    assert.equal((await post('routineRead',{routineId:habit,day:null})).status,404);assert.equal((await api(base+'/routines','GET',undefined,session)).data.routines.length,0);
+  })();
+
+  await (async function verifyPrivateRewardCatalog(){
+   const account=await store.account('https://idp.fixture.invalid/','catalog-owner','Catalog owner'),session=randomBytes(32).toString('base64url');
+   await store.createSession(session,account,'registration-csrf',600,1200);
+   const home=await onboarding.create(account.id,randomUUID(),'Owner-only catalog'),place=(await store.placement(account.id,home.householdId))!,db=place.instanceId===ids[0]?a:b;
+   const member=(await client.summary(account.id,place))!.membershipId!,base='/api/households/'+home.householdId;
+   const post=(action:string,input:Record<string,unknown>={},actor=session)=>api(base+'/catalog/'+action,'POST',{operationId:randomUUID(),...input},actor);
+   const read=async(itemId:string,version?:string)=>{const r=await post('catalogRead',{itemId,...(version?{version}:{})});assert.equal(r.status,200,JSON.stringify(r.data));return r.data.item;};
+   const fields={title:'A private reward idea',description:'Personal wording\nSecond line',category:'Aftercare',points:null,position:0},id=randomUUID();
+   const created=await post('catalogCreate',{operationId:id,fields});assert.equal(created.status,200);assert.equal(created.data.itemId,id);assert.ok(!created.body.includes('instance'));assert.ok(!created.body.includes(fields.title));
+   assert.equal((await post('catalogCreate',{operationId:id,fields})).status,200);assert.equal((await post('catalogCreate',{operationId:id,fields:{...fields,points:0}})).status,409);
+   let d=await read(id);assert.equal(d.state,'draft');assert.equal(d.points,null);assert.equal(d.historical,false);
+   assert.equal((await post('catalogUpdate',{itemId:id,version:d.version,fields:{...fields,points:0}})).status,200);d=await read(id);assert.equal(d.points,0);assert.equal(d.version,'2');
+   assert.equal((await read(id,'1')).points,null);assert.equal((await read(id,'1')).historical,true);
+   assert.equal((await post('catalogUpdate',{itemId:id,version:'1',fields})).status,409);
+   assert.equal((await post('catalogUpdate',{itemId:id,version:d.version,fields:{...fields,points:1000000}})).status,200);d=await read(id);assert.equal(d.points,1000000);
+   for(const points of [-1,0.5,'10',1000001])assert.equal((await post('catalogUpdate',{itemId:id,version:d.version,fields:{...fields,points}})).status,400);
+   assert.equal((await post('catalogCreate',{fields,granted:true})).status,400);
+   assert.equal((await api(base+'/catalog/catalogCreate','POST',{operationId:randomUUID(),fields},session,{origin:'https://wrong.fixture.invalid'})).status,403);
+   const peer=await store.account('https://idp.fixture.invalid/','catalog-admin','Catalog admin'),peerSession=randomBytes(32).toString('base64url'),peerMember=randomUUID();
+   await store.createSession(peerSession,peer,'registration-csrf',600,1200);
+   await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role) VALUES($1,$2,$3,'active','admin')",[home.householdId,peerMember,peer.id]);
+   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id) VALUES($1,$2)',[peer.id,home.householdId]);
+   assert.equal((await post('catalogList',{filter:'current'},peerSession)).data.items.length,0);
+   for(const action of ['catalogRead','catalogUpdate','catalogArchive'])assert.equal((await post(action,{itemId:id,...(action==='catalogRead'?{}:{version:d.version}),...(action==='catalogUpdate'?{fields}:{})},peerSession)).status,404);
+   assert.equal((await post('catalogRead',{itemId:id,version:'1'},peerSession)).status,404);
+   assert.equal((await api('/api/households/'+households[1]+'/catalog/catalogRead','POST',{operationId:randomUUID(),itemId:id},session)).status,404);
+   assert.equal((await api(base+'/catalog/catalogRead','POST',{operationId:randomUUID(),itemId:id},'x'.repeat(43))).status,401);
+   // Private preparation remains available while stopped; no activity is executed.
+   assert.equal((await api(base+'/consent/selfPause','POST',{operationId:randomUUID()},session)).status,200);
+   assert.equal((await api(base+'/consent/householdStop','POST',{operationId:randomUUID()},session)).status,200);
+   const before=(await api(base+'/safety','GET',undefined,session)).data.state;
+   assert.equal((await post('catalogArchive',{itemId:id,version:d.version})).status,200);d=await read(id);assert.equal(d.state,'archived');
+   assert.equal((await post('catalogUpdate',{itemId:id,version:d.version,fields})).status,409);
+   assert.equal((await post('catalogList',{filter:'current'})).data.items.length,0);assert.equal((await post('catalogList',{filter:'archived'})).data.items.length,1);
+   assert.equal((await post('catalogRestore',{itemId:id,version:d.version})).status,200);d=await read(id);assert.equal(d.state,'draft');
+   const race=await Promise.all([post('catalogUpdate',{itemId:id,version:d.version,fields:{...fields,title:'Revision A'}}),post('catalogUpdate',{itemId:id,version:d.version,fields:{...fields,title:'Revision B'}})]);assert.deepEqual(race.map(r=>r.status).sort(),[200,409]);
+   assert.deepEqual((await api(base+'/safety','GET',undefined,session)).data.state,before);
+   // Bounded position/UUID pagination; no other creator's drafts enter the pages.
+   for(let position=1;position<=10;position++)assert.equal((await post('catalogCreate',{fields:{...fields,title:'Prepared reward '+position,position}})).status,200);
+   const page=await post('catalogList',{filter:'current'});assert.equal(page.data.items.length,10);assert.equal(page.data.items[0].itemId,id);assert.ok(page.data.nextCursor);
+   const next=await post('catalogList',{filter:'current',after:page.data.nextCursor});assert.equal(next.data.items.length,1);assert.equal(next.data.items[0].position,10);
+   assert.equal((await post('catalogList',{filter:'current',after:'-1:'+id})).status,400);
+   // Final outbox failure rolls back versions, audit, receipt and replay consumption.
+   d=await read(id);const op=randomUUID(),payload=Buffer.from(JSON.stringify({operationId:op,itemId:id,version:d.version,fields:{...fields,title:'Atomic correction'},membershipId:member})),handler=services[place.instanceId===ids[0]?0:1]!;
+   const token=await signer.signCommand(account.id,home.householdId,place.instanceId,'catalogUpdate',op,payload.toString());
+   await db.owner.query("CREATE FUNCTION pactaris.fixture_catalog_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture final catalog write'; END $$; CREATE TRIGGER fixture_catalog_failure BEFORE INSERT ON pactaris.catalog_outbox FOR EACH ROW EXECUTE FUNCTION pactaris.fixture_catalog_failure()");
+   await assert.rejects(handler.catalog(token,home.householdId,'catalogUpdate',payload));assert.equal((await read(id)).version,d.version);
+   for(const table of ['catalog_receipts','catalog_outbox'])assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.'+table+' WHERE operation_id=$1',[op])).rows[0].n,0);
+   assert.equal((await db.owner.query("SELECT count(*)::int n FROM pactaris.audit_events WHERE parameters->>'operationId'=$1",[op])).rows[0].n,0);
+   await db.owner.query('DROP TRIGGER fixture_catalog_failure ON pactaris.catalog_outbox; DROP FUNCTION pactaris.fixture_catalog_failure()');
+   assert.equal((await handler.catalog(token,home.householdId,'catalogUpdate',payload)).status,'applied');await assert.rejects(handler.catalog(token,home.householdId,'catalogUpdate',payload));assert.equal((await read(id)).title,'Atomic correction');
+   const wrong=await signer.signCommand(account.id,home.householdId,ids[place.instanceId===ids[0]?1:0]!,'catalogUpdate',op,payload.toString());await assert.rejects(handler.catalog(wrong,home.householdId,'catalogUpdate',payload));
+   for(const table of ['catalog_items','catalog_versions','catalog_receipts','catalog_outbox'])await assert.rejects(db.pool.query('SELECT * FROM pactaris.'+table),{code:'42501'});
+   const backup=new pg.Pool({connectionString:url(db.database,db.backup,'fixture-only-password'),max:1});pools.push(backup);assert.ok((await backup.query('SELECT * FROM pactaris.catalog_versions')).rowCount!>0);await assert.rejects(backup.query('DELETE FROM pactaris.catalog_versions'));
+   const audit=(await db.owner.query("SELECT parameters FROM pactaris.audit_events WHERE household_id=$1 AND event_key LIKE 'catalog.%'",[home.householdId])).rows;assert.ok(audit.length>0);assert.ok(audit.every(r=>Object.keys(r.parameters).join(',')==='operationId'));
+   // Departure snapshots archived state, and a new membership inherits no content/receipts.
+   assert.equal((await commands.execute(account.id,place,'leave',randomUUID(),undefined,member)).status,'left');
+   assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.catalog_items WHERE household_id=$1 AND state=\'draft\'',[home.householdId])).rows[0].n,0);
+   const rejoined=randomUUID();await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[home.householdId,rejoined,account.id]);
+   assert.equal((await post('catalogList',{filter:'archived'})).data.items.length,0);assert.equal((await post('catalogRead',{itemId:id})).status,404);assert.equal((await post('catalogCreate',{operationId:id,fields})).status,409);
   })();
 
   // Separate concurrent creation IDs are budgeted under the same account lock.
