@@ -27,6 +27,7 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 
 ## Development
 
+- Follow the efficient development and verification workflow in docs/DEVELOPMENT.md: targeted checks while editing, one full final verification for code changes, compact results, and repeat checks only when new evidence justifies them.
 - Before installer/update/resume, Identity bootstrap, credentials, TLS/proxy or public-routing edits, read docs/FIRST_INSTALL_NOTES.md and preserve its regression requirements. It records the first operator-observed deployment; do not repeat destructive bootstrap or confuse tooling/runtime revisions.
 - Propose a plan before large changes. Work in small buildable issues with clear acceptance criteria and dependencies.
 - Inspect existing code before proposing a port. Distinguish verified behavior from schema fields, prototypes and historical claims.

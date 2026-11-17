@@ -1,3 +1,17 @@
+# Efficient development and verification
+
+Use targeted checks during development, one full final verification for code changes, and compact results. Reduce repeated work and output without weakening authorization, privacy, database or safety coverage.
+
+- Read relevant files, functions and diffs first. Reuse established context; reread only when it is missing, has changed or is needed to verify an assumption.
+- Group related edits into a coherent, buildable change. Run the affected tests while editing; run the required full checks once before publishing that change. Use one CI checkpoint rather than publishing every small intermediate edit.
+- Save verbose command output to a temporary log. Report the command outcome, test counts and any material limits. On failure, inspect and share only the relevant error and surrounding context; expand the log only when diagnosis requires it. Never expose secrets or real user data.
+- Do not repeat passing checks without a relevant code/configuration change, a failure or a concrete unresolved concern. Documentation-only changes normally need diff and link review rather than application test suites. Required repository/CI gates still apply.
+- Keep meaningful real PostgreSQL, tenant-isolation, authorization, transaction and concurrency tests for changes that affect those behaviors. Token efficiency must not replace them with mocks or source-pattern assertions, or allow skipped integration tests to be reported as passed.
+- Match new tests to the risk and behavior being changed. Avoid tests that merely mirror implementation details or add no useful regression protection.
+- Keep progress and completion reports concise: what changed, what was verified, and what remains unverified. Avoid dumping full files, successful logs or previously established explanations.
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution requirements. The checkpoints below are historical and retain their original verification limits.
+
 # Current login slice — 0.2.0-alpha.1
 
 Read [LOGIN_GATEWAY.md](LOGIN_GATEWAY.md) and [LOGIN_ROLLOUT.md](LOGIN_ROLLOUT.md) for the central OIDC/session gateway, migration/backup roles and real-host rollout. The sections below describe the original 0.1 foundation checkpoint and its historical limits. Parent issues remain open for their wider criteria.
