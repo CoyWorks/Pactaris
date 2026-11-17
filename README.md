@@ -98,3 +98,5 @@ Installer/updater/status entry points now exist with a read-only plan default; h
 Alpha delivery order: [first six P0 blocks](docs/ALPHA_P0.md), starting with [membership history and retry fencing](docs/MEMBERSHIP_LIFECYCLE.md).
 
 Participant invitation rollout and proof requirements: [INVITATIONS.md](docs/INVITATIONS.md).
+
+Relationship proposals and contextual roles (0.6.0-alpha.1): see [RELATIONSHIPS.md](docs/RELATIONSHIPS.md) for individual acceptance, participant privacy, withdrawal and the remaining consent/safety limits.

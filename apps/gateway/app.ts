@@ -1,3 +1,5 @@
+import {isRelationshipAction,relationshipInput,RelationshipError} from '../../packages/auth/relationships.js';
+import type {GatewayRelationships} from './relationships.js';
 import express from 'express';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
@@ -26,7 +28,7 @@ export function cookie(req:express.Request,name:string):string|undefined {
 function setCookie(res:express.Response,name:string,value:string,seconds:number) {
   res.append('Set-Cookie',`${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${seconds}`);
 }
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -204,6 +206,26 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
      const result=await members.change(session.account.id,cookie(req,SESSION)!,req.params.householdId,map[action as keyof typeof map],input);
      res.status(result.status==='pending'?202:200).json(result);
     }catch(error){memberFailure(res,error);}
+  });
+  function relationshipFailure(res:express.Response,error:unknown){
+    const kind=error instanceof RelationshipError?error.kind:'unavailable';
+    res.status({invalid:400,denied:404,conflict:409,unavailable:503}[kind]).json({code:'relationship_'+kind,messageKey:('relationships.'+kind) as MessageKey});
+  }
+  app.get('/api/households/:householdId/relationships',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!uuid(req.params.householdId)||(req.query.after!==undefined&&!uuid(req.query.after))){relationshipFailure(res,new RelationshipError('invalid'));return;}
+    try{if(!relationships)throw new RelationshipError('unavailable');res.json(await relationships.list(session.account.id,req.params.householdId,req.query.after as string|undefined));}catch(error){relationshipFailure(res,error);}
+  });
+  app.post('/api/households/:householdId/relationships/:action',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    const action='relationship'+req.params.action.slice(0,1).toUpperCase()+req.params.action.slice(1);
+    try{
+      if(!uuid(req.params.householdId)||!isRelationshipAction(action)||action==='relationshipList')throw new RelationshipError('invalid');
+      const input=relationshipInput(action,req.body);
+      if(!await store.throttle('relationship:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+      if(!relationships)throw new RelationshipError('unavailable');res.json(await relationships.execute(session.account.id,req.params.householdId,action,input));
+    }catch(error){relationshipFailure(res,error);}
   });
   app.use('/api',(_req,res)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});});
   frontend(app,webRoot,['/','/households/:householdId','/join']);errors(app);return app;

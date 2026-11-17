@@ -1,5 +1,5 @@
 {
-  "version": "0.5.0-alpha.1",
+  "version": "0.6.0-alpha.1",
   "protocol": 2,
   "migrations": [
     {
@@ -91,6 +91,13 @@
       "id": "0006_member_administration",
       "path": "migrations/instance/0006_member_administration.sql",
       "sha256": "52969ecf825efa17630f87439189ca027085df4b0e2d36edaa2db3ea89fe0f87",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0007_relationships",
+      "path": "migrations/instance/0007_relationships.sql",
+      "sha256": "181cd11ca0c4eed615a9dd2531508854287df7e4284d1456119286e1da24d194",
       "backwardCompatible": true
     }
   ]

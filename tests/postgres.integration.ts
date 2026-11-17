@@ -1,3 +1,4 @@
+import {GatewayRelationships} from '../apps/gateway/relationships.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID,randomBytes } from 'node:crypto';
@@ -14,7 +15,7 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient } from '../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
@@ -175,7 +176,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const onboardingStore=new PgOnboardingStore(gatewayDb.pool,1,client),onboarding=new OnboardingService(onboardingStore,new PrivateCommandClient(signer));
   const inviteClient=new PrivateInvitationClient(signer),invites=new GatewayInvitations(gatewayDb.pool,store,client,inviteClient);
   const memberClient=new PrivateMemberClient(signer),memberService=new GatewayMembers(gatewayDb.pool,store,client,memberClient);
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService);
+  const relationshipClient=new PrivateRelationshipClient(signer),relationshipService=new GatewayRelationships(store,client,relationshipClient);
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -625,6 +627,109 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const memberBackup=new pg.Pool({connectionString:url(rollbackPair.component.database,rollbackPair.component.backup,'fixture-only-password'),max:1});pools.push(memberBackup);
   assert.ok((await memberBackup.query('SELECT * FROM pactaris.membership_endings')).rowCount!>=1);
   await assert.rejects(memberBackup.query('SELECT pactaris.member_command($1,$2,$3,$4,$5,$6,$7)',[rollbackPair.household.householdId,rollbackPair.placement.instanceId,rollbackPair.owner.id,randomUUID(),'memberList',{},'a'.repeat(64)]));
+  // Public graph workflow: four members, exact proposals, no inferred edges or admin visibility.
+  const graphOwner=await store.account('https://idp.fixture.invalid/','graph-owner','Global graph owner');
+  const graphSession=randomBytes(32).toString('base64url');await store.createSession(graphSession,graphOwner,'registration-csrf',600,1200);
+  const graphHome=await onboarding.create(graphOwner.id,randomUUID(),'Graph fixture');
+  const graphPlacement=(await store.placement(graphOwner.id,graphHome.householdId))!,graphDb=graphPlacement.instanceId===ids[0]?a:b;
+  const graphOwnerMember=(await client.summary(graphOwner.id,graphPlacement))!.membershipId!;
+  async function graphMember(label:string,role='participant'){
+   const account=await store.account('https://idp.fixture.invalid/','graph-'+label,'Global '+label),member=randomUUID(),session=randomBytes(32).toString('base64url');
+   await graphDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role,display_name) VALUES($1,$2,$3,'active',$4,$5)",[graphHome.householdId,member,account.id,role,label]);
+   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[account.id,graphHome.householdId,member]);
+   await store.createSession(session,account,'registration-csrf',600,1200);return {account,member,session};
+  }
+  const graphA=await graphMember('A'),graphB=await graphMember('B','admin'),graphC=await graphMember('C');
+  const graphPath='/api/households/'+graphHome.householdId+'/relationships';
+  const graphPost=(action:string,input:Record<string,unknown>,session=graphA.session)=>api(graphPath+'/'+action,'POST',{operationId:randomUUID(),...input},session);
+  const graphRole=(membershipId:string,label:string,counterpartMembershipId:string|null)=>({membershipId,label,counterpartMembershipId,context:'Negotiated fixture context'});
+  async function graphList(session:string){
+   let after:string|null=null;const all:any[]=[];
+   do{const page=await api(graphPath+(after?'?after='+after:''),'GET',undefined,session);assert.equal(page.status,200);assert.ok(page.data.relationships.length<=1);all.push(...page.data.relationships);after=page.data.nextCursor;}while(after);
+   return all;
+  }
+  async function proposeGraph(participants:string[],roles:unknown[],session=graphA.session,label='Private graph fixture'){
+   const operationId=randomUUID(),input={operationId,proposal:{label,scope:'Immutable described context',participants,roles}};
+   const result=await graphPost('propose',input,session);assert.equal(result.status,200);assert.equal(result.data.relationshipId,operationId);return {id:operationId,input};
+  }
+  const graphPair=await proposeGraph([graphA.member,graphC.member],[graphRole(graphA.member,'Dom',graphC.member),graphRole(graphC.member,'sub',graphA.member)]);
+  let pair=(await graphList(graphA.session))[0];assert.equal(pair.status,'proposed');assert.ok(pair.participants.every((p:any)=>p.decision==='pending'));
+  assert.deepEqual(await graphList(graphSession),[]);assert.deepEqual(await graphList(graphB.session),[]);
+  assert.equal((await graphPost('accept',{relationshipId:graphPair.id,version:'1'},graphSession)).status,404);
+  assert.equal((await graphPost('withdraw',{relationshipId:graphPair.id,version:'1'},graphB.session)).status,404);
+  assert.equal((await graphPost('accept',{relationshipId:graphPair.id,version:'2'})).status,400);
+  assert.equal((await graphPost('accept',{relationshipId:graphPair.id,version:'1',acceptedFor:graphC.member})).status,400);
+  assert.equal((await graphPost('accept',{relationshipId:graphPair.id,version:'1'},graphA.session)).status,200);
+  assert.equal((await graphList(graphC.session))[0].status,'proposed');
+  assert.equal((await graphPost('accept',{relationshipId:graphPair.id,version:'1'},graphC.session)).status,200);
+  pair=(await graphList(graphA.session))[0];assert.equal(pair.status,'active');
+  assert.ok(!JSON.stringify(pair).includes(graphA.account.id));assert.ok(!JSON.stringify(pair).includes('Global'));
+  assert.deepEqual(Object.keys(pair).sort(),['endReason','label','participants','relationshipId','roles','scope','status','version']);
+  assert.equal((await graphPost('propose',graphPair.input)).status,200);
+  assert.equal((await graphPost('propose',{...graphPair.input,proposal:{...graphPair.input.proposal,label:'Changed'}})).status,409);
+  const graphSwitch=await proposeGraph([graphA.member,graphB.member],[graphRole(graphA.member,'bottom',graphB.member),graphRole(graphB.member,'top',graphA.member)]);
+  const graphRomance=await proposeGraph([graphA.member,graphB.member],[],graphA.session,'Romantic partners');
+  for(const id of [graphSwitch.id,graphRomance.id])for(const session of [graphA.session,graphB.session])assert.equal((await graphPost('accept',{relationshipId:id,version:'1'},session)).status,200);
+  const graphSecondPair=await proposeGraph([graphOwnerMember,graphB.member],[graphRole(graphOwnerMember,'sub',graphB.member),graphRole(graphB.member,'Dom',graphOwnerMember)],graphSession);
+  for(const session of [graphSession,graphB.session])assert.equal((await graphPost('accept',{relationshipId:graphSecondPair.id,version:'1'},session)).status,200);
+  assert.equal((await graphList(graphC.session)).length,1);assert.equal((await graphList(graphA.session)).length,3);
+  assert.equal((await graphList(graphSession)).length,1);
+  assert.equal((await graphDb.owner.query('SELECT technical_role FROM pactaris.memberships WHERE household_id=$1 AND id=$2',[graphHome.householdId,graphB.member])).rows[0].technical_role,'admin');
+  assert.equal((await graphPost('propose',{proposal:{...graphPair.input.proposal,participants:[graphA.member,members[1]]}})).status,404);
+  assert.equal((await api('/api/households/'+households[2]+'/relationships','GET',undefined,graphA.session)).status,404);
+  assert.equal((await graphPost('propose',graphPair.input,graphA.session)).status,200);
+  assert.equal((await api(graphPath+'/withdraw','POST',{operationId:randomUUID(),relationshipId:graphPair.id,version:'1'},graphA.session,{origin:'https://wrong.fixture.invalid'})).status,403);
+  // A lost reply requires explicit same-operation retry; no private graph is stored centrally.
+  const lostGraphId=randomUUID(),lostGraphInput={operationId:lostGraphId,proposal:{label:'Lost reply fixture',scope:'',participants:[graphA.member,graphB.member],roles:[]}};
+  const unreliableGraph=new GatewayRelationships(store,client,{execute:async(...args)=>{await relationshipClient.execute(...args);throw Error('lost fixture reply');}});
+  await assert.rejects(unreliableGraph.execute(graphA.account.id,graphHome.householdId,'relationshipPropose',lostGraphInput));
+  assert.equal((await graphPost('propose',lostGraphInput)).status,200);
+  assert.equal((await graphDb.owner.query('SELECT count(*)::int AS n FROM pactaris.relationships WHERE id=$1',[lostGraphId])).rows[0].n,1);
+  // Any participant may decline/withdraw; household pause never blocks withdrawal or gets cleared.
+  const declined=await proposeGraph([graphA.member,graphB.member],[]);
+  assert.equal((await graphPost('decline',{relationshipId:declined.id,version:'1'},graphB.session)).status,200);
+  assert.equal((await graphPost('accept',{relationshipId:declined.id,version:'1'})).status,409);
+  await graphDb.owner.query("UPDATE pactaris.households SET status='paused',safety_version=safety_version+1 WHERE id=$1",[graphHome.householdId]);
+  assert.equal((await graphPost('withdraw',{relationshipId:graphPair.id,version:'1'},graphC.session)).status,200);
+  assert.equal((await graphPost('accept',{relationshipId:lostGraphId,version:'1'},graphB.session)).status,409);
+  assert.equal((await graphDb.owner.query('SELECT status FROM pactaris.households WHERE id=$1',[graphHome.householdId])).rows[0].status,'paused');
+  await graphDb.owner.query("UPDATE pactaris.households SET status='active' WHERE id=$1",[graphHome.householdId]);
+  const racingGraph=await proposeGraph([graphA.member,graphB.member],[]);
+  assert.equal((await graphPost('accept',{relationshipId:racingGraph.id,version:'1'})).status,200);
+  const graphRaces=await Promise.all([graphPost('accept',{relationshipId:racingGraph.id,version:'1'},graphB.session),graphPost('withdraw',{relationshipId:racingGraph.id,version:'1'})]);
+  assert.ok([200,409].includes(graphRaces[0]!.status));assert.equal(graphRaces[1]!.status,200);
+  assert.equal((await graphDb.owner.query('SELECT status FROM pactaris.relationships WHERE id=$1',[racingGraph.id])).rows[0].status,'ended');
+  // All four accept their own group roles; no pairwise graph is synthesized.
+  const group=await proposeGraph([graphOwnerMember,graphA.member,graphB.member,graphC.member],[graphRole(graphA.member,'Dom',graphC.member),graphRole(graphB.member,'Dom',graphOwnerMember)]);
+  for(const session of [graphSession,graphA.session,graphB.session,graphC.session])assert.equal((await graphPost('accept',{relationshipId:group.id,version:'1'},session)).status,200);
+  assert.equal((await graphDb.owner.query('SELECT count(*)::int AS n FROM pactaris.relationship_roles WHERE relationship_id=$1',[group.id])).rows[0].n,2);
+  // Removing a precise membership ends pending/active relationships; a rejoin cannot read or replay the old generation.
+  assert.equal((await api('/api/households/'+graphHome.householdId+'/members/remove','POST',{operationId:randomUUID(),targetMembershipId:graphC.member},graphSession)).status,200);
+  assert.equal((await graphDb.owner.query('SELECT status,end_reason FROM pactaris.relationships WHERE id=$1',[group.id])).rows[0].end_reason,'membershipEnded');
+  const rejoinedGraphMember=randomUUID();await graphDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[graphHome.householdId,rejoinedGraphMember,graphC.account.id]);
+  await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[graphC.account.id,graphHome.householdId,rejoinedGraphMember]);
+  assert.deepEqual(await graphList(graphC.session),[]);
+  assert.equal((await graphPost('accept',{relationshipId:group.id,version:'1'},graphC.session)).status,404);
+  // A failed final outbox insert rolls back domain, roles, audit, receipt and replay marker together.
+  const atomicId=randomUUID(),atomicBody=Buffer.from(JSON.stringify({operationId:atomicId,membershipId:graphA.member,proposal:{label:'Atomic fixture',scope:'',participants:[graphA.member,graphB.member],roles:[graphRole(graphA.member,'bottom',graphB.member)]}}));
+  const graphHandler=services[graphPlacement.instanceId===ids[0]?0:1]!,packet=await signer.signCommand(graphA.account.id,graphHome.householdId,graphPlacement.instanceId,'relationshipPropose',atomicId,atomicBody.toString());
+  await graphDb.owner.query("CREATE FUNCTION pactaris.fixture_graph_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture final write'; END $$; CREATE TRIGGER fixture_graph_failure BEFORE INSERT ON pactaris.relationship_outbox FOR EACH ROW EXECUTE FUNCTION pactaris.fixture_graph_failure()");
+  await assert.rejects(graphHandler.relationship(packet,graphHome.householdId,'relationshipPropose',atomicBody));
+  for(const table of ['relationship_receipts','relationship_outbox'])assert.equal((await graphDb.owner.query('SELECT count(*)::int AS n FROM pactaris.'+table+' WHERE operation_id=$1',[atomicId])).rows[0].n,0);
+  assert.equal((await graphDb.owner.query('SELECT count(*)::int AS n FROM pactaris.relationships WHERE id=$1',[atomicId])).rows[0].n,0);
+  assert.equal((await graphDb.owner.query("SELECT count(*)::int AS n FROM pactaris.audit_events WHERE parameters->>'operationId'=$1",[atomicId])).rows[0].n,0);
+  const graphJti=JSON.parse(Buffer.from(packet.split('.')[1]!,'base64url').toString()).jti;
+  assert.equal((await graphDb.owner.query('SELECT count(*)::int AS n FROM pactaris.delegation_uses WHERE jti=$1',[graphJti])).rows[0].n,0);
+  await graphDb.owner.query('DROP TRIGGER fixture_graph_failure ON pactaris.relationship_outbox; DROP FUNCTION pactaris.fixture_graph_failure()');
+  assert.equal((await graphHandler.relationship(packet,graphHome.householdId,'relationshipPropose',atomicBody)).status,'applied');
+  await assert.rejects(graphHandler.relationship(packet,graphHome.householdId,'relationshipPropose',atomicBody));
+  await assert.rejects(graphHandler.relationship(await signer.sign(graphA.account.id,graphHome.householdId,graphPlacement.instanceId),graphHome.householdId,'relationshipPropose',atomicBody));
+  await assert.rejects(graphDb.pool.query('SELECT * FROM pactaris.relationships'));
+  await assert.rejects(graphDb.pool.query("UPDATE pactaris.relationships SET status='active' WHERE id=$1",[declined.id]));
+  const graphBackup=new pg.Pool({connectionString:url(graphDb.database,graphDb.backup,'fixture-only-password'),max:1});pools.push(graphBackup);
+  assert.ok((await graphBackup.query('SELECT * FROM pactaris.relationship_receipts')).rowCount!>0);
+  await assert.rejects(graphBackup.query('SELECT pactaris.relationship_command($1,$2,$3,$4,$5,$6,$7)',[graphHome.householdId,graphPlacement.instanceId,graphA.account.id,randomUUID(),'relationshipList',{},'a'.repeat(64)]));
+
   // Separate concurrent creation IDs are budgeted under the same account lock.
   const racer=await store.account('https://idp.fixture.invalid/','registration-racer','Racer fixture');await store.createSession('s'.repeat(43),racer,'registration-csrf',60,120);
   const races=await Promise.all(Array.from({length:4},()=>api('/api/households','POST',{operationId:randomUUID(),name:'Race fixture'},'s'.repeat(43))));

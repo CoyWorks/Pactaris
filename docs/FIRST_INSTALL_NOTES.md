@@ -69,3 +69,7 @@ The owner explicitly requested that update.sh fetch current main and update inst
 A future change must retain the protections above or document and test an intentional replacement. Link new regressions/fixes back to this record and the relevant issue. Preserve the distinction between locally tested code, operator-observed host behavior and planned automation. Never re-run destructive bootstrap or rewrite active deployment values merely because an example/default changed.
 
 See [RECOVERY.md](RECOVERY.md), [FRESH_SERVER.md](FRESH_SERVER.md), [IDENTITY_OIDC.md](IDENTITY_OIDC.md) and [INSTALLER_EXPERIENCE.md](INSTALLER_EXPERIENCE.md).
+
+## Relationship migration checkpoint — 0.6.0-alpha.1
+
+The additive Instance 0007 relationship migration preserves historical scaffold rows without exposing or accepting them. The preserving updater must activate the Instance before the gateway. No Identity configuration, issuer/client/Brand/web certificate, credentials, backend TLS or proxy changes are required. Database fallback is not a consent/relationship rollback; ended memberships/relationships must never be restored by application fallback. Runtime receives only the narrow relationship command grant; backup remains read-only and separately protected. Native CI and live operator/mobile acceptance remain distinct evidence. See [RELATIONSHIPS.md](RELATIONSHIPS.md).
