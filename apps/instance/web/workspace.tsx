@@ -1,3 +1,4 @@
+import {LibraryPanel} from './library.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {TaskDetail,TaskFields,TaskSummary,WorkspaceResult} from '../../../packages/auth/workspace.js';
@@ -5,9 +6,9 @@ import {SafetyProvider} from './consent.js';
 import {Relationships} from './relationships.js';
 import {InvitationManager} from './invitations.js';
 import {MemberAdministration} from './members.js';
-type View='home'|'tasks'|'members'|'settings'|'relationships'|'safety';
+type View='home'|'rules'|'notes'|'tasks'|'members'|'settings'|'relationships'|'safety';
 type Draft={action:string;body:Record<string,unknown>};
-const labels:Record<View,MessageKey>={home:'workspace.home',tasks:'workspace.tasks',members:'workspace.members',settings:'workspace.settings',relationships:'workspace.relationships',safety:'workspace.safety'};
+const labels:Record<View,MessageKey>={home:'workspace.home',tasks:'workspace.tasks',rules:'library.guidance',notes:'library.notes',members:'workspace.members',settings:'workspace.settings',relationships:'workspace.relationships',safety:'workspace.safety'};
 const priorities:Record<TaskFields['priority'],MessageKey>={low:'workspace.priorityLow',normal:'workspace.priorityNormal',high:'workspace.priorityHigh'};
 const filters:Record<string,MessageKey>={open:'workspace.open',done:'workspace.done',archived:'workspace.archived'};
 const errorKey=(key:unknown):MessageKey=>(['workspace.invalid','workspace.denied','workspace.conflict','workspace.capacity','workspace.paused','workspace.unavailable','errors.rateLimited','errors.request'] as unknown[]).includes(key)?key as MessageKey:'workspace.unavailable';
@@ -62,6 +63,7 @@ export function HouseholdWorkspace({householdId,session,language,format,onLeave,
      </div></li>)}</ul>
     {data.nextCursor&&<button type="button" disabled={busy} onClick={()=>setCursor(data.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}
    </section>}
+   {(view==='rules'||view==='notes')&&h&&<LibraryPanel key={view} householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} section={view==='notes'?'notes':'guidance'}/>}
    {view==='members'&&h&&<><InvitationManager householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone}/><MemberAdministration householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone}/></>}
    {view==='relationships'&&h&&<Relationships householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone}/>}
    {view==='settings'&&h&&<section><h2>{t('workspace.settings')}</h2>{h.canEdit?<form onSubmit={e=>{e.preventDefault();const current=settings??{name:h.name,timeZone:h.timeZone,version:h.version};void change('settingsUpdate',{...current,name:current.name.trim(),timeZone:current.timeZone.trim()});}}>

@@ -1,5 +1,5 @@
 {
-  "version": "0.8.0-alpha.1",
+  "version": "0.9.0-alpha.1",
   "protocol": 2,
   "migrations": [
     {
@@ -112,6 +112,13 @@
       "id": "0009_workspace_tasks",
       "path": "migrations/instance/0009_workspace_tasks.sql",
       "sha256": "1138ce842fe4b8de5de4017164279274edf920ebd10372e75347d8a7dc3e6412",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0010_library_notes",
+      "path": "migrations/instance/0010_library_notes.sql",
+      "sha256": "820b2503b11eba677da9aa6a7d6cbf64e70f79b01a388b10fb20aff8170c2a5e",
       "backwardCompatible": true
     }
   ]

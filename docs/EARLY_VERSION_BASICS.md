@@ -45,3 +45,7 @@ With one fresh account and no invitations: create household; edit its name/timez
 ## First everyday checkpoint — 0.8.0-alpha.1
 
 The owner-only dashboard/navigation, name/timezone settings and private unassigned/self-directed task workflow are implemented in this checkpoint. Contract, safety/quotas, tests and explicit limits: [WORKSPACE_TASKS.md](WORKSPACE_TASKS.md). Partner assignment/review, shared boards, recurrence, uploads and rewards remain open. Next everyday modules are the rules/protocol library (#16), then private notes (#66). Source/CI completion is not live operator/mobile acceptance.
+
+## Library/notes checkpoint — 0.9.0-alpha.1
+
+Rules/protocols and personal notes now have an owner-only draft workflow, explicit current-audience publication, saved versions, categories/order/search and archival. Rules/protocol acknowledgement is exact-version and distinct from consent; note text deletion is live-Instance only. Contract and remaining scope: [LIBRARY_NOTES.md](LIBRARY_NOTES.md). Next: basic habits (#63) and ritual/check-in definitions (#19), then reward catalog preparation (#64). Broader task sharing, export/retention/restore and live mobile acceptance remain gates.

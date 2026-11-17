@@ -1,3 +1,4 @@
+import {GatewayLibrary} from '../apps/gateway/library.js';
 import {GatewayWorkspace} from '../apps/gateway/workspace.js';
 import {GatewayConsent} from '../apps/gateway/consent.js';
 import {GatewayRelationships} from '../apps/gateway/relationships.js';
@@ -17,7 +18,7 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient } from '../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
@@ -181,7 +182,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const relationshipClient=new PrivateRelationshipClient(signer),relationshipService=new GatewayRelationships(store,client,relationshipClient);
   const consentService=new GatewayConsent(store,client,new PrivateConsentClient(signer));
   const workspaceService=new GatewayWorkspace(store,client,new PrivateWorkspaceClient(signer));
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService);
+  const libraryService=new GatewayLibrary(store,client,new PrivateLibraryClient(signer));
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -994,6 +996,120 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const rejoined=randomUUID();await wsDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[wsHome.householdId,rejoined,wsOwner.id]);
   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[wsOwner.id,wsHome.householdId,rejoined]);
   assert.deepEqual((await wsRead()).data.tasks,[]);assert.equal((await wsPost('taskRead',{taskId:atomicId})).status,404);assert.equal((await wsPost('taskCreate',createBody)).status,409);
+  }
+
+  {
+  const libOwner=await store.account('https://idp.fixture.invalid/','library-owner','Library owner'),libSession=randomBytes(32).toString('base64url');
+  await store.createSession(libSession,libOwner,'registration-csrf',600,1200);
+  const libHome=await onboarding.create(libOwner.id,randomUUID(),'Solo library'),libPlacement=(await store.placement(libOwner.id,libHome.householdId))!,libDb=libPlacement.instanceId===ids[0]?a:b;
+  const libMember=(await client.summary(libOwner.id,libPlacement))!.membershipId!,libBase='/api/households/'+libHome.householdId+'/library';
+  const libPost=(action:string,input:Record<string,unknown>={},session=libSession)=>api(libBase+'/'+action,'POST',{operationId:randomUUID(),...input},session);
+  const libList=(kind='rule',session=libSession,extra:Record<string,unknown>={})=>libPost('documentList',{kind,filter:'active',query:'',...extra},session);
+  const libRead=(documentId:string,session=libSession,version?:string)=>libPost('documentRead',{documentId,...(version?{version}:{})},session);
+  const libFields={title:'Private protocol planning',body:'Private original wording\nSecond line',category:'Protocols',position:10,visibility:'private',recipients:[] as string[]};
+  const ruleId=randomUUID(),noteId=randomUUID();
+  assert.equal((await libPost('documentCreate',{operationId:ruleId,kind:'rule',fields:libFields})).status,200);
+  assert.equal((await libPost('documentCreate',{operationId:ruleId,kind:'rule',fields:libFields})).status,200);
+  assert.equal((await libPost('documentCreate',{operationId:ruleId,kind:'rule',fields:{...libFields,title:'Conflicting copy'}})).status,409);
+  assert.equal((await libPost('documentCreate',{operationId:noteId,kind:'note',fields:{...libFields,title:'Private note'}})).status,200);
+  assert.equal((await libList()).data.documents.length,1);assert.equal((await libList('note')).data.documents.length,1);
+  assert.equal((await libDb.owner.query('SELECT count(*)::int AS n FROM pactaris.relationships WHERE household_id=$1',[libHome.householdId])).rows[0].n,0);
+  assert.ok(!(await libList()).body.includes(libFields.body));assert.ok(!(await libList()).body.includes(libOwner.id));
+  assert.equal((await libRead(ruleId)).data.document.body,libFields.body);
+  assert.equal((await libPost('documentAcknowledge',{documentId:ruleId,version:'1'})).status,409);
+  assert.equal((await libPost('documentPublish',{documentId:ruleId,version:'1'})).status,200);
+  async function libOther(label:string,role:string){
+   const account=await store.account('https://idp.fixture.invalid/','library-'+label,'Other library'),member=randomUUID(),session=randomBytes(32).toString('base64url');
+   await libDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role) VALUES($1,$2,$3,'active',$4)",[libHome.householdId,member,account.id,role]);
+   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[account.id,libHome.householdId,member]);await store.createSession(session,account,'registration-csrf',600,1200);return {account,member,session};
+  }
+  const libAdmin=await libOther('admin','admin'),libPeer=await libOther('peer','participant');
+  for(const session of [libAdmin.session,libPeer.session]){
+   assert.deepEqual((await libList('rule',session)).data.documents,[]);assert.equal((await libRead(ruleId,session)).status,404);assert.equal((await libRead(noteId,session)).status,404);
+   assert.deepEqual((await libList('rule',session,{query:'Private original'})).data.documents,[]);
+  }
+  assert.equal((await libPost('documentUpdate',{documentId:noteId,version:'1',fields:libFields},libAdmin.session)).status,404);
+  // A selected-member publication never exposes older author-only snapshots.
+  const selected={...libFields,title:'Selected guidance',body:'Selected published text',visibility:'participants',recipients:[libAdmin.member.toUpperCase()]};
+  assert.equal((await libPost('documentUpdate',{documentId:ruleId,version:'2',fields:selected})).status,200);
+  assert.equal((await libPost('documentPublish',{documentId:ruleId,version:'3'})).status,200);
+  assert.equal((await libRead(ruleId,libAdmin.session)).data.document.body,selected.body);assert.equal((await libRead(ruleId,libPeer.session)).status,404);
+  assert.equal((await libRead(ruleId,libAdmin.session,'1')).status,404);assert.equal((await libRead(ruleId,libSession,'1')).data.document.body,libFields.body);
+  assert.deepEqual((await libRead(ruleId,libAdmin.session)).data.document.recipients,[]);
+  const ackId=randomUUID();assert.equal((await libPost('documentAcknowledge',{operationId:ackId,documentId:ruleId,version:'4'},libAdmin.session)).status,200);
+  assert.equal((await libPost('documentAcknowledge',{operationId:ackId,documentId:ruleId,version:'4'},libAdmin.session)).status,200);
+  assert.equal((await libRead(ruleId)).data.document.acknowledgements.length,1);assert.equal((await libRead(ruleId,libAdmin.session)).data.document.acknowledged,true);
+  assert.equal((await libPost('documentAcknowledge',{documentId:ruleId,version:'4',membershipId:libPeer.member},libAdmin.session)).status,400);
+  assert.equal((await libPost('documentUpdate',{documentId:ruleId,version:'4',fields:selected},libAdmin.session)).status,404);
+  const householdFields={...libFields,title:'Shared current guidance',body:'New household wording',visibility:'household'};
+  assert.equal((await libPost('documentUpdate',{documentId:ruleId,version:'4',fields:householdFields})).status,200);
+  assert.equal((await libRead(ruleId,libAdmin.session)).status,404);
+  assert.equal((await libPost('documentAcknowledge',{documentId:ruleId,version:'4'},libAdmin.session)).status,404);
+  assert.equal((await libPost('documentPublish',{documentId:ruleId,version:'5'})).status,200);
+  assert.equal((await libRead(ruleId,libPeer.session)).status,200);assert.equal((await libRead(ruleId,libAdmin.session)).data.document.acknowledged,false);
+  assert.equal((await libRead(ruleId,libSession,'4')).data.document.acknowledgements[0].membershipId,libAdmin.member);
+  assert.equal((await libPost('documentDelete',{documentId:ruleId,version:'6'})).status,404);
+  const protocol=randomUUID();assert.equal((await libPost('documentCreate',{operationId:protocol,kind:'protocol',fields:libFields})).status,200);assert.equal((await libList('protocol')).data.documents[0].documentId,protocol);
+  // Notes share explicitly, cannot be acknowledged and physically delete their saved text versions locally.
+  assert.equal((await libPost('documentUpdate',{documentId:noteId,version:'1',fields:selected})).status,200);
+  assert.equal((await libPost('documentPublish',{documentId:noteId,version:'2'})).status,200);assert.equal((await libRead(noteId,libAdmin.session)).status,200);
+  assert.equal((await libPost('documentAcknowledge',{documentId:noteId,version:'3'},libAdmin.session)).status,409);
+  assert.equal((await libPost('documentDelete',{documentId:noteId,version:'3'})).status,200);
+  assert.equal((await libRead(noteId)).status,404);assert.equal((await libRead(noteId,libAdmin.session)).status,404);
+  assert.equal((await libDb.owner.query('SELECT count(*)::int AS n FROM pactaris.document_versions WHERE document_id=$1',[noteId])).rows[0].n,0);
+  assert.equal((await libPost('documentCreate',{operationId:noteId,kind:'note',fields:{...libFields,title:'Private note'}})).status,200);
+  assert.equal((await libDb.owner.query('SELECT state FROM pactaris.documents WHERE id=$1',[noteId])).rows[0].state,'deleted');
+  // Ordered bounded pagination and search inspect only visible current bodies, never private historical text.
+  for(let i=0;i<11;i++)assert.equal((await libPost('documentCreate',{kind:'note',fields:{...libFields,title:'Idea '+i,position:i,category:'Ideas'}})).status,200);
+  const page=await libList('note');assert.equal(page.data.documents.length,10);assert.ok(page.data.nextCursor);assert.equal(page.data.documents[0].position,0);
+  const page2=await libList('note',libSession,{after:page.data.nextCursor});assert.equal(page2.data.documents.length,1);assert.equal(page2.data.documents[0].position,10);
+  assert.deepEqual((await libList('note',libAdmin.session,{query:'Ideas'})).data.documents,[]);
+  assert.equal((await libList('rule',libPeer.session,{query:'New household wording'})).data.documents[0].documentId,ruleId);
+  assert.deepEqual((await libList('rule',libPeer.session,{query:'Private original wording'})).data.documents,[]);
+  assert.equal((await api(libBase+'?kind=note&query=secret','GET',undefined,libSession)).status,400);
+  assert.equal((await api('/api/households/'+households[2]+'/library','GET',undefined,libSession)).status,404);
+  assert.equal((await libPost('documentCreate',{kind:'rule',fields:{...selected,recipients:[members[1]]}})).status,404);
+  assert.equal((await api(libBase+'/documentCreate','POST',{operationId:randomUUID(),kind:'note',fields:libFields},libSession,{origin:'https://wrong.fixture.invalid'})).status,403);
+  await assert.rejects(new PrivateLibraryClient(signer).execute(libOwner.id,{...libPlacement,instanceId:libPlacement.instanceId===ids[0]?ids[1]!:ids[0]!},'documentList',{operationId:randomUUID(),membershipId:libMember,kind:'note',filter:'active',query:''}));
+  // Archive/restore and racing publication cannot revive a superseded revision or carry acknowledgement forward.
+  assert.equal((await libPost('documentArchive',{documentId:ruleId,version:'6'})).status,200);assert.equal((await libRead(ruleId,libPeer.session)).status,404);
+  assert.equal((await libPost('documentAcknowledge',{documentId:ruleId,version:'6'},libPeer.session)).status,404);
+  assert.equal((await libPost('documentRestore',{documentId:ruleId,version:'7'})).status,200);assert.equal((await libRead(ruleId)).data.document.state,'draft');assert.equal((await libRead(ruleId,libPeer.session)).status,404);
+  assert.equal((await libPost('documentPublish',{documentId:ruleId,version:'8'})).status,200);
+  const concurrent=await Promise.all([libPost('documentAcknowledge',{documentId:ruleId,version:'9'},libAdmin.session),libPost('documentUpdate',{documentId:ruleId,version:'9',fields:householdFields})]);
+  assert.ok([200,404].includes(concurrent[0]!.status));assert.equal(concurrent[1]!.status,200);assert.equal((await libRead(ruleId)).data.document.state,'draft');
+  const raceDoc=randomUUID();assert.equal((await libPost('documentCreate',{operationId:raceDoc,kind:'rule',fields:householdFields})).status,200);
+  const publication=await Promise.all([libPost('documentPublish',{documentId:raceDoc,version:'1'}),libPost('documentArchive',{documentId:raceDoc,version:'1'})]);
+  assert.equal(publication.filter(r=>r.status===200).length,1);assert.equal(publication.filter(r=>r.status===409).length,1);assert.equal((await libPost('documentPublish',{documentId:raceDoc,version:'1'})).status,409);
+  // Exact selected membership sharing is not inherited by a replacement membership.
+  const generationDoc=randomUUID();assert.equal((await libPost('documentCreate',{operationId:generationDoc,kind:'protocol',fields:selected})).status,200);assert.equal((await libPost('documentPublish',{documentId:generationDoc,version:'1'})).status,200);
+  assert.equal((await api('/api/households/'+libHome.householdId+'/leave','POST',{operationId:randomUUID()},libAdmin.session)).status,200);
+  const newAdmin=randomUUID();await libDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role) VALUES($1,$2,$3,'active','admin')",[libHome.householdId,newAdmin,libAdmin.account.id]);
+  await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[libAdmin.account.id,libHome.householdId,newAdmin]);
+  assert.equal((await libRead(generationDoc,libAdmin.session)).status,404);
+  assert.equal((await libPost('documentUpdate',{documentId:generationDoc,version:'2',fields:{...selected,title:'Stale recipient'}})).status,404);
+  // A failed final outbox insert rolls deletion back, including saved text and replay marker.
+  const deleteDoc=randomUUID();assert.equal((await libPost('documentCreate',{operationId:deleteDoc,kind:'note',fields:libFields})).status,200);
+  const deleteId=randomUUID(),deleteBody=Buffer.from(JSON.stringify({operationId:deleteId,membershipId:libMember,documentId:deleteDoc,version:'1'})),handler=services[libPlacement.instanceId===ids[0]?0:1]!;
+  const packet=await signer.signCommand(libOwner.id,libHome.householdId,libPlacement.instanceId,'documentDelete',deleteId,deleteBody.toString());
+  await libDb.owner.query("CREATE FUNCTION pactaris.fixture_library_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture final library write'; END $$; CREATE TRIGGER fixture_library_failure BEFORE INSERT ON pactaris.document_outbox FOR EACH ROW EXECUTE FUNCTION pactaris.fixture_library_failure()");
+  await assert.rejects(handler.library(packet,libHome.householdId,'documentDelete',deleteBody));assert.equal((await libRead(deleteDoc)).data.document.body,libFields.body);
+  for(const table of ['document_receipts','document_outbox'])assert.equal((await libDb.owner.query('SELECT count(*)::int AS n FROM pactaris.'+table+' WHERE operation_id=$1',[deleteId])).rows[0].n,0);
+  assert.equal((await libDb.owner.query("SELECT count(*)::int AS n FROM pactaris.audit_events WHERE parameters->>'operationId'=$1",[deleteId])).rows[0].n,0);
+  const jti=JSON.parse(Buffer.from(packet.split('.')[1]!,'base64url').toString()).jti;assert.equal((await libDb.owner.query('SELECT count(*)::int AS n FROM pactaris.delegation_uses WHERE jti=$1',[jti])).rows[0].n,0);
+  await libDb.owner.query('DROP TRIGGER fixture_library_failure ON pactaris.document_outbox; DROP FUNCTION pactaris.fixture_library_failure()');
+  assert.equal((await handler.library(packet,libHome.householdId,'documentDelete',deleteBody)).status,'applied');await assert.rejects(handler.library(packet,libHome.householdId,'documentDelete',deleteBody));
+  assert.equal((await libDb.owner.query('SELECT count(*)::int AS n FROM pactaris.document_versions WHERE document_id=$1',[deleteDoc])).rows[0].n,0);
+  await assert.rejects(libDb.pool.query('SELECT * FROM pactaris.documents'));await assert.rejects(libDb.pool.query('SELECT pactaris.document_visible($1,$2,$3)',[libHome.householdId,ruleId,libMember]));
+  const libBackup=new pg.Pool({connectionString:url(libDb.database,libDb.backup,'fixture-only-password'),max:1});pools.push(libBackup);assert.ok((await libBackup.query('SELECT * FROM pactaris.document_versions')).rowCount!>0);
+  await assert.rejects(libBackup.query('SELECT pactaris.document_command($1,$2,$3,$4,$5,$6,$7)',[libHome.householdId,libPlacement.instanceId,libOwner.id,randomUUID(),'documentRead',{},'a'.repeat(64)]));
+  assert.equal((await libDb.owner.query('SELECT count(*)::int AS n FROM pactaris.agreement_decisions WHERE household_id=$1',[libHome.householdId])).rows[0].n,0);
+  assert.equal((await api('/api/households/'+libHome.householdId+'/leave','POST',{operationId:randomUUID()},libSession)).status,200);
+  assert.equal((await libDb.owner.query("SELECT count(*)::int AS n FROM pactaris.documents WHERE household_id=$1 AND state IN ('draft','published')",[libHome.householdId])).rows[0].n,0);
+  const replacement=randomUUID();await libDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[libHome.householdId,replacement,libOwner.id]);
+  await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[libOwner.id,libHome.householdId,replacement]);
+  assert.deepEqual((await libList('note')).data.documents,[]);assert.equal((await libRead(ruleId)).status,404);
+  assert.equal((await libPost('documentCreate',{operationId:ruleId,kind:'rule',fields:libFields})).status,409);
   }
 
   // Separate concurrent creation IDs are budgeted under the same account lock.
