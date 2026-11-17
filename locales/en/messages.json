@@ -527,5 +527,7 @@
   "partner.policyActive": "Active authority",
   "partner.policyProposed": "Proposed authority — awaiting recipient adoption",
   "partner.prepare": "Create a participant task",
-  "partner.direction": "{creator} may assign tasks to {assignee}."
+  "partner.direction": "{creator} may assign tasks to {assignee}.",
+  "partner.myTodo": "My to-do list",
+  "partner.preferredPolicy": "An adopted assignment policy is selected automatically for this recipient and agreement, preferring direct assignment. You can choose an individual offer or another adopted policy before creating the task."
 }

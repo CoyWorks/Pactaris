@@ -25,7 +25,7 @@ export function partnerInput(action:PartnerAction,value:unknown):Record<string,u
  else {keys.push('taskId','version');if(!['partnerCancel','partnerDecline'].includes(action))keys.push('epoch','safetyVersion');if(['partnerSubmit','partnerChanges'].includes(action))keys.push('note');}
  if(Object.keys(value).sort().join(',')!==keys.sort().join(',')||['taskId','assigneeId','agreementId','policyId','after'].some(k=>k in value&&!uuid(value[k]))||['version','policyVersion','agreementVersion','epoch','afterVersion'].some(k=>k in value&&!documentVersion(value[k]))||('safetyVersion'in value&&(typeof value.safetyVersion!=='string'||!/^[a-f0-9]{32}$/.test(value.safetyVersion)))||('note'in value&&!documentText(value.note,500,false,true)))throw new PartnerError('invalid');
  if(action==='partnerPolicyPropose'&&!['direct','explicit'].includes(value.mode as string))throw new PartnerError('invalid');
- if(action==='partnerList'&&!(typeof value.filter==='string'&&['active','closed'].includes(value.filter)))throw new PartnerError('invalid');
+ if(action==='partnerList'&&!(typeof value.filter==='string'&&['active','closed','todo'].includes(value.filter)))throw new PartnerError('invalid');
  if('fields'in value){const f=value.fields;if(!record(f)||Object.keys(f).sort().join(',')!=='description,dueAt,priority,title'||!documentText(f.title,120)||!documentText(f.description,500,true,true)||typeof f.priority!=='string'||!['low','normal','high'].includes(f.priority)||(f.dueAt!==null&&!utcInstant(f.dueAt)))throw new PartnerError('invalid');}
  return {...value,...Object.fromEntries(['operationId','taskId','assigneeId','agreementId','policyId','after'].filter(k=>k in value).map(k=>[k,(value[k] as string).toLowerCase()]))} as Record<string,unknown>&{operationId:string};
 }

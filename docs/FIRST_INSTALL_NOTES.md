@@ -99,3 +99,7 @@ Additive Instance 0012 adds private catalog versions/receipts/outbox and exact-m
 ## Participant task checkpoint — 0.12.0-alpha.1
 
 Additive Instance 0013 adds participant task history/receipts/outbox, departure cancellation and combined private/shared task-capacity triggers. Activate Instance before gateway through the preserving updater; retain all old migration checksums, credentials/config/data and independent Identity issuer/client/flows/Brand/web certificate/TLS/domain/proxy settings. No new operator input is needed. Preserve the production build/test separation and reduced-stack checks from #72. See [PARTICIPANT_TASKS.md](PARTICIPANT_TASKS.md); code fallback does not undo the additive schema or restore withdrawn authority.
+
+## Direct task/to-do checkpoint — 0.13.0-alpha.1
+
+Keep the already merged 0014_standing_assignment immutable; do not introduce a competing migration with the same sequence or silently change its checksum. Additive 0015_assignment_todo adds a read projection while retaining standing-policy/transition guards. Update Instance before gateway with preserved config/data/secrets and separate DB roles. Native upgrade fixtures retain old offered/accepted decisions and events. No Identity/client/Brand/TLS/domain/proxy change is needed. See [STANDING_TASK_AUTHORITY.md](STANDING_TASK_AUTHORITY.md).

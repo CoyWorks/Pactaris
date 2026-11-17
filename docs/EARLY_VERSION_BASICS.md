@@ -65,3 +65,7 @@ The first #17 shared lifecycle now supports offers under current task agreements
 ## Owner correction: task planning and direct assignment
 
 A Dom must be able to create/plan recurring tasks with optional rewards and assign them directly to the sub's task/to-do lists under standing agreed task authority. Per-task acceptance is optional, not the universal gate used by the first 0.12 flow. Prioritize the direct-assignment correction #17 with scheduling #18 and task-linked reward effects #20/#64; notifications #22 support freshness, not task creation. Requirements, examples and preserving migration boundary: [TASK_PLANNING.md](TASK_PLANNING.md). This clarification does not itself change the deployed app.
+
+## Direct task/to-do checkpoint — 0.13.0-alpha.1
+
+The direct-assignment implementation merged by the AI workflow is retained as the source of truth. The editor prefers an existing adopted direct policy for the selected direction; My to-do list is server-filtered for the actual assignee. Upgrade fixtures preserve real prior offers/accepted rows/events across 0014/0015. See [STANDING_TASK_AUTHORITY.md](STANDING_TASK_AUTHORITY.md). The next scope remains actual recurrence #18 and task-linked reward/points #20/#64; this is not a scheduler release.

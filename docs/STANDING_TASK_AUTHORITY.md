@@ -39,3 +39,13 @@ In this development sandbox, targeted input/render tests and real PostgreSQL sin
 Planners/upcoming series, recurrence/worker generation (#18), reward/points (#20/#64), notifications (#22), protocol/session links, configurable proof/file requirements (#21), third-party reviewers/disputes, complete export/deletion/retention and trusted restore replay remain open. Participant tasks currently have their own active list; the overview's existing private-task counts are not a cross-module aggregate. No browser visit generates scheduled work.
 
 Documentation consulted: AGENTS.md, README.md, DEVELOPMENT.md, ARCHITECTURE.md, DOMAIN_MODEL.md, PLANS.md, INFRASTRUCTURE.md, EXISTING_SITE.md, EARLY_VERSION_BASICS.md, OBEDIENCE_BASELINE.md, INTERNATIONALIZATION.md, RELATIONSHIPS.md, CONSENT_SAFETY.md, WORKSPACE_TASKS.md, PARTICIPANT_TASKS.md, TASK_PLANNING.md, PRIVATE_COMMANDS.md, LOGIN_GATEWAY.md, LOGIN_ROLLOUT.md, FIRST_INSTALL_NOTES.md and CONTRIBUTING.md.
+
+## 0.13 to-do and update checkpoint
+
+The task editor now preselects an already adopted policy for the exact creator, recipient and agreement version, preferring direct mode. The creator can explicitly choose an individual offer or another adopted policy before saving; changing the selected scope/policy clears the audience confirmation. This uses existing adopted authority and creates no new grant or individual acceptance.
+
+My to-do list is a server-filtered, bounded view of the current assignee's assigned, accepted, in-progress and changes-requested tasks. It excludes unaccepted offers, closed tasks and tasks created for others. Directly assigned work appears immediately before any recipient action. Existing active/closed lists and all privacy/safety/cancellation guards remain available.
+
+Additive Instance 0015 replaces only the participant command body to add this read projection. Migration 0014_standing_assignment and every previous checksum remain unchanged. Native fixtures first migrate through the actual 0.12 schema and populate offered/accepted tasks/events, then apply 0014/0015 and prove no decision/history conversion.
+
+This checkpoint is still one-off task assignment. Recurring definitions/worker generation #18, reward/points effects #20/#64 and notification delivery #22 remain separate work. Update Instance before gateway with the existing preserving updater; no Identity/config/secrets/TLS/domain/proxy changes are needed. Live operator acceptance remains separate from CI.

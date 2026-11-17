@@ -49,3 +49,7 @@ Existing 0.12 offers retain their recorded pending/accepted/declined decisions. 
 ## Standing authority implementation checkpoint
 
 Current source adds explicitly adopted, versioned directional task authority, direct one-off assignment and optional per-task acceptance while preserving existing offers. See [STANDING_TASK_AUTHORITY.md](STANDING_TASK_AUTHORITY.md) for the API, lifecycle, migration, verification limits and remaining scope. The earlier 0.12 state table/checkpoint is historical; scheduled series and rewards remain follow-up work.
+
+## Direct task/to-do implementation — 0.13.0-alpha.1
+
+Standing assignment policies from #73 now provide the agreed direct/per-task modes. The follow-up adds preferred adopted-policy selection and a server-filtered personal to-do view with immediate assigned-task visibility. Existing task history is preserved across the additive upgrade. See [STANDING_TASK_AUTHORITY.md](STANDING_TASK_AUTHORITY.md). The recurrence, background worker and reward/ledger sections above remain planned follow-up work.

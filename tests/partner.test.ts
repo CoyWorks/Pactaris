@@ -43,3 +43,8 @@ test('only the recipient sees adoption; standing direction and direct mode are e
  assert.doesNotMatch(render(policy.creatorId),/Adopt this standing task authority/);
  assert.match(render(policy.assigneeId),/no per-task acceptance/);assert.match(render(policy.creatorId),/Revoke or decline authority/);
 });
+
+test('personal to-do query is supported without client-selected membership authority',()=>{
+ const op=randomUUID();assert.equal(partnerInput('partnerList',{operationId:op,filter:'todo'}).filter,'todo');
+ assert.throws(()=>partnerInput('partnerList',{operationId:op,filter:'todo',assigneeId:randomUUID()}),{kind:'invalid'});
+});

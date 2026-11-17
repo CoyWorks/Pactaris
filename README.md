@@ -10,7 +10,7 @@ Historical 0.1 empty-server bootstrap, including apt dependencies (upgrade to 0.
 
 A mobile-first platform for consenting-adult BDSM, SM and kink: Dom/sub and play-partner relationships, protocols, tasks, rituals, negotiated sessions, rewards/consequences and aftercare.
 
-**Status: connected alpha, 0.12.0-alpha.1.** Signed-in accounts can [create, select and explicitly leave a private dynamic](docs/HOUSEHOLD_ONBOARDING.md) through the public gateway, with durable placement/receipt recovery and independent Instance databases. Participant invitations, alpha member reservations and [member administration with voluntary ownership transfer](docs/MEMBER_ADMINISTRATION.md) are connected. Reviewed migrations and one-command updates preserve prepared installations. The broader consent/task and privacy/deletion workflows remain unfinished; this is not ready for general public onboarding. The confirmed product name is Pactaris.
+**Status: connected alpha, 0.13.0-alpha.1.** Signed-in accounts can [create, select and explicitly leave a private dynamic](docs/HOUSEHOLD_ONBOARDING.md) through the public gateway, with durable placement/receipt recovery and independent Instance databases. Participant invitations, alpha member reservations and [member administration with voluntary ownership transfer](docs/MEMBER_ADMINISTRATION.md) are connected. Reviewed migrations and one-command updates preserve prepared installations. The broader consent/task and privacy/deletion workflows remain unfinished; this is not ready for general public onboarding. The confirmed product name is Pactaris.
 
 Central-login rollout: [LOGIN_ROLLOUT.md](docs/LOGIN_ROLLOUT.md), with trust boundaries in [LOGIN_GATEWAY.md](docs/LOGIN_GATEWAY.md).
 
@@ -114,3 +114,5 @@ Private reward catalog preparation (0.11.0-alpha.1): [REWARD_CATALOG.md](docs/RE
 Participant task lifecycle (0.12.0-alpha.1): [PARTICIPANT_TASKS.md](docs/PARTICIPANT_TASKS.md) covers voluntary offers, accept/decline, start, text submissions, creator review/changes, cancellation and reacceptance on reopen with current task consent. Private owner-only tasks remain available.
 
 Standing task authority (current source): [STANDING_TASK_AUTHORITY.md](docs/STANDING_TASK_AUTHORITY.md) covers explicit adoption, direct one-off assignment, optional acceptance and the remaining planning/reward scope.
+
+Direct assignment and personal to-do (0.13.0-alpha.1): [STANDING_TASK_AUTHORITY.md](docs/STANDING_TASK_AUTHORITY.md) covers one-time scoped policy adoption, direct task assignment, optional per-task acceptance, preferred policy selection and immediate My to-do list visibility. Recurrence/reward engines remain follow-up work.

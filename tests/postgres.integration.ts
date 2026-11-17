@@ -60,13 +60,26 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    await pool.query('SELECT pactaris.create_household_command($1,$2,$3,$4,$5,$6)',[
     '90000000-0000-4000-8000-000000000001','90000000-0000-4000-8000-000000000002','90000000-0000-4000-8000-000000000003',
     '90000000-0000-4000-8000-000000000004','Legacy membership fixture','a'.repeat(64)]);
+   // Upgrade through 0.12 with real existing task rows before applying 0014.
+   const prior=JSON.parse(await readFile('deploy/release.json','utf8'));prior.migrations=prior.migrations.filter((m:{component:string;id:string})=>m.component!=='instance'||m.id<'0014');await writeFile(join(previous,'deploy/release.json'),JSON.stringify(prior));await migrate(migrator,previous,kind,runtime,backup);
+   const home='90000000-0000-4000-8000-000000000001',creator=(await owner.query('SELECT id FROM pactaris.memberships WHERE household_id=$1',[home])).rows[0].id,recipient=randomUUID(),rel=randomUUID(),agreement=randomUUID(),offered=randomUUID(),accepted=randomUUID();
+   await owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[home,recipient,randomUUID()]);
+   await owner.query("INSERT INTO pactaris.relationships(household_id,id,label,status) VALUES($1,$2,'Legacy task relation','active')",[home,rel]);await owner.query('INSERT INTO pactaris.relationship_participants(household_id,relationship_id,membership_id,accepted) VALUES($1,$2,$3,true),($1,$2,$4,true)',[home,rel,creator,recipient]);
+   await owner.query('INSERT INTO pactaris.agreements(household_id,id,relationship_id) VALUES($1,$2,$3)',[home,agreement,rel]);
+   await owner.query("INSERT INTO pactaris.agreement_versions(household_id,agreement_id,version,terms,expires_at,created_by) VALUES($1,$2,1,$3,now()+interval '1 day',$4)",[home,agreement,{label:'Legacy task scope',scope:'Existing scope',hard:'',soft:'',signal:'',aftercare:'',activities:['task'],validHours:24},creator]);
+   const fields={title:'Existing task',description:'Existing content',priority:'normal',dueAt:null};
+   await owner.query("INSERT INTO pactaris.partner_tasks(household_id,id,creator_id,assignee_id,agreement_id,agreement_version,fields,state,version) VALUES($1,$2,$3,$4,$5,1,$6,'offered',1),($1,$7,$3,$4,$5,1,$6,'accepted',2)",[home,offered,creator,recipient,agreement,fields,accepted]);
+   await owner.query("INSERT INTO pactaris.partner_events(household_id,task_id,version,action,actor_id) VALUES($1,$2,1,'partnerOffer',$3),($1,$4,1,'partnerOffer',$3),($1,$4,2,'partnerAccept',$5)",[home,offered,creator,accepted,recipient]);
   }
   await migrate(migrator,process.cwd(),kind,runtime,backup);await migrate(migrator,process.cwd(),kind,runtime,backup);
   if(kind==='instance') {
    const legacyId='90000000-0000-4000-8000-000000000001';
    const receipt=(await owner.query('SELECT result FROM pactaris.household_command_receipts WHERE household_id=$1',[legacyId])).rows[0].result;
-   const member=(await owner.query('SELECT id FROM pactaris.memberships WHERE household_id=$1',[legacyId])).rows[0].id;
+   const member=(await owner.query("SELECT id FROM pactaris.memberships WHERE household_id=$1 AND account_id='90000000-0000-4000-8000-000000000003'",[legacyId])).rows[0].id;
    assert.equal(receipt.membershipId,member);
+   assert.deepEqual((await owner.query('SELECT state,policy_id,policy_version,version::text FROM pactaris.partner_tasks WHERE household_id=$1 ORDER BY state',[legacyId])).rows,[{state:'accepted',policy_id:null,policy_version:null,version:'2'},{state:'offered',policy_id:null,policy_version:null,version:'1'}]);
+   assert.equal((await owner.query('SELECT count(*)::int n FROM pactaris.partner_events WHERE household_id=$1',[legacyId])).rows[0].n,3);
+   for(const table of ['partner_events','partner_tasks','agreement_versions','agreements','relationship_participants','relationships'])await owner.query('DELETE FROM pactaris.'+table+' WHERE household_id=$1',[legacyId]);
    // Fixture cleanup only; the migration itself never removes historical rows.
    for(const table of ['household_outbox','household_command_receipts','audit_events','household_entitlements','memberships'])
     await owner.query('DELETE FROM pactaris.'+table+' WHERE household_id=$1',[legacyId]);
@@ -1330,6 +1343,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
     const direct=await post(A,'partnerAssign',body);assert.equal(direct.status,200,JSON.stringify(direct.data));
     assert.equal((await post(A,'partnerAssign',body)).status,200);
     const task=direct.data.taskId,d=await read(B,task);assert.equal(d.state,'assigned');assert.equal(d.assignmentMode,'direct');assert.equal(d.policyVersion,'2');assert.equal(d.events[0].action,'partnerAssign');assert.ok(!d.events.some((e:any)=>e.action==='partnerAccept'));
+    const todo=await post(B,'partnerList',{filter:'todo'});assert.equal(todo.status,200);assert.ok(todo.data.tasks.some((t:any)=>t.taskId===task));assert.ok(!(await post(A,'partnerList',{filter:'todo'})).data.tasks.some((t:any)=>t.taskId===task));assert.equal((await post(C,'partnerList',{filter:'todo'})).data.tasks.length,0);
     assert.ok((await post(B,'partnerList',{filter:'active'})).data.tasks.some((t:any)=>t.taskId===task&&t.state==='assigned'));
     await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','0') WHERE household_id=$1",[home.householdId]);
     assert.equal((await post(A,'partnerAssign',{...body,operationId:randomUUID()})).data.code,'partner_capacity');
@@ -1347,7 +1361,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
     assert.equal((await post(A,'partnerAssign',{...body,...await offerBody(A,B)})).status,404);
     const explicit=await propose(A,B,'explicit');assert.equal((await adopt(B,explicit)).status,200);
     const exp=(await policies(A)).find((p:any)=>p.policyId===explicit.policyId);
-    const r=await post(A,'partnerAssign',{...await offerBody(A,B),policyId:exp.policyId,policyVersion:exp.version});assert.equal(r.status,200);assert.equal((await read(B,r.data.taskId)).state,'offered');assert.equal((await move(B,'partnerStart',r.data.taskId)).status,409);assert.equal((await move(B,'partnerAccept',r.data.taskId)).status,200);assert.equal((await move(B,'partnerCancel',r.data.taskId)).status,200);
+    const r=await post(A,'partnerAssign',{...await offerBody(A,B),policyId:exp.policyId,policyVersion:exp.version});assert.equal(r.status,200);assert.equal((await read(B,r.data.taskId)).state,'offered');assert.ok(!(await post(B,'partnerList',{filter:'todo'})).data.tasks.some((t:any)=>t.taskId===r.data.taskId));assert.equal((await move(B,'partnerStart',r.data.taskId)).status,409);assert.equal((await move(B,'partnerAccept',r.data.taskId)).status,200);assert.ok((await post(B,'partnerList',{filter:'todo'})).data.tasks.some((t:any)=>t.taskId===r.data.taskId));assert.equal((await move(B,'partnerCancel',r.data.taskId)).status,200);
     // Revocation and adoption serialize; no stale adoption restores authority.
     const raced=await propose(A,B),race=await Promise.all([adopt(B,raced),revoke(A,raced)]);assert.ok(race.some(r=>r.status===200));
     const remaining=(await policies(A)).find((p:any)=>p.policyId===raced.policyId);if(remaining)assert.equal((await revoke(A,remaining)).status,200);

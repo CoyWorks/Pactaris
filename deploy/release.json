@@ -1,5 +1,5 @@
 {
-  "version": "0.12.0-alpha.1",
+  "version": "0.13.0-alpha.1",
   "protocol": 2,
   "migrations": [
     {
@@ -147,6 +147,13 @@
       "id": "0014_standing_assignment",
       "path": "migrations/instance/0014_standing_assignment.sql",
       "sha256": "8984c0e53cb5db14bc12079ae754dadf6ce3fedd7ece464971a1a5e17c170da2",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0015_assignment_todo",
+      "path": "migrations/instance/0015_assignment_todo.sql",
+      "sha256": "82b07e2c213a60e8ef16414225777e41115d9fa4f999a5ab2ee8721b2528e7c5",
       "backwardCompatible": true
     }
   ]
