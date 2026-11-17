@@ -112,3 +112,5 @@ Personal habits, rituals and check-ins (0.10.0-alpha.1): [HABITS_CHECKINS.md](do
 Private reward catalog preparation (0.11.0-alpha.1): [REWARD_CATALOG.md](docs/REWARD_CATALOG.md) covers draft CRUD, categories/order, optional proposed point costs, saved versions and scope limits. Redemption and the points ledger remain open.
 
 Participant task lifecycle (0.12.0-alpha.1): [PARTICIPANT_TASKS.md](docs/PARTICIPANT_TASKS.md) covers voluntary offers, accept/decline, start, text submissions, creator review/changes, cancellation and reacceptance on reopen with current task consent. Private owner-only tasks remain available.
+
+Standing task authority (current source): [STANDING_TASK_AUTHORITY.md](docs/STANDING_TASK_AUTHORITY.md) covers explicit adoption, direct one-off assignment, optional acceptance and the remaining planning/reward scope.

@@ -45,3 +45,7 @@ Existing 0.12 offers retain their recorded pending/accepted/declined decisions. 
 - A separate dynamic configured for explicit acceptance still supports its chosen offer/accept/decline flow, with the assigned offer visible before that decision.
 - A contextual switch can assign to one partner and receive from another; unrelated household members/admins see neither private task stream.
 - A completed occurrence triggers only its agreed reward once; retry, review races and reopening do not duplicate it. Pause/departure/revocation prevent stale jobs/effects and never cause default punishment.
+
+## Standing authority implementation checkpoint
+
+Current source adds explicitly adopted, versioned directional task authority, direct one-off assignment and optional per-task acceptance while preserving existing offers. See [STANDING_TASK_AUTHORITY.md](STANDING_TASK_AUTHORITY.md) for the API, lifecycle, migration, verification limits and remaining scope. The earlier 0.12 state table/checkpoint is historical; scheduled series and rewards remain follow-up work.

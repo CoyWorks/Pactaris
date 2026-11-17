@@ -308,12 +308,20 @@ export class PrivatePartnerClient{
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
    if(response.status===403||response.status===404)throw new PartnerError('denied');if(response.status===400)throw new PartnerError('invalid');if(response.status===409){const code=(response.data as {code?:string})?.code;throw new PartnerError(code==='partner_paused'?'paused':code==='partner_capacity'?'capacity':'conflict');}
    const r=response.data as import('../auth/partner.js').PartnerResult;
-   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['partnerOptions','partnerRead','partnerList'].includes(action)?'listed':'applied'))throw Error('routing.response');
+   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['partnerPolicyList','partnerOptions','partnerRead','partnerList'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/partner.js').PartnerResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
    const summary=(s:import('../auth/partner.js').PartnerSummary)=>{
     if(!s||!uuid(s.taskId)||!uuid(s.creatorId)||!uuid(s.assigneeId)||s.creatorId===s.assigneeId||!documentVersion(s.version)||!partnerStates.includes(s.state)||!documentText(s.title,120)||!documentText(s.description,500,true,true)||!documentText(s.counterpart,80,true)||!['low','normal','high'].includes(s.priority)||(s.dueAt!==null&&!utcInstant(s.dueAt))||!['creator','assignee'].includes(s.role)||s.role!==(s.creatorId===input.membershipId?'creator':s.assigneeId===input.membershipId?'assignee':undefined))throw Error('routing.response');
     return {taskId:s.taskId,version:s.version,state:s.state,creatorId:s.creatorId,assigneeId:s.assigneeId,role:s.role,counterpart:s.counterpart,title:s.title,description:s.description,priority:s.priority,dueAt:s.dueAt};
    };
+   if(r.policyId!==undefined){if(!uuid(r.policyId))throw Error('routing.response');out.policyId=r.policyId;}
+   if(action==='partnerPolicyList'){
+    if(!Array.isArray(r.policies)||r.policies.length>25)throw Error('routing.response');
+    out.policies=r.policies.map(p=>{
+     if(!uuid(p.policyId)||!uuid(p.agreementId)||!uuid(p.creatorId)||!uuid(p.assigneeId)||p.creatorId===p.assigneeId||![p.creatorId,p.assigneeId].includes(input.membershipId as string)||!documentVersion(p.version)||!documentVersion(p.agreementVersion)||!documentVersion(p.epoch)||!snapshot(p.safetyVersion)||!['direct','explicit'].includes(p.mode)||!['proposed','active'].includes(p.state)||!documentText(p.agreementLabel,80)||!documentText(p.creatorName,80,true)||!documentText(p.assigneeName,80,true))throw Error('routing.response');
+     return {policyId:p.policyId,version:p.version,agreementId:p.agreementId,agreementVersion:p.agreementVersion,creatorId:p.creatorId,assigneeId:p.assigneeId,mode:p.mode,state:p.state,epoch:p.epoch,safetyVersion:p.safetyVersion,agreementLabel:p.agreementLabel,creatorName:p.creatorName,assigneeName:p.assigneeName};
+    });
+   }
    if(r.taskId!==undefined){if(!uuid(r.taskId))throw Error('routing.response');out.taskId=r.taskId;}
    if(action==='partnerList'||action==='partnerOptions'){if(r.nextCursor!==null&&!uuid(r.nextCursor))throw Error('routing.response');out.nextCursor=r.nextCursor;}
    if(action==='partnerList'){if(!Array.isArray(r.tasks)||r.tasks.length>10)throw Error('routing.response');out.tasks=r.tasks.map(summary);}
@@ -321,9 +329,9 @@ export class PrivatePartnerClient{
     if(!Array.isArray(r.choices)||r.choices.length>10)throw Error('routing.response');out.choices=r.choices.map(c=>{if(!uuid(c.agreementId)||!documentVersion(c.agreementVersion)||!documentVersion(c.epoch)||!snapshot(c.safetyVersion)||!documentText(c.label,80)||!Array.isArray(c.assignees)||c.assignees.length<1||c.assignees.length>7||c.assignees.some(m=>!uuid(m.membershipId)||m.membershipId===input.membershipId||!documentText(m.name,80,true)))throw Error('routing.response');return {agreementId:c.agreementId,agreementVersion:c.agreementVersion,label:c.label,epoch:c.epoch,safetyVersion:c.safetyVersion,assignees:c.assignees.map(m=>({membershipId:m.membershipId,name:m.name}))};});
    }
    if(action==='partnerRead'){
-    const s=r.task;if(!s||!uuid(s.agreementId)||!documentVersion(s.agreementVersion)||!documentText(s.agreementLabel,80)||!documentVersion(s.epoch)||!snapshot(s.safetyVersion)||typeof s.eligible!=='boolean'||!Array.isArray(s.events)||s.events.length>10||(s.nextEventCursor!==null&&!documentVersion(s.nextEventCursor)))throw Error('routing.response');
+    const s=r.task;if(!s||!['offer','direct','explicit'].includes(s.assignmentMode)||(s.policyVersion!==null&&!documentVersion(s.policyVersion))||(s.assignmentMode==='offer')!==(s.policyVersion===null)||!uuid(s.agreementId)||!documentVersion(s.agreementVersion)||!documentText(s.agreementLabel,80)||!documentVersion(s.epoch)||!snapshot(s.safetyVersion)||typeof s.eligible!=='boolean'||!Array.isArray(s.events)||s.events.length>10||(s.nextEventCursor!==null&&!documentVersion(s.nextEventCursor)))throw Error('routing.response');
     const events=s.events.map(e=>{if(!documentVersion(e.version)||!(isPartnerAction(e.action)||e.action==='membershipEnded')||!uuid(e.actorId)||![s.creatorId,s.assigneeId].includes(e.actorId)||!documentText(e.note,500,true,true)||!Number.isFinite(Date.parse(e.at)))throw Error('routing.response');return {version:e.version,action:e.action,actorId:e.actorId,note:e.note,at:e.at};});
-    out.task={...summary(s),agreementId:s.agreementId,agreementVersion:s.agreementVersion,agreementLabel:s.agreementLabel,epoch:s.epoch,safetyVersion:s.safetyVersion,eligible:s.eligible,events,nextEventCursor:s.nextEventCursor};
+    out.task={...summary(s),assignmentMode:s.assignmentMode,policyVersion:s.policyVersion,agreementId:s.agreementId,agreementVersion:s.agreementVersion,agreementLabel:s.agreementLabel,epoch:s.epoch,safetyVersion:s.safetyVersion,eligible:s.eligible,events,nextEventCursor:s.nextEventCursor};
    }return out;
   }catch(error){if(error instanceof PartnerError)throw error;throw new PartnerError('unavailable');}
  }
