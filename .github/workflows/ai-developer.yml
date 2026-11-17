@@ -42,6 +42,7 @@ jobs:
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          codex-version: '0.156.1'
           permission-profile: ':workspace'
           prompt: |
             Implement the GitHub issue in .pactaris-ai-issue.json.
@@ -179,6 +180,7 @@ jobs:
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          codex-version: '0.156.1'
           permission-profile: ':workspace'
           prompt: |
             You are repairing an implementation of Pactaris issue #${{ inputs.issue_number }}.
@@ -316,6 +318,7 @@ jobs:
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          codex-version: '0.156.1'
           permission-profile: ':workspace'
           prompt: |
             You are repairing an implementation of Pactaris issue #${{ inputs.issue_number }}.
