@@ -1,5 +1,7 @@
 # First six P0 delivery blocks
 
+**Feature-order override — 17 November 2026:** the owner requested everyday basics first. Follow [EARLY_VERSION_BASICS.md](EARLY_VERSION_BASICS.md): owner-only household workspace/settings and basic tasks (#15/#27/#17), then the rules library and notes. The table below records prior delivery history; it is no longer the next feature execution order. Keep existing safety/privacy boundaries and broader release gates.
+
 Approved execution order for a closed alpha with a small invited test group. Tracking: #68. This plan does not declare the broader parent issues complete.
 
 The alpha goal is sign in, create a private dynamic, invite a partner, explicitly agree on relationships/scope, perform a task, pause/stop and leave. These six P0 blocks establish participation, permission and safety before task execution. Tasks/dashboard/PWA and the release operations/privacy gates remain separate required alpha work.

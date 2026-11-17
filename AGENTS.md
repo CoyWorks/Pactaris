@@ -27,6 +27,8 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 
 ## Development
 
+- Current feature priority: docs/EARLY_VERSION_BASICS.md supersedes the old six-block execution order. Deliver a useful owner-only household, dashboard/settings and basic unassigned/self-directed tasks before expanding relationships/emergency procedures. Setup/drafts must not require a second member or invented relationship; retain all applicable authorization/privacy/safety controls.
+
 - Follow the efficient development and verification workflow in docs/DEVELOPMENT.md: targeted checks while editing, one full final verification for code changes, compact results, and repeat checks only when new evidence justifies them.
 - Before installer/update/resume, Identity bootstrap, credentials, TLS/proxy or public-routing edits, read docs/FIRST_INSTALL_NOTES.md and preserve its regression requirements. It records the first operator-observed deployment; do not repeat destructive bootstrap or confuse tooling/runtime revisions.
 - Propose a plan before large changes. Work in small buildable issues with clear acceptance criteria and dependencies.
