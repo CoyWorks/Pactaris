@@ -745,7 +745,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
     api('/api/households/'+graphHome.householdId+'/members/remove','POST',{operationId:randomUUID(),targetMembershipId:graphB.member},graphSession)]);
   assert.ok([200,404,409].includes(departureGraphRace[0]!.status));assert.equal(departureGraphRace[1]!.status,200);
   assert.equal((await graphDb.owner.query('SELECT status,end_reason FROM pactaris.relationships WHERE id=$1',[departureGraph.id])).rows[0].end_reason,'membershipEnded');
-  {
+  await (async function verifyConsentAndSafety(){
   // Consent/safety through the public origin, private TLS and real independent stores.
   const safeOwner=await store.account('https://idp.fixture.invalid/','safety-owner','Safety owner'),safeSession=randomBytes(32).toString('base64url');
   await store.createSession(safeSession,safeOwner,'registration-csrf',600,1200);
@@ -889,8 +889,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const safeRejoin=randomUUID();await safeDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[safeHome.householdId,safeRejoin,safeC.account.id]);
   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[safeC.account.id,safeHome.householdId,safeRejoin]);
   assert.equal((await departedRestriction()).status,404);assert.equal((await safety(safeC.session)).data.state.limitsVersion,'1');
-  }
-  {
+  })();
+  await (async function verifyOwnerWorkspace(){
   // Fresh owner-only end-to-end workspace: no partner, relationship or agreement setup.
   const wsOwner=await store.account('https://idp.fixture.invalid/','workspace-owner','Workspace fixture'),wsSession=randomBytes(32).toString('base64url');
   await store.createSession(wsSession,wsOwner,'registration-csrf',600,1200);
@@ -998,9 +998,9 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const rejoined=randomUUID();await wsDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[wsHome.householdId,rejoined,wsOwner.id]);
   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[wsOwner.id,wsHome.householdId,rejoined]);
   assert.deepEqual((await wsRead()).data.tasks,[]);assert.equal((await wsPost('taskRead',{taskId:atomicId})).status,404);assert.equal((await wsPost('taskCreate',createBody)).status,409);
-  }
+  })();
 
-  {
+  await (async function verifyLibraryAndNotes(){
   const libOwner=await store.account('https://idp.fixture.invalid/','library-owner','Library owner'),libSession=randomBytes(32).toString('base64url');
   await store.createSession(libSession,libOwner,'registration-csrf',600,1200);
   const libHome=await onboarding.create(libOwner.id,randomUUID(),'Solo library'),libPlacement=(await store.placement(libOwner.id,libHome.householdId))!,libDb=libPlacement.instanceId===ids[0]?a:b;
@@ -1112,10 +1112,12 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[libOwner.id,libHome.householdId,replacement]);
   assert.deepEqual((await libList('note')).data.documents,[]);assert.equal((await libRead(ruleId)).status,404);
   assert.equal((await libPost('documentCreate',{operationId:ruleId,kind:'rule',fields:libFields})).status,409);
-  }
+  })();
 
+  // Keep scenario control-flow graphs separate: one ever-growing async test
+  // can exhaust the TypeScript checker stack on smaller-stack runtimes.
   // Owner-only everyday routines: real private HTTPS, database transactions and calendar periods.
-  {
+  await (async function verifyPersonalRoutines(){
    const person=await store.account('https://idp.fixture.invalid/','routine-owner','Routine owner'),session=randomBytes(32).toString('base64url');
    await store.createSession(session,person,'registration-csrf',600,1200);
    const home=await onboarding.create(person.id,randomUUID(),'Solo routines'),place=(await store.placement(person.id,home.householdId))!,db=place.instanceId===ids[0]?a:b;
@@ -1209,7 +1211,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    assert.equal((await db.owner.query('SELECT state FROM pactaris.routines WHERE household_id=$1 AND id=$2',[home.householdId,habit])).rows[0].state,'archived');
    const rejoined=randomUUID();await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[home.householdId,rejoined,person.id]);
    assert.equal((await post('routineRead',{routineId:habit,day:null})).status,404);assert.equal((await api(base+'/routines','GET',undefined,session)).data.routines.length,0);
-  }
+  })();
 
   // Separate concurrent creation IDs are budgeted under the same account lock.
   const racer=await store.account('https://idp.fixture.invalid/','registration-racer','Racer fixture');await store.createSession('s'.repeat(43),racer,'registration-csrf',60,120);

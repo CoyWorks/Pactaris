@@ -14,7 +14,7 @@
     "pretest": "npm run catalogs",
     "precheck:i18n": "npm run catalogs",
     "predev:instance": "npm run catalogs",
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "tsc -p tsconfig.build.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --import tsx --test tests/*.test.ts",
     "check:i18n": "node --import tsx scripts/check-i18n.ts",

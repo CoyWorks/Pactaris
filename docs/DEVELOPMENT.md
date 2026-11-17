@@ -30,6 +30,10 @@ This first code checkpoint starts milestone 1; it does not complete the connecte
 
 No OIDC login, household data API, durable task processing, manager enrollment or Google/Apple callback integration is implemented yet. `/api/session` returns 401 regardless of proxy identity headers. The status page explicitly says sign-in is not enabled. Do not expose this foundation as a production household service.
 
+## Build and test compilation boundaries
+
+`npm run build` emits deployable apps/packages/scripts through `tsconfig.build.json`; it does not compile tests into the release. `npm run typecheck` uses the broader `tsconfig.json` and checks all tests. Keep long integration scenarios in bounded async functions instead of extending one unbounded control-flow graph: TypeScript stack exhaustion was observed on the OCI host and reproduced locally with a 512 KiB V8 stack. CI retains a reduced-stack all-source typecheck, a clean-artifact test exclusion check and actual PostgreSQL/HTTPS execution. Do not exclude tests from typechecking or remove integration assertions to make a deployment build pass.
+
 ## Local checks
 
 Prerequisites: Node.js 24, npm and Python 3.12 or newer on Linux. Dependencies are pinned in package-lock.json.
