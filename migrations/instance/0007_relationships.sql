@@ -33,7 +33,8 @@ BEGIN
    WHERE r.household_id=NEW.household_id AND r.proposer_membership_id IS NOT NULL AND r.status<>'ended'
     AND EXISTS(SELECT 1 FROM pactaris.relationship_participants p WHERE p.household_id=r.household_id AND p.relationship_id=r.id AND p.membership_id=NEW.id);
   UPDATE pactaris.relationship_participants SET decision='withdrawn',accepted=false,decided_at=statement_timestamp()
-   WHERE household_id=NEW.household_id AND membership_id=NEW.id;
+   WHERE household_id=NEW.household_id AND membership_id=NEW.id AND EXISTS(SELECT 1 FROM pactaris.relationships r
+    WHERE r.household_id=NEW.household_id AND r.id=relationship_id AND r.proposer_membership_id IS NOT NULL);
  END IF;
  RETURN NEW;
 END $$;
@@ -45,7 +46,7 @@ DECLARE h pactaris.households; member pactaris.memberships; r pactaris.relations
  answer jsonb; listing jsonb; proposal jsonb; role jsonb; role_id uuid; relation_id uuid; participant uuid; after_id uuid; next_id uuid;
 BEGIN
  IF target IS NULL OR instance IS NULL OR actor IS NULL OR operation IS NULL OR fingerprint IS NULL OR fingerprint!~'^[a-f0-9]{64}$'
-  OR action NOT IN ('relationshipList','relationshipPropose','relationshipAccept','relationshipDecline','relationshipWithdraw') THEN
+  OR action IS NULL OR action NOT IN ('relationshipList','relationshipPropose','relationshipAccept','relationshipDecline','relationshipWithdraw') THEN
   RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='relationship.invalid';
  END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended('pactaris.relationship.operation.'||operation::text,0));

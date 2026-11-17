@@ -675,7 +675,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await graphList(graphC.session)).length,1);assert.equal((await graphList(graphA.session)).length,3);
   assert.equal((await graphList(graphSession)).length,1);
   assert.equal((await graphDb.owner.query('SELECT technical_role FROM pactaris.memberships WHERE household_id=$1 AND id=$2',[graphHome.householdId,graphB.member])).rows[0].technical_role,'admin');
-  assert.equal((await graphPost('propose',{proposal:{...graphPair.input.proposal,participants:[graphA.member,members[1]]}})).status,404);
+  assert.equal((await graphPost('propose',{proposal:{...graphPair.input.proposal,participants:[graphA.member,members[1]],roles:[]}})).status,404);
   assert.equal((await api('/api/households/'+households[2]+'/relationships','GET',undefined,graphA.session)).status,404);
   assert.equal((await graphPost('propose',graphPair.input,graphA.session)).status,200);
   assert.equal((await api(graphPath+'/withdraw','POST',{operationId:randomUUID(),relationshipId:graphPair.id,version:'1'},graphA.session,{origin:'https://wrong.fixture.invalid'})).status,403);
@@ -711,13 +711,14 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.deepEqual(await graphList(graphC.session),[]);
   assert.equal((await graphPost('accept',{relationshipId:group.id,version:'1'},graphC.session)).status,404);
   // A failed final outbox insert rolls back domain, roles, audit, receipt and replay marker together.
-  const atomicId=randomUUID(),atomicBody=Buffer.from(JSON.stringify({operationId:atomicId,membershipId:graphA.member,proposal:{label:'Atomic fixture',scope:'',participants:[graphA.member,graphB.member],roles:[graphRole(graphA.member,'bottom',graphB.member)]}}));
+  const atomicId=randomUUID(),atomicBody=Buffer.from(JSON.stringify({operationId:atomicId,membershipId:graphA.member,proposal:{label:'Atomic fixture',scope:'',participants:[graphA.member,graphB.member],roles:[graphRole(graphA.member,'Atomic fixture role',graphB.member)]}}));
   const graphHandler=services[graphPlacement.instanceId===ids[0]?0:1]!,packet=await signer.signCommand(graphA.account.id,graphHome.householdId,graphPlacement.instanceId,'relationshipPropose',atomicId,atomicBody.toString());
   await graphDb.owner.query("CREATE FUNCTION pactaris.fixture_graph_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture final write'; END $$; CREATE TRIGGER fixture_graph_failure BEFORE INSERT ON pactaris.relationship_outbox FOR EACH ROW EXECUTE FUNCTION pactaris.fixture_graph_failure()");
   await assert.rejects(graphHandler.relationship(packet,graphHome.householdId,'relationshipPropose',atomicBody));
   for(const table of ['relationship_receipts','relationship_outbox'])assert.equal((await graphDb.owner.query('SELECT count(*)::int AS n FROM pactaris.'+table+' WHERE operation_id=$1',[atomicId])).rows[0].n,0);
   assert.equal((await graphDb.owner.query('SELECT count(*)::int AS n FROM pactaris.relationships WHERE id=$1',[atomicId])).rows[0].n,0);
   assert.equal((await graphDb.owner.query("SELECT count(*)::int AS n FROM pactaris.audit_events WHERE parameters->>'operationId'=$1",[atomicId])).rows[0].n,0);
+  assert.equal((await graphDb.owner.query("SELECT count(*)::int AS n FROM pactaris.dynamic_roles WHERE household_id=$1 AND label='Atomic fixture role'",[graphHome.householdId])).rows[0].n,0);
   const graphJti=JSON.parse(Buffer.from(packet.split('.')[1]!,'base64url').toString()).jti;
   assert.equal((await graphDb.owner.query('SELECT count(*)::int AS n FROM pactaris.delegation_uses WHERE jti=$1',[graphJti])).rows[0].n,0);
   await graphDb.owner.query('DROP TRIGGER fixture_graph_failure ON pactaris.relationship_outbox; DROP FUNCTION pactaris.fixture_graph_failure()');
@@ -730,6 +731,12 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.ok((await graphBackup.query('SELECT * FROM pactaris.relationship_receipts')).rowCount!>0);
   await assert.rejects(graphBackup.query('SELECT pactaris.relationship_command($1,$2,$3,$4,$5,$6,$7)',[graphHome.householdId,graphPlacement.instanceId,graphA.account.id,randomUUID(),'relationshipList',{},'a'.repeat(64)]));
 
+  const departureGraph=await proposeGraph([graphA.member,graphB.member],[]);
+  assert.equal((await graphPost('accept',{relationshipId:departureGraph.id,version:'1'})).status,200);
+  const departureGraphRace=await Promise.all([graphPost('accept',{relationshipId:departureGraph.id,version:'1'},graphB.session),
+    api('/api/households/'+graphHome.householdId+'/members/remove','POST',{operationId:randomUUID(),targetMembershipId:graphB.member},graphSession)]);
+  assert.ok([200,404,409].includes(departureGraphRace[0]!.status));assert.equal(departureGraphRace[1]!.status,200);
+  assert.equal((await graphDb.owner.query('SELECT status,end_reason FROM pactaris.relationships WHERE id=$1',[departureGraph.id])).rows[0].end_reason,'membershipEnded');
   // Separate concurrent creation IDs are budgeted under the same account lock.
   const racer=await store.account('https://idp.fixture.invalid/','registration-racer','Racer fixture');await store.createSession('s'.repeat(43),racer,'registration-csrf',60,120);
   const races=await Promise.all(Array.from({length:4},()=>api('/api/households','POST',{operationId:randomUUID(),name:'Race fixture'},'s'.repeat(43))));

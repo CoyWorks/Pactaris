@@ -97,7 +97,7 @@
       "component": "instance",
       "id": "0007_relationships",
       "path": "migrations/instance/0007_relationships.sql",
-      "sha256": "181cd11ca0c4eed615a9dd2531508854287df7e4284d1456119286e1da24d194",
+      "sha256": "8d53aacba8842c8ae28c637455bbf71ff5ea9eee3eb1314fdea0ab1b67912727",
       "backwardCompatible": true
     }
   ]
