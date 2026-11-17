@@ -244,5 +244,43 @@ class GatewayDeploymentTests(unittest.TestCase):
             finally:
                 os.umask(previous)
 
+    def test_build_log_captures_both_streams_without_echo_or_overwrite(self):
+        with tempfile.TemporaryDirectory() as folder, patch('sys.stdout', new_callable=io.StringIO) as console:
+            log = Path(folder) / 'npm-build.log'
+            command = [sys.executable, '-c', 'import sys;print("fixture-private-stdout",flush=True);sys.stderr.write("fixture-private-stderr");sys.exit(7)']
+            with self.assertRaises(deploy.DeployError) as error:
+                deploy.run(command, command_log=log)
+            self.assertEqual(error.exception.params, {'tool': Path(sys.executable).name, 'code': 7})
+            self.assertIn('fixture-private-stdout', log.read_text())
+            self.assertIn('fixture-private-stderr', log.read_text())
+            self.assertEqual(log.stat().st_mode & 0o777, 0o600)
+            self.assertNotIn('fixture-private', console.getvalue())
+            self.assertIn(str(log), console.getvalue())
+            original = log.read_bytes()
+            with self.assertRaises(FileExistsError):
+                deploy.run(command, command_log=log)
+            self.assertEqual(log.read_bytes(), original)
+
+    def test_successful_build_log_stays_private_and_does_not_become_command_result(self):
+        with tempfile.TemporaryDirectory() as folder, patch('sys.stdout', new_callable=io.StringIO) as console:
+            log = Path(folder) / 'npm-ci.log'
+            self.assertEqual(deploy.run([sys.executable, '-c', 'print("fixture-private-success")'], command_log=log), '')
+            self.assertIn('fixture-private-success', log.read_text())
+            self.assertNotIn('fixture-private', console.getvalue())
+            self.assertNotIn('cli.commandLog', console.getvalue())
+
+    def test_cancelled_build_reports_retained_log_and_terminates_child_group(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(deploy.subprocess, 'Popen') as process, patch.object(deploy.os, 'killpg') as kill, patch('sys.stdout', new_callable=io.StringIO) as console:
+            log = Path(folder) / 'npm-build.log'
+            child = process.return_value.__enter__.return_value
+            child.pid = 12345
+            child.poll.return_value = None
+            child.communicate.side_effect = [KeyboardInterrupt, (None, None)]
+            with self.assertRaises(KeyboardInterrupt):
+                deploy.run(['npm', 'run', 'build'], command_log=log)
+            kill.assert_called_once_with(12345, deploy.signal.SIGTERM)
+            self.assertTrue(log.exists())
+            self.assertIn(str(log), console.getvalue())
+
 if __name__ == '__main__':
     unittest.main()

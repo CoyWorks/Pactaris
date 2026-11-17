@@ -42,7 +42,7 @@ def emit(key, **params):
         message = message.replace('{' + name + '}', str(value))
     print(json.dumps({'messageKey': key, 'message': message, **params}), flush=True)
 
-def run(args, *, cwd=None, env=None, user=None, output=None, error_file=None):
+def run(args, *, cwd=None, env=None, user=None, output=None, error_file=None, command_log=None):
     command = list(args)
     if user:
         command = ['runuser', '-u', user, '--', *command]
@@ -50,8 +50,17 @@ def run(args, *, cwd=None, env=None, user=None, output=None, error_file=None):
     tool = Path(args[0]).name
     emit('cli.command', tool=tool)
     started = time.monotonic()
-    with subprocess.Popen(command, cwd=cwd, env=env, stdout=output or subprocess.PIPE,
-                          stderr=subprocess.PIPE, start_new_session=True) as child:
+    with contextlib.ExitStack() as stack:
+        if command_log is not None:
+            if output is not None or error_file is not None:
+                fail('command_log_options')
+            fd = os.open(command_log, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            log = stack.enter_context(os.fdopen(fd, 'wb'))
+        else:
+            log = None
+        child = stack.enter_context(subprocess.Popen(command, cwd=cwd, env=env,
+            stdout=log if log is not None else output or subprocess.PIPE,
+            stderr=subprocess.STDOUT if log is not None else subprocess.PIPE, start_new_session=True))
         try:
             while True:
                 try:
@@ -71,8 +80,12 @@ def run(args, *, cwd=None, env=None, user=None, output=None, error_file=None):
                 except subprocess.TimeoutExpired:
                     os.killpg(child.pid, signal.SIGKILL)
                     child.communicate()
+            if command_log is not None:
+                emit('cli.commandLog', path=str(command_log))
             raise
         if child.returncode:
+            if command_log is not None:
+                emit('cli.commandLog', path=str(command_log))
             if error_file is not None:
                 fd = os.open(error_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 with os.fdopen(fd, 'wb') as log:
@@ -479,8 +492,17 @@ def deploy(args):
                 # Build unprivileged. Reset ownership afterwards so runtime cannot rewrite releases.
                 run(['chown', '-R', str(info.pw_uid) + ':' + str(info.pw_gid), str(release)])
                 build_env = {**os.environ, 'npm_config_cache': str(base / 'data/npm-cache'), 'HOME': str(base / 'data')}
-                run(['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], cwd=release, env=build_env, user=info.pw_name)
-                run(['npm', 'run', 'build'], cwd=release, env=build_env, user=info.pw_name)
+                # Keep diagnostics outside the service-owned checkout/cache. Root
+                # opens each file before dropping privileges; children only inherit
+                # its write descriptor, never access to the protected directory.
+                logs = base / 'build-logs'
+                logs.mkdir(mode=0o700, exist_ok=True)
+                safe_root(str(logs))
+                logs.chmod(0o700)
+                attempt = logs / (str(time.time_ns()) + '-' + args.revision)
+                attempt.mkdir(mode=0o700)
+                run(['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], cwd=release, env=build_env, user=info.pw_name, command_log=attempt / 'npm-ci.log')
+                run(['npm', 'run', 'build'], cwd=release, env=build_env, user=info.pw_name, command_log=attempt / 'npm-build.log')
                 run(['chown', '-R', 'root:' + info.pw_name, str(release)])
                 run(['chmod', '-R', 'u=rwX,g=rX,o=', str(release)])
             if args.component == 'identity' and existing:
