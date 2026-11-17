@@ -2,6 +2,10 @@
 
 First bounded partner lifecycle slice of #17. Existing owner-only private/unassigned/self-directed tasks remain separate and do not require a partner. The new Participant tasks section handles explicit shared offers; it does not publish private tasks or expose a household-wide board.
 
+## Owner direction superseding the default workflow
+
+The owner clarified on 17 November 2026 that a Dom must be able to assign planned/recurring tasks directly into the sub's task/to-do list under standing task scope, without mandatory acceptance per task. Acceptance becomes optional. See [TASK_PLANNING.md](TASK_PLANNING.md) and #17/#18/#20/#22. The state table below documents what 0.12 actually implements; it is not the required universal future workflow. No runtime behavior is changed by this clarification alone.
+
 ## State and audience
 
 Any current participant in an active, individually accepted task agreement may offer a task to another current participant in that same relationship. Contextual Dom/sub labels and technical administrator roles do not decide who can create or receive an offer. Pairs and multi-person relationships work; only the selected creator and assignee see the task, submission and feedback. Other relationship participants, household owners and administrators receive no extra access.

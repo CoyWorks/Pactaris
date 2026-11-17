@@ -29,6 +29,8 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 
 ## Development
 
+- Task direction: follow docs/TASK_PLANNING.md and #17/#18/#20. A Dom with standing relationship-scoped task authority can assign planned/recurring tasks (with optional rewards) directly into the sub's task/to-do lists. Per-task acceptance is optional, not a universal prerequisite. Preserve explicit standing scope, contextual roles, privacy, safe withdrawal and idempotent scheduled/reward effects; never infer task authority from a global Dom label.
+
 - Current feature priority: docs/EARLY_VERSION_BASICS.md supersedes the old six-block execution order. Deliver a useful owner-only household, dashboard/settings and basic unassigned/self-directed tasks before expanding relationships/emergency procedures. Setup/drafts must not require a second member or invented relationship; retain all applicable authorization/privacy/safety controls.
 
 - Follow the efficient development and verification workflow in docs/DEVELOPMENT.md: targeted checks while editing, one full final verification for code changes, compact results, and repeat checks only when new evidence justifies them.

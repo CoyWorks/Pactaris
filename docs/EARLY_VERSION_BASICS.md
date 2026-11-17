@@ -61,3 +61,7 @@ The first #64 slice provides personal-private reward drafts with title/descripti
 ## Participant task checkpoint — 0.12.0-alpha.1
 
 The first #17 shared lifecycle now supports offers under current task agreements, recipient acceptance/refusal, start/submission, creator review/changes and safe cancellation/reopening. Pair and group agreements do not create a household-wide task board; only the two task parties see content. Existing private tasks remain unchanged, with shared household capacity enforced across both APIs. See [PARTICIPANT_TASKS.md](PARTICIPANT_TASKS.md). Next priorities remain scheduling/in-app notifications #18/#22 and the reviewed catalog sharing/redemption/ledger slice #64/#20.
+
+## Owner correction: task planning and direct assignment
+
+A Dom must be able to create/plan recurring tasks with optional rewards and assign them directly to the sub's task/to-do lists under standing agreed task authority. Per-task acceptance is optional, not the universal gate used by the first 0.12 flow. Prioritize the direct-assignment correction #17 with scheduling #18 and task-linked reward effects #20/#64; notifications #22 support freshness, not task creation. Requirements, examples and preserving migration boundary: [TASK_PLANNING.md](TASK_PLANNING.md). This clarification does not itself change the deployed app.
