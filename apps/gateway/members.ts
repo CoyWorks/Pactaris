@@ -19,7 +19,7 @@ export class GatewayMembers{
  }
  private async recent(sessionToken:string,accountId:string){
   const r=await this.pool.query(`SELECT 1 FROM pactaris.sessions s JOIN pactaris.accounts a ON a.id=s.account_id
-   WHERE s.token_hash=$1 AND a.id=$2 AND a.status='active' AND s.expires_at>now() AND s.idle_expires_at>now() AND s.created_at>now()-interval '15 minutes'`,[hash(sessionToken),accountId]);
+   WHERE s.token_hash=$1 AND a.id=$2 AND a.status='active' AND s.expires_at>now() AND s.idle_expires_at>now() AND s.created_at>now()-interval '15 minutes' AND s.created_at<=now()`,[hash(sessionToken),accountId]);
   if(!r.rowCount)throw new MemberError('reauthenticate');
  }
  private async own(accountId:string,householdId:string){
@@ -30,7 +30,10 @@ export class GatewayMembers{
  async list(accountId:string,householdId:string,after?:string){
   const own=await this.own(accountId,householdId);
   const r=await this.client.execute(accountId,own.placement,'memberList',{operationId:randomUUID(),membershipId:own.membershipId,...(after?{after}:{})});
-  return {actorMembershipId:r.actorMembershipId,members:r.members,offers:r.offers,nextCursor:r.nextCursor??null,...await this.operations(accountId,householdId)};
+  return {actorMembershipId:r.actorMembershipId,
+   members:(r.members??[]).map(m=>({membershipId:m.membershipId,displayName:m.displayName,technicalRole:m.technicalRole,isSelf:m.isSelf,canRemove:m.canRemove,canOffer:m.canOffer})),
+   offers:(r.offers??[]).map(o=>({offerId:o.offerId,fromMembershipId:o.fromMembershipId,toMembershipId:o.toMembershipId,status:o.status,expiresAt:o.expiresAt})),
+   nextCursor:r.nextCursor??null,...await this.operations(accountId,householdId)};
  }
  async change(accountId:string,sessionToken:string,householdId:string,action:Mutation,input:{operationId:string;name?:string;targetMembershipId?:string;offerId?:string}){
   const canonical=Object.fromEntries(Object.keys(input).sort().map(k=>[k,input[k as keyof typeof input]]));

@@ -483,6 +483,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const manageAdmin=await seedMember('admin','manage-admin'),manageA=await seedMember('participant','manage-a'),manageB=await seedMember('participant','manage-b');
   const change=(action:string,payload:Record<string,unknown>,session=manageSession)=>api(managePath+'/'+action,'POST',{operationId:randomUUID(),...payload},session);
   const memberList=await api(managePath,'GET',undefined,manageSession);assert.equal(memberList.status,200);assert.equal(memberList.data.members.length,4);
+  assert.ok(memberList.data.members.every((m:any)=>Object.keys(m).sort().join(',')==='canOffer,canRemove,displayName,isSelf,membershipId,technicalRole'));
   assert.ok(!memberList.body.includes(manageOwner.id));assert.ok(!memberList.body.includes(manageA.account.id));assert.ok(!memberList.body.includes(manageA.email));assert.ok(!memberList.body.includes('Global owner'));
   assert.equal((await api(managePath,'GET',undefined,'w'.repeat(43))).status,404);
   const aliasId=randomUUID(),aliasInput={operationId:aliasId,name:'Household-only alias'};
@@ -575,6 +576,55 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const cancelRaceOffer=randomUUID();assert.equal((await change('offer',{operationId:cancelRaceOffer,targetMembershipId:newB},manageA.session)).status,200);
   const cancelRace=await Promise.all([change('accept',{offerId:cancelRaceOffer},manageB.session),change('cancel',{offerId:cancelRaceOffer},manageA.session)]);
   assert.equal(cancelRace.filter(r=>r.status===200).length,1);assert.equal(cancelRace.filter(r=>r.status===409).length,1);
+  async function memberPair(label:string){
+   const owner=await store.account('https://idp.fixture.invalid/',label+'-owner','Pair owner'),sourceSession=randomBytes(32).toString('base64url');
+   await store.createSession(sourceSession,owner,'registration-csrf',60,120);
+   const household=await onboarding.create(owner.id,randomUUID(),label),placement=(await store.placement(owner.id,household.householdId))!,component=placement.instanceId===ids[0]?a:b;
+   const sourceMember=(await client.summary(owner.id,placement))!.membershipId!,targetAccount=await store.account('https://idp.fixture.invalid/',label+'-target','Pair target'),targetMember=randomUUID(),targetSession=randomBytes(32).toString('base64url');
+   await component.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[household.householdId,targetMember,targetAccount.id]);
+   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[targetAccount.id,household.householdId,targetMember]);
+   await store.createSession(targetSession,targetAccount,'registration-csrf',60,120);
+   return {owner,sourceSession,household,placement,component,sourceMember,targetAccount,targetMember,targetSession,path:'/api/households/'+household.householdId+'/members'};
+  }
+  // Either the recipient explicitly becomes owner before departure, or the
+  // remaining ownerless pair pauses. Departure must never await acceptance.
+  const leavePair=await memberPair('Ownership versus leave'),leaveOffer=randomUUID();
+  assert.equal((await api(leavePair.path+'/offer','POST',{operationId:leaveOffer,targetMembershipId:leavePair.targetMember},leavePair.sourceSession)).status,200);
+  const leaveRace=await Promise.all([
+   api('/api/households/'+leavePair.household.householdId+'/leave','POST',{operationId:randomUUID()},leavePair.sourceSession),
+   api(leavePair.path+'/accept','POST',{operationId:randomUUID(),offerId:leaveOffer},leavePair.targetSession)
+  ]);
+  assert.equal(leaveRace[0]!.status,200);assert.ok([200,409].includes(leaveRace[1]!.status));
+  const leftState=(await leavePair.component.owner.query('SELECT status FROM pactaris.households WHERE id=$1',[leavePair.household.householdId])).rows[0].status;
+  const targetRole=(await leavePair.component.owner.query('SELECT technical_role FROM pactaris.memberships WHERE household_id=$1 AND id=$2',[leavePair.household.householdId,leavePair.targetMember])).rows[0].technical_role;
+  assert.equal(targetRole,leaveRace[1]!.status===200?'owner':'participant');assert.equal(leftState,leaveRace[1]!.status===200?'active':'paused');
+  // A failed final outbox write must roll back all trigger cleanup, domain,
+  // audit, receipt and replay writes. Retry the identical signed packet.
+  const rollbackPair=await memberPair('Member rollback'),rollbackOffer=randomUUID();
+  assert.equal((await api(rollbackPair.path+'/alias','POST',{operationId:randomUUID(),name:'Rollback alias'},rollbackPair.targetSession)).status,200);
+  assert.equal((await api(rollbackPair.path+'/offer','POST',{operationId:rollbackOffer,targetMembershipId:rollbackPair.targetMember},rollbackPair.sourceSession)).status,200);
+  await rollbackPair.component.owner.query("CREATE FUNCTION pactaris.fixture_member_failure() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RAISE EXCEPTION 'fixture member failure'; END$$; CREATE TRIGGER fixture_member_failure BEFORE INSERT ON pactaris.membership_outbox FOR EACH ROW EXECUTE FUNCTION pactaris.fixture_member_failure()");
+  const rollbackOperation=randomUUID(),memberBody=Buffer.from(JSON.stringify({operationId:rollbackOperation,membershipId:rollbackPair.sourceMember,targetMembershipId:rollbackPair.targetMember}));
+  const memberPacket=await signer.signCommand(rollbackPair.owner.id,rollbackPair.household.householdId,rollbackPair.placement.instanceId,'memberRemove',rollbackOperation,memberBody.toString());
+  const memberHandler=services[rollbackPair.placement.instanceId===ids[0]?0:1]!;
+  await assert.rejects(memberHandler.membership(memberPacket,rollbackPair.household.householdId,'memberRemove',memberBody));
+  const rolledBack=(await rollbackPair.component.owner.query('SELECT status,display_name FROM pactaris.memberships WHERE household_id=$1 AND id=$2',[rollbackPair.household.householdId,rollbackPair.targetMember])).rows[0];
+  assert.equal(rolledBack.status,'active');assert.equal(rolledBack.display_name,'Rollback alias');
+  assert.equal((await rollbackPair.component.owner.query('SELECT status FROM pactaris.ownership_offers WHERE id=$1',[rollbackOffer])).rows[0].status,'pending');
+  assert.equal((await rollbackPair.component.owner.query('SELECT count(*)::int AS n FROM pactaris.membership_endings WHERE household_id=$1',[rollbackPair.household.householdId])).rows[0].n,0);
+  for(const table of ['membership_receipts','membership_outbox'])assert.equal((await rollbackPair.component.owner.query('SELECT count(*)::int AS n FROM pactaris.'+table+' WHERE operation_id=$1',[rollbackOperation])).rows[0].n,0);
+  assert.equal((await rollbackPair.component.owner.query("SELECT count(*)::int AS n FROM pactaris.audit_events WHERE parameters->>'operationId'=$1",[rollbackOperation])).rows[0].n,0);
+  const packetJti=JSON.parse(Buffer.from(memberPacket.split('.')[1]!,'base64url').toString()).jti;
+  assert.equal((await rollbackPair.component.owner.query('SELECT count(*)::int AS n FROM pactaris.delegation_uses WHERE jti=$1',[packetJti])).rows[0].n,0);
+  await rollbackPair.component.owner.query('DROP TRIGGER fixture_member_failure ON pactaris.membership_outbox; DROP FUNCTION pactaris.fixture_member_failure()');
+  assert.equal((await memberHandler.membership(memberPacket,rollbackPair.household.householdId,'memberRemove',memberBody)).status,'applied');
+  await assert.rejects(memberHandler.membership(memberPacket,rollbackPair.household.householdId,'memberRemove',memberBody));
+  assert.equal((await rollbackPair.component.owner.query('SELECT status FROM pactaris.ownership_offers WHERE id=$1',[rollbackOffer])).rows[0].status,'invalidated');
+  assert.equal((await rollbackPair.component.owner.query('SELECT count(*)::int AS n FROM pactaris.membership_endings WHERE household_id=$1',[rollbackPair.household.householdId])).rows[0].n,1);
+  await assert.rejects(memberHandler.membership(await signer.sign(rollbackPair.owner.id,rollbackPair.household.householdId,rollbackPair.placement.instanceId),rollbackPair.household.householdId,'memberRemove',memberBody));
+  const memberBackup=new pg.Pool({connectionString:url(rollbackPair.component.database,rollbackPair.component.backup,'fixture-only-password'),max:1});pools.push(memberBackup);
+  assert.ok((await memberBackup.query('SELECT * FROM pactaris.membership_endings')).rowCount!>=1);
+  await assert.rejects(memberBackup.query('SELECT pactaris.member_command($1,$2,$3,$4,$5,$6,$7)',[rollbackPair.household.householdId,rollbackPair.placement.instanceId,rollbackPair.owner.id,randomUUID(),'memberList',{},'a'.repeat(64)]));
   // Separate concurrent creation IDs are budgeted under the same account lock.
   const racer=await store.account('https://idp.fixture.invalid/','registration-racer','Racer fixture');await store.createSession('s'.repeat(43),racer,'registration-csrf',60,120);
   const races=await Promise.all(Array.from({length:4},()=>api('/api/households','POST',{operationId:randomUUID(),name:'Race fixture'},'s'.repeat(43))));

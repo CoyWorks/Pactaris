@@ -1,5 +1,7 @@
 # Membership identity and delayed-operation fencing
 
+Update: 0.5.0-alpha.1 adds [member administration, voluntary ownership proposals and local departure cleanup](MEMBER_ADMINISTRATION.md). The 0.3.2 prerequisite contract below remains the generation-fencing foundation; public participant invitation/rejoin shipped separately in 0.4.0.
+
 Implemented prerequisite of #70/#8/#26 in 0.3.2-alpha.1. This release does not expose invitation acceptance, member removal or public rejoin.
 
 ## Identity and history

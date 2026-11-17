@@ -8,7 +8,7 @@ The alpha goal is sign in, create a private dynamic, invite a partner, explicitl
 | --- | --- | --- | --- |
 | 1 | #70 | Membership identity/history; delayed command, receipt and hint fencing | Implemented in 0.3.2-alpha.1; CI and rollout evidence recorded in #70 |
 | 2 | #8, #53 | Explicit invitation create/preview/accept/decline/revoke; verified recipient and atomic member reservations | Participant invitation workflow implemented in 0.4.0-alpha.1; real IdP/mobile acceptance remains |
-| 3 | #26 | Immediate departure/removal, voluntary ownership transfer and lifecycle/privacy cleanup | Self-leave exists; member removal/voluntary owner transfer and privacy cleanup are the next block |
+| 3 | #26 | Immediate departure/removal, voluntary ownership transfer and lifecycle/privacy cleanup | Member removal, voluntary ownership, aliases and local revocation cleanup implemented in 0.5.0-alpha.1; account-wide deletion/export/retention and restore gates remain open |
 | 4 | #35, #9 | Explicit accepted relationship graph and contextual roles; resource authorization separate from labels | Schema/permission foundations exist; APIs/UI queued |
 | 5 | #10, #11 | Exact-version individual consent, limits, revocation and authoritative pause/stop | Queued; required before protected task/protocol execution |
 | 6 | #6, #7, #24 | Verified registration/recovery, MFA/session controls and transactional delivery; real Google/Apple/local acceptance | OIDC/session/email assertion foundations exist; provider/operational acceptance remains |
@@ -20,6 +20,8 @@ Each block is split into reviewed migrations/domain operations, public API/mobil
 For invitation work, start with recipient proof tied to the accepting session. The cached verified-email account column from #69 alone must never authorize joining. Requesting an email scope or hardcoding a verification claim is not verification. Then add participant invitations and capacity reservations in the Instance transaction, strict private command purposes, explicit preview/accept/decline/revoke, and durable central hint recovery. No GET/login autoacceptance, hidden Instance URL, inherited relationship consent or implicit technical ownership. Invite delivery must use configured transactional infrastructure, not a developer's personal email connection.
 
 For ownership, use an explicit recipient offer/acceptance rather than silently assigning another member the owner role. The last owner can still leave; ownerless groups pause and final departure closes the dynamic. Removal and departure must fence pending invitations, jobs, grants and future notifications.
+
+The connected membership/ownership slice is documented in [MEMBER_ADMINISTRATION.md](MEMBER_ADMINISTRATION.md). The next feature block is #35/#9 relationship graph and resource policies. Remaining #25/#26 privacy/export/deletion/restore work remains required before broader alpha onboarding; the member ending-marker schema is not a substitute for those release gates.
 
 For relationships and consent, exercise a pair, a four-person Dom/Dom/sub/sub group and someone who is Dom to one member and sub/bottom to another. Consent is individual and version-bound. Neither payment, technical administration nor a role label supplies consent.
 
