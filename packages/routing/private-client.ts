@@ -12,7 +12,7 @@ export function privateAddress(address:string):boolean {
 }
 export type HouseholdSummary={id:string;name:string;membershipId?:string};
 export interface HouseholdClient { summary(accountId:string,placement:Placement):Promise<HouseholdSummary|undefined>; }
-export async function privateResponse(placement:Placement,path:string,token:string,body?:string):Promise<{status:number;data:unknown}> {
+export async function privateResponse(placement:Placement,path:string,token:string,body?:string,responseLimit:16384|65536=16384):Promise<{status:number;data:unknown}> {
   const endpoint=new URL(placement.endpoint);
   if(endpoint.protocol!=='https:'||endpoint.username||endpoint.password||endpoint.search||endpoint.hash||endpoint.pathname!=='/'||!placement.tlsServerName)throw Error('routing.endpoint');
   const host=endpoint.hostname.replace(/^\[|\]$/g,'');
@@ -25,7 +25,7 @@ export async function privateResponse(placement:Placement,path:string,token:stri
       // Never follow redirects or expose upstream errors, headers or destinations.
       if(![200,400,403,404,409].includes(response.statusCode??0)){response.resume();reject(Error('routing.unavailable'));return;}
       let received='';response.setEncoding('utf8');
-      response.on('data',(chunk:string)=>{received+=chunk;if(Buffer.byteLength(received)>16384)response.destroy(Error('routing.size'));});
+      response.on('data',(chunk:string)=>{received+=chunk;if(Buffer.byteLength(received)>responseLimit)response.destroy(Error('routing.size'));});
       response.on('error',reject);response.on('aborted',()=>reject(Error('routing.incomplete')));
       response.on('end',()=>{try{resolve({status:response.statusCode!,data:JSON.parse(received)});}catch{reject(Error('routing.response'));}});
     });
@@ -281,7 +281,7 @@ export class PrivateCatalogClient{
   const {CatalogError}=await import('../auth/catalog.js'),{documentText,documentVersion}=await import('../auth/library.js');
   try{
    if(!uuid(input.operationId))throw new CatalogError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new CatalogError('invalid');
-   const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body);
+   const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
    if(response.status===403||response.status===404)throw new CatalogError('denied');if(response.status===400)throw new CatalogError('invalid');if(response.status===409)throw new CatalogError('conflict');
    const r=response.data as import('../auth/catalog.js').CatalogResult;
    if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['catalogRead','catalogList'].includes(action)?'listed':'applied'))throw Error('routing.response');
@@ -305,7 +305,7 @@ export class PrivatePartnerClient{
   const snapshot=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{32}$/.test(v);
   try{
    if(!uuid(input.operationId))throw new PartnerError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new PartnerError('invalid');
-   const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body);
+   const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
    if(response.status===403||response.status===404)throw new PartnerError('denied');if(response.status===400)throw new PartnerError('invalid');if(response.status===409){const code=(response.data as {code?:string})?.code;throw new PartnerError(code==='partner_paused'?'paused':code==='partner_capacity'?'capacity':'conflict');}
    const r=response.data as import('../auth/partner.js').PartnerResult;
    if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['partnerOptions','partnerRead','partnerList'].includes(action)?'listed':'applied'))throw Error('routing.response');
