@@ -102,3 +102,5 @@ Participant invitation rollout and proof requirements: [INVITATIONS.md](docs/INV
 Relationship proposals and contextual roles (0.6.0-alpha.1): see [RELATIONSHIPS.md](docs/RELATIONSHIPS.md) for individual acceptance, participant privacy, withdrawal and the remaining consent/safety limits.
 
 Versioned consent, private limits and safety (0.7.0-alpha.1): [CONSENT_SAFETY.md](docs/CONSENT_SAFETY.md) documents exact acceptance, pause/stop/re-entry, the transactional guard, bounded outage connections and remaining execution/recovery gates.
+
+Everyday owner-only workspace (0.8.0-alpha.1): [WORKSPACE_TASKS.md](docs/WORKSPACE_TASKS.md) covers the dashboard, household name/timezone, private unassigned/self-directed tasks, safety/capacity boundaries and remaining feature scope.

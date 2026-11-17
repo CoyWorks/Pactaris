@@ -8,7 +8,7 @@ const SafetyContext=createContext<Context|null>(null);
 const errorKey=(key:unknown):MessageKey=>(['consent.invalid','consent.denied','consent.conflict','consent.unavailable','errors.request','errors.rateLimited'] as unknown[]).includes(key)?key as MessageKey:'consent.unavailable';
 const activityKeys:Record<Activity,MessageKey>={task:'consent.activity.task',protocol:'consent.activity.protocol',reward:'consent.activity.reward',consequence:'consent.activity.consequence',session:'consent.activity.session',reminder:'consent.activity.reminder'};
 const decisionKeys:Record<string,MessageKey>={pending:'relationships.pending',accepted:'relationships.accepted',declined:'relationships.declined',withdrawn:'relationships.withdrawn'};
-export function SafetyProvider({householdId,session,language,children}:{householdId:string;session:{csrfToken:string};language:string;children:React.ReactNode}){
+export function SafetyProvider({householdId,session,language,children,compact=false}:{householdId:string;session:{csrfToken:string};language:string;children:React.ReactNode;compact?:boolean}){
  const t=createTranslator(language),[state,setState]=useState<SafetyState>(),[actor,setActor]=useState<string>(),[refresh,setRefresh]=useState(0),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[draft,setDraft]=useState<Draft>(),[busy,setBusy]=useState(false);
  const grant=useRef<{ticketId:string;proof:string;expiresAt:string}|undefined>(undefined),active=useRef(false),base='/api/households/'+householdId;
  async function read(action:string,input:Record<string,unknown>,signal?:AbortSignal){
@@ -50,7 +50,7 @@ export function SafetyProvider({householdId,session,language,children}:{househol
   const operationId=crypto.randomUUID(),ticket=grant.current;
   try{return await send(restrictive&&ticket&&Date.parse(ticket.expiresAt)>Date.now()?{url:'/api/local-safety/'+ticket.ticketId,body:{operationId,proof:ticket.proof,restriction:{action,...input}}}:{url:base+'/consent/'+action,body:{operationId,...input}});}finally{if(!restrictive)active.current=false;}
  }
- return <SafetyContext.Provider value={{state,actor,refresh,read,command}}><section className="notice"><h2>{t('consent.safetyTitle')}</h2><p>{t('consent.ackNotice')}</p>
+ return <SafetyContext.Provider value={{state,actor,refresh,read,command}}><details open={!compact} className="safety-drawer"><summary>{t('workspace.safety')}</summary><section className="notice"><h2>{t('consent.safetyTitle')}</h2><p>{t('consent.ackNotice')}</p>
   {state&&<><p>{t(state.householdStatus==='active'?'consent.householdActive':'consent.householdPaused')}</p><p>{t(state.selfPaused?'consent.selfPaused':'consent.selfActive')}</p></>}
   {error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}
   <button type="button" onClick={()=>{void command('selfPause',{},true);}}>{t('consent.pauseSelf')}</button>
@@ -60,7 +60,7 @@ export function SafetyProvider({householdId,session,language,children}:{househol
   {draft&&<div><p>{t('consent.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void send(draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}
   <button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>
   {state&&<PersonalLimits state={state} language={language} command={command}/>}
- </section>{children}</SafetyContext.Provider>;
+ </section></details>{children}</SafetyContext.Provider>;
 }
 function PersonalLimits({state,language,command}:{state:SafetyState;language:string;command:Context['command']}){
  const t=createTranslator(language),[limits,setLimits]=useState<Limits>(state.limits),[version,setVersion]=useState(state.limitsVersion),edited=useRef(false);

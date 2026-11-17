@@ -1,3 +1,4 @@
+import {GatewayWorkspace} from '../apps/gateway/workspace.js';
 import {GatewayConsent} from '../apps/gateway/consent.js';
 import {GatewayRelationships} from '../apps/gateway/relationships.js';
 import test from 'node:test';
@@ -16,7 +17,7 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient } from '../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
@@ -179,7 +180,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const memberClient=new PrivateMemberClient(signer),memberService=new GatewayMembers(gatewayDb.pool,store,client,memberClient);
   const relationshipClient=new PrivateRelationshipClient(signer),relationshipService=new GatewayRelationships(store,client,relationshipClient);
   const consentService=new GatewayConsent(store,client,new PrivateConsentClient(signer));
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService);
+  const workspaceService=new GatewayWorkspace(store,client,new PrivateWorkspaceClient(signer));
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -884,6 +886,116 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[safeC.account.id,safeHome.householdId,safeRejoin]);
   assert.equal((await departedRestriction()).status,404);assert.equal((await safety(safeC.session)).data.state.limitsVersion,'1');
   }
+  {
+  // Fresh owner-only end-to-end workspace: no partner, relationship or agreement setup.
+  const wsOwner=await store.account('https://idp.fixture.invalid/','workspace-owner','Workspace fixture'),wsSession=randomBytes(32).toString('base64url');
+  await store.createSession(wsSession,wsOwner,'registration-csrf',600,1200);
+  const wsHome=await onboarding.create(wsOwner.id,randomUUID(),'Initial workspace'),wsPlacement=(await store.placement(wsOwner.id,wsHome.householdId))!,wsDb=wsPlacement.instanceId===ids[0]?a:b;
+  const wsMember=(await client.summary(wsOwner.id,wsPlacement))!.membershipId!,wsBase='/api/households/'+wsHome.householdId+'/workspace';
+  const wsRead=(session=wsSession,filter='open',after?:string)=>api(wsBase+'?filter='+filter+(after?'&after='+after:''),'GET',undefined,session);
+  const wsPost=(action:string,input:Record<string,unknown>={},session=wsSession)=>api(wsBase+'/'+action,'POST',{operationId:randomUUID(),...input},session);
+  const wsFields={title:'My first protocol preparation',description:'Private preparation\nSecond line',priority:'normal',dueAt:'2020-01-02T11:00:00.000Z',assignment:'unassigned'};
+  const wsEpoch=async(session=wsSession)=>{const h=(await wsRead(session)).data.household;return {epoch:h.epoch,memberEpoch:h.memberEpoch};};
+  let ws=await wsRead();assert.equal(ws.status,200);assert.equal(ws.data.household.memberCount,1);assert.equal(ws.data.household.canEdit,true);assert.deepEqual(ws.data.tasks,[]);
+  assert.equal((await wsDb.owner.query('SELECT count(*)::int AS n FROM pactaris.relationships WHERE household_id=$1',[wsHome.householdId])).rows[0].n,0);
+  assert.equal((await wsPost('settingsUpdate',{name:'My configured dynamic',timeZone:'Europe/Amsterdam',version:ws.data.household.version})).status,200);
+  assert.equal((await wsPost('settingsUpdate',{name:'Stale override',timeZone:'UTC',version:ws.data.household.version})).status,409);
+  ws=await wsRead();assert.equal(ws.data.household.name,'My configured dynamic');assert.equal(ws.data.household.timeZone,'Europe/Amsterdam');
+  assert.equal((await client.summary(wsOwner.id,wsPlacement))!.name,'My configured dynamic');
+  const createId=randomUUID(),createBody={operationId:createId,fields:wsFields,...await wsEpoch()};
+  assert.equal((await wsPost('taskCreate',createBody)).status,200);assert.equal((await wsPost('taskCreate',createBody)).status,200);
+  assert.equal((await wsPost('taskCreate',{...createBody,fields:{...wsFields,title:'Conflicting retry'}})).status,409);
+  ws=await wsRead();assert.equal(ws.data.tasks.length,1);assert.equal(ws.data.counts.overdue,1);assert.equal(ws.data.counts.unassigned,1);
+  assert.ok(!JSON.stringify(ws.data).includes(wsOwner.id));assert.ok(!JSON.stringify(ws.data).includes('Private preparation'));
+  let detail=(await wsPost('taskRead',{taskId:createId})).data.task;assert.equal(detail.description,wsFields.description);
+  assert.equal((await wsPost('taskComplete',{taskId:createId,version:detail.version,...await wsEpoch()})).status,409);
+  assert.equal((await wsPost('taskUpdate',{taskId:createId,version:detail.version,fields:{...wsFields,title:'Edited by me',assignment:'self'},...await wsEpoch()})).status,200);
+  detail=(await wsPost('taskRead',{taskId:createId})).data.task;
+  const completeId=randomUUID(),completeBody={operationId:completeId,taskId:createId,version:detail.version,...await wsEpoch()};
+  assert.equal((await wsPost('taskComplete',completeBody)).status,200);assert.equal((await wsPost('taskComplete',completeBody)).status,200);
+  assert.equal((await wsRead()).data.counts.done,1);assert.equal((await wsRead()).data.counts.open,0);
+  detail=(await wsPost('taskRead',{taskId:createId})).data.task;
+  assert.equal((await wsPost('taskArchive',{taskId:createId,version:detail.version})).status,200);
+  detail=(await wsPost('taskRead',{taskId:createId})).data.task;
+  assert.equal((await wsPost('taskReopen',{taskId:createId,version:detail.version})).status,200);
+  assert.equal((await wsPost('taskRead',{taskId:createId})).data.task.assignment,'unassigned');
+  // Own execution honors personal pause and an ABA epoch; drafts/settings remain usable.
+  const pausedTask=randomUUID();assert.equal((await wsPost('taskCreate',{operationId:pausedTask,fields:{...wsFields,assignment:'self'},...await wsEpoch()})).status,200);
+  const staleEpoch=await wsEpoch();
+  assert.equal((await api('/api/households/'+wsHome.householdId+'/consent/selfPause','POST',{operationId:randomUUID()},wsSession)).status,200);
+  assert.equal((await wsPost('taskComplete',{taskId:pausedTask,version:'1',...staleEpoch})).data.code,'workspace_paused');
+  assert.equal((await wsPost('taskCreate',{fields:wsFields,...staleEpoch})).status,200);
+  const state=(await api('/api/households/'+wsHome.householdId+'/safety','GET',undefined,wsSession)).data.state;
+  assert.equal((await api('/api/households/'+wsHome.householdId+'/consent/selfResume','POST',{operationId:randomUUID(),epoch:state.epoch,memberEpoch:state.memberEpoch},wsSession)).status,200);
+  assert.equal((await wsPost('taskComplete',{taskId:pausedTask,version:'1',...staleEpoch})).data.code,'workspace_paused');
+  assert.equal((await wsPost('taskComplete',{taskId:pausedTask,version:'1',...await wsEpoch()})).status,200);
+  // A structured private task block is separate from free-text preparation.
+  const blockedLimits={hard:'',soft:'',signal:'',aftercare:'',blockedActivities:['task']};
+  assert.equal((await api('/api/households/'+wsHome.householdId+'/consent/limitsUpdate','POST',{operationId:randomUUID(),limitsVersion:'1',limits:blockedLimits},wsSession)).status,200);
+  assert.equal((await wsPost('taskCreate',{fields:{...wsFields,assignment:'self'},...await wsEpoch()})).data.code,'workspace_paused');
+  assert.equal((await api('/api/households/'+wsHome.householdId+'/consent/limitsUpdate','POST',{operationId:randomUUID(),limitsVersion:'2',limits:{...blockedLimits,blockedActivities:[]}},wsSession)).status,200);
+  const stopHome='/api/households/'+wsHome.householdId+'/consent/';
+  assert.equal((await api(stopHome+'householdStop','POST',{operationId:randomUUID()},wsSession)).status,200);
+  assert.equal((await wsPost('taskCreate',{fields:{...wsFields,assignment:'self'},...await wsEpoch()})).data.code,'workspace_paused');
+  assert.equal((await wsPost('taskCreate',{fields:wsFields,...await wsEpoch()})).status,200);
+  const homeState=(await api('/api/households/'+wsHome.householdId+'/safety','GET',undefined,wsSession)).data.state;
+  assert.equal((await api(stopHome+'householdResume','POST',{operationId:randomUUID(),epoch:homeState.epoch,memberEpoch:homeState.memberEpoch},wsSession)).status,200);
+  const racedTask=randomUUID();assert.equal((await wsPost('taskCreate',{operationId:racedTask,fields:{...wsFields,assignment:'self'},...await wsEpoch()})).status,200);
+  const concurrentEpoch=await wsEpoch(),effectRace=await Promise.all([wsPost('taskComplete',{taskId:racedTask,version:'1',...concurrentEpoch}),api(stopHome+'selfPause','POST',{operationId:randomUUID()},wsSession)]);
+  assert.ok([200,409].includes(effectRace[0]!.status));assert.equal(effectRace[1]!.status,200);
+  const afterRace=(await api('/api/households/'+wsHome.householdId+'/safety','GET',undefined,wsSession)).data.state;
+  assert.equal(afterRace.selfPaused,true);assert.equal((await api(stopHome+'selfResume','POST',{operationId:randomUUID(),epoch:afterRace.epoch,memberEpoch:afterRace.memberEpoch},wsSession)).status,200);
+  // Bounded list summaries/details and actual private tenant/role boundaries.
+  for(let i=0;i<11;i++)assert.equal((await wsPost('taskCreate',{fields:{...wsFields,title:'Paged task '+i},...await wsEpoch()})).status,200);
+  ws=await wsRead();assert.equal(ws.data.tasks.length,10);assert.ok(ws.data.nextCursor);
+  assert.ok((await wsRead(wsSession,'open',ws.data.nextCursor)).data.tasks.length>0);
+  async function wsOther(label:string,role:string){
+   const account=await store.account('https://idp.fixture.invalid/','workspace-'+label,'Other workspace'),member=randomUUID(),session=randomBytes(32).toString('base64url');
+   await wsDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role) VALUES($1,$2,$3,'active',$4)",[wsHome.householdId,member,account.id,role]);
+   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[account.id,wsHome.householdId,member]);await store.createSession(session,account,'registration-csrf',600,1200);return {account,member,session};
+  }
+  const wsAdmin=await wsOther('admin','admin'),wsParticipant=await wsOther('participant','participant');
+  assert.deepEqual((await wsRead(wsAdmin.session)).data.tasks,[]);assert.equal((await wsPost('taskRead',{taskId:createId},wsAdmin.session)).status,404);
+  assert.equal((await wsPost('taskArchive',{taskId:createId,version:'5'},wsAdmin.session)).status,404);
+  assert.equal((await wsPost('settingsUpdate',{name:'Forbidden',timeZone:'UTC',version:(await wsRead()).data.household.version},wsParticipant.session)).status,404);
+  assert.equal((await wsPost('taskCreate',{fields:{...wsFields,assignment:wsAdmin.member},...await wsEpoch()})).status,400);
+  assert.equal((await api(wsBase+'/taskCreate','POST',{operationId:randomUUID(),fields:wsFields,...await wsEpoch()},wsSession,{origin:'https://wrong.fixture.invalid'})).status,403);
+  assert.equal((await api('/api/households/'+households[2]+'/workspace','GET',undefined,wsSession)).status,404);
+  await assert.rejects(new PrivateWorkspaceClient(signer).execute(wsOwner.id,{...wsPlacement,instanceId:wsPlacement.instanceId===ids[0]?ids[1]!:ids[0]!},'workspaceRead',{operationId:randomUUID(),membershipId:wsMember,filter:'open'}));
+  // Capacity is atomic across creators; downgrade does not block existing reads/archive/own completion.
+  const openRows=(await wsDb.owner.query("SELECT id,version::text FROM pactaris.tasks WHERE household_id=$1 AND state='open'",[wsHome.householdId])).rows;
+  for(const row of openRows)assert.equal((await wsPost('taskArchive',{taskId:row.id,version:row.version})).status,200);
+  await wsDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"tasks.active.max\":1}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
+  const racers=[wsSession,wsAdmin.session,wsParticipant.session],raceReplies=await Promise.all(racers.map(async session=>wsPost('taskCreate',{fields:wsFields,...await wsEpoch(session)},session)));
+  assert.equal(raceReplies.filter(r=>r.status===200).length,1);assert.equal(raceReplies.filter(r=>r.data.code==='workspace_capacity').length,2);
+  const winner=raceReplies.findIndex(r=>r.status===200),won=raceReplies[winner]!.data.taskId,wonSession=racers[winner]!;
+  await wsDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"tasks.active.max\":0}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
+  assert.equal((await wsPost('taskUpdate',{taskId:won,version:'1',fields:{...wsFields,assignment:'self'},...await wsEpoch(wonSession)},wonSession)).status,200);
+  assert.equal((await wsPost('taskComplete',{taskId:won,version:'2',...await wsEpoch(wonSession)},wonSession)).status,200);
+  assert.equal((await wsPost('taskReopen',{taskId:won,version:'3'},wonSession)).data.code,'workspace_capacity');
+  // Failed final write rolls back content, receipts, replay, audit and capacity use.
+  await wsDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"tasks.active.max\":25}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
+  const atomicId=randomUUID(),atomicBody=Buffer.from(JSON.stringify({operationId:atomicId,membershipId:wsMember,fields:wsFields,...await wsEpoch()}));
+  const wsHandler=services[wsPlacement.instanceId===ids[0]?0:1]!,packet=await signer.signCommand(wsOwner.id,wsHome.householdId,wsPlacement.instanceId,'taskCreate',atomicId,atomicBody.toString());
+  await wsDb.owner.query("CREATE FUNCTION pactaris.fixture_workspace_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture final workspace write'; END $$; CREATE TRIGGER fixture_workspace_failure BEFORE INSERT ON pactaris.workspace_outbox FOR EACH ROW EXECUTE FUNCTION pactaris.fixture_workspace_failure()");
+  await assert.rejects(wsHandler.workspace(packet,wsHome.householdId,'taskCreate',atomicBody));
+  for(const table of ['workspace_receipts','workspace_outbox'])assert.equal((await wsDb.owner.query('SELECT count(*)::int AS n FROM pactaris.'+table+' WHERE operation_id=$1',[atomicId])).rows[0].n,0);
+  assert.equal((await wsDb.owner.query('SELECT count(*)::int AS n FROM pactaris.tasks WHERE id=$1',[atomicId])).rows[0].n,0);
+  assert.equal((await wsDb.owner.query("SELECT count(*)::int AS n FROM pactaris.audit_events WHERE parameters->>'operationId'=$1",[atomicId])).rows[0].n,0);
+  const jti=JSON.parse(Buffer.from(packet.split('.')[1]!,'base64url').toString()).jti;assert.equal((await wsDb.owner.query('SELECT count(*)::int AS n FROM pactaris.delegation_uses WHERE jti=$1',[jti])).rows[0].n,0);
+  await wsDb.owner.query('DROP TRIGGER fixture_workspace_failure ON pactaris.workspace_outbox; DROP FUNCTION pactaris.fixture_workspace_failure()');
+  assert.equal((await wsHandler.workspace(packet,wsHome.householdId,'taskCreate',atomicBody)).status,'applied');await assert.rejects(wsHandler.workspace(packet,wsHome.householdId,'taskCreate',atomicBody));
+  await assert.rejects(wsDb.pool.query('SELECT * FROM pactaris.tasks'));await assert.rejects(wsDb.pool.query("UPDATE pactaris.households SET time_zone='UTC'"));
+  const wsBackup=new pg.Pool({connectionString:url(wsDb.database,wsDb.backup,'fixture-only-password'),max:1});pools.push(wsBackup);
+  assert.ok((await wsBackup.query('SELECT * FROM pactaris.tasks')).rowCount!>0);await assert.rejects(wsBackup.query('SELECT pactaris.workspace_command($1,$2,$3,$4,$5,$6,$7)',[wsHome.householdId,wsPlacement.instanceId,wsOwner.id,randomUUID(),'workspaceRead',{},'a'.repeat(64)]));
+  // Departure frees active capacity; replacement membership inherits no private tasks or receipt access.
+  assert.equal((await api('/api/households/'+wsHome.householdId+'/leave','POST',{operationId:randomUUID()},wsSession)).status,200);
+  assert.equal((await wsDb.owner.query("SELECT count(*)::int AS n FROM pactaris.tasks WHERE household_id=$1 AND creator_membership_id=$2 AND state='open'",[wsHome.householdId,wsMember])).rows[0].n,0);
+  const rejoined=randomUUID();await wsDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[wsHome.householdId,rejoined,wsOwner.id]);
+  await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[wsOwner.id,wsHome.householdId,rejoined]);
+  assert.deepEqual((await wsRead()).data.tasks,[]);assert.equal((await wsPost('taskRead',{taskId:atomicId})).status,404);assert.equal((await wsPost('taskCreate',createBody)).status,409);
+  }
+
   // Separate concurrent creation IDs are budgeted under the same account lock.
   const racer=await store.account('https://idp.fixture.invalid/','registration-racer','Racer fixture');await store.createSession('s'.repeat(43),racer,'registration-csrf',60,120);
   const races=await Promise.all(Array.from({length:4},()=>api('/api/households','POST',{operationId:randomUUID(),name:'Race fixture'},'s'.repeat(43))));

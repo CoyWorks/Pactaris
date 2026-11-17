@@ -1,3 +1,5 @@
+import {isWorkspaceAction,workspaceInput,WorkspaceError} from '../../packages/auth/workspace.js';
+import type {GatewayWorkspace} from './workspace.js';
 import {isConsentAction,consentInput,ConsentError} from '../../packages/auth/consent.js';
 import type {GatewayConsent} from './consent.js';
 import {isRelationshipAction,relationshipInput,RelationshipError} from '../../packages/auth/relationships.js';
@@ -30,7 +32,7 @@ export function cookie(req:express.Request,name:string):string|undefined {
 function setCookie(res:express.Response,name:string,value:string,seconds:number) {
   res.append('Set-Cookie',`${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${seconds}`);
 }
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -254,6 +256,24 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
   // remain independent of central account/placement reads during an outage.
   app.post('/api/local-safety/:ticketId',express.json({limit:4096,strict:true,inflate:false}),async(req,res)=>{
     try{if(req.get('origin')!==config.publicOrigin||!uuid(req.params.ticketId))throw new ConsentError('denied');if(!consent)throw new ConsentError('unavailable');res.json(await consent.restrict(req.params.ticketId,req.body));}catch(error){consentFailure(res,error);}
+  });
+  function workspaceFailure(res:express.Response,error:unknown){
+    const kind=error instanceof WorkspaceError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,capacity:409,paused:409,unavailable:503}[kind]).json({code:'workspace_'+kind,messageKey:('workspace.'+kind) as MessageKey});
+  }
+  app.get('/api/households/:householdId/workspace',async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      if(!uuid(req.params.householdId)||(req.query.after!==undefined&&!uuid(req.query.after))||!['open','done','archived'].includes(String(req.query.filter??'open')))throw new WorkspaceError('invalid');
+      if(!workspace)throw new WorkspaceError('unavailable');res.json(await workspace.read(session.account.id,req.params.householdId,String(req.query.filter??'open'),req.query.after as string|undefined));
+    }catch(error){workspaceFailure(res,error);}
+  });
+  app.post('/api/households/:householdId/workspace/:action',async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+      const action=req.params.action;if(!uuid(req.params.householdId)||!isWorkspaceAction(action)||action==='workspaceRead')throw new WorkspaceError('invalid');
+      const input=workspaceInput(action,req.body);if(!workspace)throw new WorkspaceError('unavailable');
+      if(action!=='taskRead'&&!await store.throttle('workspace:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+      res.json(await workspace.execute(session.account.id,req.params.householdId,action,input));
+    }catch(error){workspaceFailure(res,error);}
   });
   app.use('/api',(_req,res)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});});
   frontend(app,webRoot,['/','/households/:householdId','/join']);errors(app);return app;

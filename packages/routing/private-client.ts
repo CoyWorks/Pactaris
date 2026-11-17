@@ -191,3 +191,32 @@ export class PrivateConsentClient{
   }catch(error){if(error instanceof ConsentError)throw error;throw new ConsentError('unavailable');}
  }
 }
+
+export class PrivateWorkspaceClient{
+ constructor(private signer:DelegationSigner){}
+ async execute(accountId:string,placement:Placement,action:import('../auth/workspace.js').WorkspaceAction,input:Record<string,unknown>):Promise<import('../auth/workspace.js').WorkspaceResult>{
+  const {WorkspaceError}=await import('../auth/workspace.js');
+  try{
+   if(!uuid(input.operationId))throw new WorkspaceError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new WorkspaceError('invalid');
+   const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body);
+   if(response.status===403||response.status===404)throw new WorkspaceError('denied');if(response.status===400)throw new WorkspaceError('invalid');
+   if(response.status===409){const code=(response.data as {code?:string})?.code;throw new WorkspaceError(code==='workspace_capacity'?'capacity':code==='workspace_paused'?'paused':'conflict');}
+   const r=response.data as import('../auth/workspace.js').WorkspaceResult;
+   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['workspaceRead','taskRead'].includes(action)?'listed':'applied'))throw Error('routing.response');
+   const out:import('../auth/workspace.js').WorkspaceResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
+   const ver=(v:unknown)=>typeof v==='string'&&/^[1-9][0-9]{0,14}$/.test(v);
+   const task=(v:import('../auth/workspace.js').TaskSummary)=>{
+    if(!v||!uuid(v.taskId)||!ver(v.version)||typeof v.title!=='string'||!v.title||[...v.title].length>120||!['low','normal','high'].includes(v.priority)||!['open','done','archived'].includes(v.state)||!['self','unassigned'].includes(v.assignment)||(v.dueAt!==null&&!Number.isFinite(Date.parse(v.dueAt))))throw Error('routing.response');
+    return {taskId:v.taskId,version:v.version,title:v.title,priority:v.priority,state:v.state,assignment:v.assignment,dueAt:v.dueAt};
+   };
+   if(r.taskId!==undefined){if(!uuid(r.taskId))throw Error('routing.response');out.taskId=r.taskId;}
+   if(action==='taskRead'){if(!r.task||typeof r.task.description!=='string'||[...r.task.description].length>1000)throw Error('routing.response');out.task={...task(r.task),description:r.task.description};}
+   if(action==='workspaceRead'){
+    const h=r.household,c=r.counts;if(!h||typeof h.name!=='string'||!h.name||[...h.name].length>120||typeof h.timeZone!=='string'||!ver(h.version)||!ver(h.epoch)||!ver(h.memberEpoch)||typeof h.canEdit!=='boolean'||typeof h.selfPaused!=='boolean'||!['active','paused'].includes(h.status)||!Number.isSafeInteger(h.memberCount)||h.memberCount<1||!c||[c.open,c.done,c.overdue,c.unassigned].some(v=>!Number.isSafeInteger(v)||v<0)||!Array.isArray(r.tasks)||r.tasks.length>10||(r.nextCursor!==null&&!uuid(r.nextCursor)))throw Error('routing.response');
+    new Intl.DateTimeFormat('en',{timeZone:h.timeZone});
+    out.household={name:h.name,timeZone:h.timeZone,version:h.version,canEdit:h.canEdit,status:h.status,epoch:h.epoch,memberEpoch:h.memberEpoch,selfPaused:h.selfPaused,memberCount:h.memberCount};
+    out.counts={open:c.open,done:c.done,overdue:c.overdue,unassigned:c.unassigned};out.tasks=r.tasks.map(task);out.nextCursor=r.nextCursor;
+   }return out;
+  }catch(error){if(error instanceof WorkspaceError)throw error;throw new WorkspaceError('unavailable');}
+ }
+}

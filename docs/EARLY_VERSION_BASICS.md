@@ -41,3 +41,7 @@ Keep advanced relationship/consent/emergency screens accessible in suitable sect
 ## End-to-end acceptance for the next release
 
 With one fresh account and no invitations: create household; edit its name/timezone; open its dashboard; save an unassigned task; edit it; assign a separate task to oneself and complete it; reload and verify persistence. No relationship/agreement creation is requested for these owner-only actions. Another household cannot list/read/edit this content. Existing safety controls remain available, and partner-directed execution is not silently enabled. Only appropriate meaningful tests run, with compact output per DEVELOPMENT.md.
+
+## First everyday checkpoint — 0.8.0-alpha.1
+
+The owner-only dashboard/navigation, name/timezone settings and private unassigned/self-directed task workflow are implemented in this checkpoint. Contract, safety/quotas, tests and explicit limits: [WORKSPACE_TASKS.md](WORKSPACE_TASKS.md). Partner assignment/review, shared boards, recurrence, uploads and rewards remain open. Next everyday modules are the rules/protocol library (#16), then private notes (#66). Source/CI completion is not live operator/mobile acceptance.

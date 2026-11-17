@@ -1,3 +1,4 @@
+import {workspaceActions} from './workspace-actions.js';
 import {consentActions} from './consent-actions.js';
 import {relationshipActions} from './relationship-actions.js';
 import { readFile } from 'node:fs/promises';
@@ -9,7 +10,7 @@ export const audience=(instanceId:string)=>`urn:pactaris:instance:${instanceId}`
 export const membershipActions=['memberList','memberAlias','memberRemove','ownerOffer','ownerAccept','ownerDecline','ownerCancel','memberReceipt'] as const;
 export type MembershipAction=typeof membershipActions[number];
 export const isMembershipAction=(value:unknown):value is MembershipAction=>typeof value==='string'&&(membershipActions as readonly string[]).includes(value);
-export const householdActions=['create','leave','receipt','inviteCreate','invitePreview','inviteAccept','inviteDecline','inviteRevoke','inviteList','inviteReceipt',...membershipActions,...relationshipActions,...consentActions] as const;
+export const householdActions=['create','leave','receipt','inviteCreate','invitePreview','inviteAccept','inviteDecline','inviteRevoke','inviteList','inviteReceipt',...membershipActions,...relationshipActions,...consentActions,...workspaceActions] as const;
 export type HouseholdAction=typeof householdActions[number];
 export type InvitationAction=Extract<HouseholdAction,`invite${string}`>;
 export const isHouseholdAction=(value:unknown):value is HouseholdAction=>typeof value==='string'&&(householdActions as readonly string[]).includes(value);
