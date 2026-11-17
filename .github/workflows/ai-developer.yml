@@ -3,6 +3,12 @@ name: Pactaris AI Developer
 
 on:
   workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "GitHub issue number"
+        required: true
+        type: number
+
 
 permissions:
   contents: read
