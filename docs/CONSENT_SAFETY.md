@@ -1,0 +1,50 @@
+# Consent, limits and authoritative safety — 0.7.0-alpha.1
+
+This is the connected #10/#11 alpha slice. It does not implement task execution, a reminder queue, play/session delivery, emergency delivery, personal export/deletion or complete restore revocation protection.
+
+## Agreements and visibility
+
+An active relationship's exact participants can propose agreements containing scope, hard/soft limits, safeword/non-verbal signal, aftercare preferences, covered activity categories and validity (1–720 hours). Proposals and revisions preaccept nobody. Every participant must explicitly accept their own current version. Revisions increment the agreement version and immediately make earlier acceptance insufficient for future protected activity. All versions and decisions remain on the home Instance; this UI lists the current version, while a complete historical browsing/export interface remains open.
+
+Declining or withdrawing revokes that whole agreement version. Others cannot accept it back into effect. New consent requires a new version and fresh individual acceptance. Another agreement or relationship cannot override a revoked version. Relationship membership or ongoing D/s does not imply consent to tasks, sessions, protocols or consequences. Stored text cannot prove real-world consent or interpret arbitrary activity wording.
+
+Agreement terms and decisions are participants-only, including against unrelated owner/admin members. Minimal audit/outbox identifiers contain no intimate text and are not exposed through a general household feed. The manager stores no agreement or limits content. Existing operator/migration/backup access is not end-to-end encryption.
+
+Each member can independently edit their own household-local private hard/soft limits, signal, aftercare and blocked activity categories. Those private fields are never automatically copied into shared terms or returned to other participants/admins. Each update increments a limits version, invalidating that person's prior acceptance until renewed. Only the fixed categories `task`, `protocol`, `reward`, `consequence`, `session` and `reminder` are machine-enforced here; user prose is descriptive. Categories confer no technical permission and do not start work. A new membership UUID inherits no old limits, consent or safety grant.
+
+## Safety scopes and re-entry
+
+- A personal pause blocks every protected agreement involving that membership across its relationships. Only that member clears it. Every pause/clear changes a monotonic member epoch; clearing requires the observed member and household epochs. It does not renew consent.
+- A relationship pause is that participant's hold within one relationship. Others clear only their own holds. Its monotonic epoch invalidates that person's acceptance in that relationship, while unrelated relationships remain independent. Clearing it cannot clear a personal pause or household stop.
+- Every current member can stop the household without elevated permission, plan capacity or a fresh-login requirement. Stop pauses it and advances the household safety epoch. Duplicate operation retries do not advance it again. A new explicit stop invalidates old re-entry votes and acceptance.
+- Household re-entry requires explicit votes from **all current active members** for the current stop epoch, no personal pauses, and at least one current technical owner. Any ownerless pause still needs the separate recovery design; ownership is never silently assigned. Relationship holds and revoked consent remain intact after re-entry. Every participant must renew agreement acceptance against the new household epoch.
+
+A departure/removal shares the same household lock, ends affected relationships and changes the membership generation. A stale acceptance, safety grant or delayed resume cannot authorize a replacement membership. Stops and pauses never expire automatically and do not depend on commercial entitlements.
+
+## Domain and future worker guard
+
+`pactaris.activity_guard` checks exact home Instance, actor/current membership, current active relationship, current agreement version, expiry/revocation, covered activity, household epoch, every participant's current membership, personal/relationship pauses, current individual acceptance epochs, limits versions and structured activity blocks. It fails closed and acquires the household lifecycle lock for the calling transaction.
+
+Future tasks/protocols/ledger/jobs must call it inside the same write transaction as their effect, together with their own technical/resource permission and idempotency checks. A queued item must retain its original agreement version and safety epoch; no automatic backlog replay occurs after re-entry. A UI eligibility check is informational, not a transferable authorization token or guarantee of future eligibility. No task/reminder/automation execution exists in this release; adapting each future effectful module remains a required acceptance gate. The heartbeat worker is not a consent-aware task scheduler.
+
+## Short-lived restrictive connection during manager-database outage
+
+While the household page is open with a valid gateway session, it prepares a random browser-memory proof. The Instance stores only its hash and an exact-membership grant, valid for at most five minutes and no later than the gateway session's absolute expiry. The gateway caches a bounded private route descriptor without intimate content. The browser receives only an opaque ticket ID/expiry and retains its proof in memory, never a private endpoint, URL query, localStorage record or Instance cookie.
+
+`POST /api/local-safety/:ticketId` requires that proof and the exact configured Origin. It bypasses central account/session/placement DB reads and verifies the grant/current membership on the Instance through a fresh signed, body-bound private command. It can **only** pause oneself, stop the household, pause one's relationship or withdraw one's agreement consent. It cannot read private state, accept, revise, edit limits or resume anything. Normal logout removes matching cached routes. Membership removal/expiry is checked even when an old receipt exists; copied restrictive proofs have a bounded lifetime and cannot restore access.
+
+This is a bounded degraded mode, not independent offline delivery or general local browsing. It requires an already prepared unexpired grant, the same gateway process/route cache, working signing keys, private network and reachable Instance/database. Gateway restart, expired grant, a closed/long-hidden page, network loss or Instance outage can prevent confirmation. Central account revocation not yet observable during a DB outage can leave this restrictive-only capability usable for its remaining five-minute lifetime. A gateway process/host outage still makes its public origin unreachable. Split-host failover, longer local sessions and trusted restore/deletion replay remain separate work.
+
+## Commands, receipts and UI
+
+Normal authenticated commands are under `POST /api/households/:householdId/consent/:action`. Read-only state is `GET .../safety`; agreement listing and activity eligibility use authenticated, nonmutating commands. Bodies have exact keys and stable activity codes. The gateway pins live membership and private placement; the browser cannot choose an actor or accept for another person. Normal commands require session, exact Origin and CSRF. Proposal/revision/acceptance/limits edits and grant preparation have account throttling; restrictive safety controls have no commercial or shared edit quota.
+
+All mutations atomically commit domain state, minimal audit, receipt, outbox and replay rejection under the shared household lock. Grant preparation stores a receipt but creates no noisy activity outbox/audit entry. Same operation/body retries return historical acknowledgement, not a claim that a later stop was cleared. Changed requests with the same ID conflict. General outbox delivery and retention remain open. Runtime has only narrow function execution and no direct access to private tables; backup remains separately protected and read-only.
+
+Visible online pages refresh at most once per minute (plus explicit actions); they prepare/renew the short grant when under a minute remains. Pause/stop/withdraw controls remain usable while another edit's result is unknown. No mutation is queued offline or automatically redispatched. Failed/timed-out requests display unconfirmed state. An exact retry is held only in page memory; abandoning it does not cancel an in-flight request. Expired degraded-mode proof cannot confirm an old request; reconnect and read current state. Recorded acknowledgement does not guarantee real-world safety or emergency response.
+
+## Verification and deployment
+
+Input tests cover exact versions, structured categories and restrictive proof scope. Native two-Instance PostgreSQL/HTTPS tests cover pair/four-person acceptance, private limits/admin exclusion, revisions/expiry/blocks, independent relationship holds, all-member re-entry, stale resume, pause/resume and accept/withdraw races, transactional execution fencing, outage requests with central session/placement reads disabled, forbidden/invalid/expired grants, departure/rejoin, final-write rollback, exact retry/replay and runtime/backup boundaries. CI evidence belongs in #10/#11/#68; live mobile/operator/provider acceptance is separate.
+
+Migration `instance/0008_consent_safety` is additive. Existing checksums, separate roles/config/secrets, Identity issuer/client/Brand/web certificate, domains and TLS/proxy settings stay intact. The normal updater activates the Instance before the gateway. Restart discards gateway emergency route cache; refresh the page while central services are healthy to prepare a new connection. Application fallback does not undo a migration or legitimately restore revoked consent, a stopped state or an ended membership. Restoring old backups without the still-open trusted revocation replay gate is not approved by these tests.

@@ -1,3 +1,4 @@
+import {Agreements} from './consent.js';
 import React,{useEffect,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import type {RelationshipView,RelationshipRole,Proposal} from '../../../packages/auth/relationships.js';
@@ -8,7 +9,7 @@ const decisions:Record<string,MessageKey>={pending:'relationships.pending',accep
 const states:Record<string,MessageKey>={proposed:'relationships.proposed',active:'relationships.active',ended:'relationships.ended'};
 const reasons:Record<string,MessageKey>={declined:'relationships.declined',withdrawn:'relationships.withdrawn',membershipEnded:'relationships.membershipEnded'};
 const errorKey=(value:unknown):MessageKey=>(['relationships.invalid','relationships.denied','relationships.conflict','relationships.unavailable','errors.rateLimited','errors.request'] as unknown[]).includes(value)?value as MessageKey:'relationships.unavailable';
-export function Relationships({householdId,session,language}:{householdId:string;session:{csrfToken:string;account:{id:string}};language:string}){
+export function Relationships({householdId,session,language,format,timeZone}:{householdId:string;session:{csrfToken:string;account:{id:string}};language:string;format:string;timeZone:string}){
  const t=createTranslator(language),[listing,setListing]=useState<Listing>(),[members,setMembers]=useState<MemberRow[]>([]),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[busy,setBusy]=useState(false),[draft,setDraft]=useState<Draft>(),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>();
  const [label,setLabel]=useState(''),[scope,setScope]=useState(''),[participants,setParticipants]=useState<string[]>([]),[roles,setRoles]=useState<RelationshipRole[]>([]),[confirm,setConfirm]=useState<{action:string;relationship:RelationshipView}>();
  useEffect(()=>{
@@ -75,6 +76,7 @@ export function Relationships({householdId,session,language}:{householdId:string
      <button type="button" disabled={blocked} onClick={()=>setConfirm({action:'decline',relationship:r})}>{t('relationships.decline')}</button>
     </>}
     {r.status!=='ended'&&<button type="button" disabled={blocked} onClick={()=>setConfirm({action:'withdraw',relationship:r})}>{t('relationships.withdraw')}</button>}
+    <Agreements relationship={r} language={language} format={format} timeZone={timeZone}/>
    </article>)}
    {listing.nextCursor&&<button type="button" disabled={busy} onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}
    {confirm&&<div className="notice" role="group"><h3>{t('relationships.confirmTitle')}</h3><p>{confirm.relationship.label}</p><p>{confirm.relationship.scope}</p><p>{t(confirm.action==='accept'?'relationships.acceptNotice':'relationships.endNotice')}</p>

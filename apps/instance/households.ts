@@ -1,3 +1,5 @@
+import {InstanceConsent} from './consent.js';
+import type {ConsentAction} from '../../packages/auth/consent.js';
 import {InstanceRelationships} from './relationships.js';
 import type {RelationshipAction} from '../../packages/auth/relationships.js';
 import type pg from 'pg';
@@ -16,11 +18,13 @@ export class InstanceHouseholds {
   private invitations:InstanceInvitations;
   private members:InstanceMembers;
   private relationships:InstanceRelationships;
-  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new DelegationVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);this.members=new InstanceMembers(pool,config);this.relationships=new InstanceRelationships(pool,config);}
+  private consentService:InstanceConsent;
+  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new DelegationVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);this.members=new InstanceMembers(pool,config);this.relationships=new InstanceRelationships(pool,config);this.consentService=new InstanceConsent(pool,config);}
   command(token:string,householdId:string,action:HouseholdAction,body:Buffer){return this.commands.execute(token,householdId,action,body);}
   invitation(token:string,householdId:string,action:InvitationAction,body:Buffer){return this.invitations.execute(token,householdId,action,body);}
   membership(token:string,householdId:string,action:MembershipAction,body:Buffer){return this.members.execute(token,householdId,action,body);}
   relationship(token:string,householdId:string,action:RelationshipAction,body:Buffer){return this.relationships.execute(token,householdId,action,body);}
+  consent(token:string,householdId:string,action:ConsentAction,body:Buffer){return this.consentService.execute(token,householdId,action,body);}
   async summary(token:string,householdId:string) {
     const verified=await this.verifier.verify(token,householdId);
     const db=await this.pool.connect();

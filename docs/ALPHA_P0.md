@@ -10,7 +10,7 @@ The alpha goal is sign in, create a private dynamic, invite a partner, explicitl
 | 2 | #8, #53 | Explicit invitation create/preview/accept/decline/revoke; verified recipient and atomic member reservations | Participant invitation workflow implemented in 0.4.0-alpha.1; real IdP/mobile acceptance remains |
 | 3 | #26 | Immediate departure/removal, voluntary ownership transfer and lifecycle/privacy cleanup | Member removal, voluntary ownership, aliases and local revocation cleanup implemented in 0.5.0-alpha.1; account-wide deletion/export/retention and restore gates remain open |
 | 4 | #35, #9 | Explicit accepted relationship graph and contextual roles; resource authorization separate from labels | Private immutable proposals, individual accept/decline/withdraw and contextual roles implemented in 0.6.0-alpha.1; wider sharing, profile labels and activity consent remain open |
-| 5 | #10, #11 | Exact-version individual consent, limits, revocation and authoritative pause/stop | Queued; required before protected task/protocol execution |
+| 5 | #10, #11 | Exact-version individual consent, limits, revocation and authoritative pause/stop | Versioned agreements/private limits, transactional activity guard, personal/relationship pauses, all-member household re-entry and bounded restrictive outage grants implemented in 0.7.0-alpha.1; effectful queue/task integration and wider failover remain gates |
 | 6 | #6, #7, #24 | Verified registration/recovery, MFA/session controls and transactional delivery; real Google/Apple/local acceptance | OIDC/session/email assertion foundations exist; provider/operational acceptance remains |
 
 ## Small delivery steps
@@ -21,7 +21,7 @@ For invitation work, start with recipient proof tied to the accepting session. T
 
 For ownership, use an explicit recipient offer/acceptance rather than silently assigning another member the owner role. The last owner can still leave; ownerless groups pause and final departure closes the dynamic. Removal and departure must fence pending invitations, jobs, grants and future notifications.
 
-The connected membership/ownership slice is documented in [MEMBER_ADMINISTRATION.md](MEMBER_ADMINISTRATION.md). The private relationship slice is documented in [RELATIONSHIPS.md](RELATIONSHIPS.md). The next functional block is #10/#11 activity consent, limits and authoritative safety controls. Remaining #25/#26 privacy/export/deletion/restore work remains required before broader alpha onboarding; the member ending-marker schema is not a substitute for those release gates.
+The connected membership/ownership slice is documented in [MEMBER_ADMINISTRATION.md](MEMBER_ADMINISTRATION.md). The private relationship slice is documented in [RELATIONSHIPS.md](RELATIONSHIPS.md). The consent/safety slice is documented in [CONSENT_SAFETY.md](CONSENT_SAFETY.md). The next functional block is #6/#7/#24 provider account/recovery/MFA and transactional delivery acceptance. Remaining #25/#26 privacy/export/deletion/restore work remains required before broader alpha onboarding; the member ending-marker schema is not a substitute for those release gates.
 
 For relationships and consent, exercise a pair, a four-person Dom/Dom/sub/sub group and someone who is Dom to one member and sub/bottom to another. Consent is individual and version-bound. Neither payment, technical administration nor a role label supplies consent.
 

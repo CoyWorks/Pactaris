@@ -1,3 +1,4 @@
+import {GatewayConsent} from './consent.js';
 import {GatewayRelationships} from './relationships.js';
 import https from 'node:https';
 import http from 'node:http';
@@ -7,7 +8,7 @@ import { database } from '../../packages/db/index.js';
 import { requireSchema } from '../../packages/db/migrations.js';
 import { OpenIdLogin } from '../../packages/auth/oidc.js';
 import { DelegationSigner } from '../../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient } from '../../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient } from '../../packages/routing/private-client.js';
 import {GatewayMembers} from './members.js';
 import { GatewayInvitations } from './invitations.js';
 import { PgGatewayStore } from './store.js';
@@ -19,7 +20,7 @@ try {
   const store=new PgGatewayStore(db.pool,probe),login=new OpenIdLogin(config),signer=new DelegationSigner(config);
   await login.validateLocal();await signer.ready();
   const onboarding=new OnboardingService(new PgOnboardingStore(db.pool,config.onboarding.maxOwnedHouseholds,new PrivateHouseholdClient(signer)),new PrivateCommandClient(signer));
-  const app=createGatewayApp(config,store,login,new PrivateHouseholdClient(signer),undefined,onboarding,new GatewayInvitations(db.pool,store,new PrivateHouseholdClient(signer),new PrivateInvitationClient(signer)),new GatewayMembers(db.pool,store,new PrivateHouseholdClient(signer),new PrivateMemberClient(signer)),new GatewayRelationships(store,new PrivateHouseholdClient(signer),new PrivateRelationshipClient(signer)));
+  const app=createGatewayApp(config,store,login,new PrivateHouseholdClient(signer),undefined,onboarding,new GatewayInvitations(db.pool,store,new PrivateHouseholdClient(signer),new PrivateInvitationClient(signer)),new GatewayMembers(db.pool,store,new PrivateHouseholdClient(signer),new PrivateMemberClient(signer)),new GatewayRelationships(store,new PrivateHouseholdClient(signer),new PrivateRelationshipClient(signer)),new GatewayConsent(store,new PrivateHouseholdClient(signer),new PrivateConsentClient(signer)));
   const tls=config.listen.tls;
   const server=tls?https.createServer({key:readFileSync(tls.keyFile),cert:readFileSync(tls.certFile),minVersion:'TLSv1.2'},app):http.createServer(app);
   server.requestTimeout=15000;server.headersTimeout=10000;

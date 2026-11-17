@@ -1,3 +1,4 @@
+import {SafetyProvider} from './consent.js';
 import {Relationships} from './relationships.js';
 import React,{useEffect,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
@@ -86,10 +87,10 @@ export function Portal({language,format,timeZone}:{language:string;format:string
     {loading?<p role="status">{t('portal.loading')}</p>:!session?<section><h2>{t('portal.signInTitle')}</h2><p>{t('portal.signInDescription')}</p><a className="button" href="/auth/login">{t('portal.signIn')}</a></section>:<>
       <p>{session.account.displayName||t('portal.account')}</p>
       {error&&<p role="alert">{t(error)}</p>}
-      {selectedId?<section>{selected&&<><h2>{selected.name}</h2><p>{t('portal.workspacePending')}</p><InvitationManager key={session.account.id+':'+selectedId} householdId={selectedId} session={session} language={language} format={format} timeZone={timeZone}/>
-        <Relationships key={'relationships:'+session.account.id+':'+selectedId} householdId={selectedId} session={session} language={language}/><MemberAdministration key={session.account.id+':'+selectedId} householdId={selectedId} session={session} language={language} format={format} timeZone={timeZone}/><button type="button" onClick={()=>setConfirmLeave(true)} disabled={busy}>{t('onboarding.leave')}</button>
+      {selectedId?<section>{selected&&<SafetyProvider key={session.account.id+':'+selectedId} householdId={selectedId} session={session} language={language}><h2>{selected.name}</h2><p>{t('portal.workspacePending')}</p><InvitationManager key={session.account.id+':'+selectedId} householdId={selectedId} session={session} language={language} format={format} timeZone={timeZone}/>
+        <Relationships key={'relationships:'+session.account.id+':'+selectedId} householdId={selectedId} session={session} language={language} format={format} timeZone={timeZone}/><MemberAdministration key={session.account.id+':'+selectedId} householdId={selectedId} session={session} language={language} format={format} timeZone={timeZone}/><button type="button" onClick={()=>setConfirmLeave(true)} disabled={busy}>{t('onboarding.leave')}</button>
         {confirmLeave&&<div className="notice"><p>{t('onboarding.leaveConfirm')}</p><button type="button" onClick={()=>{void leave();}} disabled={busy}>{t('onboarding.leaveConfirmButton')}</button><button type="button" onClick={()=>setConfirmLeave(false)} disabled={busy}>{t('onboarding.cancel')}</button></div>}
-      </>}{leavePending&&<div role="status"><p>{t('onboarding.leavePending')}</p><button type="button" onClick={()=>{void leave();}} disabled={busy}>{t('onboarding.retry')}</button></div>}<p><a href="/">{t('portal.back')}</a></p></section>:<>{listing&&<section aria-live="polite">
+      </SafetyProvider>}{leavePending&&<div role="status"><p>{t('onboarding.leavePending')}</p><button type="button" onClick={()=>{void leave();}} disabled={busy}>{t('onboarding.retry')}</button></div>}<p><a href="/">{t('portal.back')}</a></p></section>:<>{listing&&<section aria-live="polite">
         {listing.partial&&<p role="status">{t('portal.partial')}</p>}
         {!listing.households.length&&!listing.partial&&<><h2>{t('portal.emptyTitle')}</h2><p>{t('portal.emptyDescription')}</p></>}
         {!!listing.households.length&&<ul className="households">{listing.households.map(h=><li key={h.id}><a href={`/households/${h.id}`}>{h.name}</a></li>)}</ul>}

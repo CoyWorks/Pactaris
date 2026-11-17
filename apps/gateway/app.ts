@@ -1,3 +1,5 @@
+import {isConsentAction,consentInput,ConsentError} from '../../packages/auth/consent.js';
+import type {GatewayConsent} from './consent.js';
 import {isRelationshipAction,relationshipInput,RelationshipError} from '../../packages/auth/relationships.js';
 import type {GatewayRelationships} from './relationships.js';
 import express from 'express';
@@ -28,7 +30,7 @@ export function cookie(req:express.Request,name:string):string|undefined {
 function setCookie(res:express.Response,name:string,value:string,seconds:number) {
   res.append('Set-Cookie',`${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${seconds}`);
 }
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'>) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -84,7 +86,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
   app.post('/auth/logout',async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;
     if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
-    await store.logout(cookie(req,SESSION)!);setCookie(res,SESSION,'',0);res.status(204).end();
+    consent?.revokeSession(cookie(req,SESSION)!);await store.logout(cookie(req,SESSION)!);setCookie(res,SESSION,'',0);res.status(204).end();
   });
   app.use('/api/households',express.json({limit:4096,strict:true,inflate:false}));
   app.get('/api/households/operations',async(req,res)=>{
@@ -226,6 +228,32 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       if(!await store.throttle('relationship:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
       if(!relationships)throw new RelationshipError('unavailable');res.json(await relationships.execute(session.account.id,req.params.householdId,action,input));
     }catch(error){relationshipFailure(res,error);}
+  });
+  function consentFailure(res:express.Response,error:unknown){
+    const kind=error instanceof ConsentError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,unavailable:503}[kind]).json({code:'consent_'+kind,messageKey:('consent.'+kind) as MessageKey});
+  }
+  app.get('/api/households/:householdId/safety',async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;if(!uuid(req.params.householdId))throw new ConsentError('invalid');if(!consent)throw new ConsentError('unavailable');res.json(await consent.state(session.account.id,req.params.householdId));}catch(error){consentFailure(res,error);}
+  });
+  app.post('/api/households/:householdId/consent/:action',async(req,res)=>{
+    try{
+      const session=await authenticate(req,res);if(!session)return;
+      if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+      const action=req.params.action;if(!uuid(req.params.householdId)||!isConsentAction(action)||action==='localRestrict'||action==='consentState')throw new ConsentError('invalid');
+      if(!consent)throw new ConsentError('unavailable');
+      if(action==='safetyGrant'){
+        if(!await store.throttle('safetyGrant:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+        res.json(await consent.grant(session.account.id,cookie(req,SESSION)!,session.expiresAt,req.params.householdId,req.body));return;
+      }
+      const input=consentInput(action,req.body);
+      if(['agreementPropose','agreementRevise','agreementAccept','limitsUpdate'].includes(action)&&!await store.throttle('consent:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+      res.json(await consent.execute(session.account.id,req.params.householdId,action,input));
+    }catch(error){consentFailure(res,error);}
+  });
+  // Bearer proof + exact Origin, never ambient session cookies. This route must
+  // remain independent of central account/placement reads during an outage.
+  app.post('/api/local-safety/:ticketId',express.json({limit:4096,strict:true,inflate:false}),async(req,res)=>{
+    try{if(req.get('origin')!==config.publicOrigin||!uuid(req.params.ticketId))throw new ConsentError('denied');if(!consent)throw new ConsentError('unavailable');res.json(await consent.restrict(req.params.ticketId,req.body));}catch(error){consentFailure(res,error);}
   });
   app.use('/api',(_req,res)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});});
   frontend(app,webRoot,['/','/households/:householdId','/join']);errors(app);return app;

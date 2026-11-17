@@ -100,3 +100,5 @@ Alpha delivery order: [first six P0 blocks](docs/ALPHA_P0.md), starting with [me
 Participant invitation rollout and proof requirements: [INVITATIONS.md](docs/INVITATIONS.md).
 
 Relationship proposals and contextual roles (0.6.0-alpha.1): see [RELATIONSHIPS.md](docs/RELATIONSHIPS.md) for individual acceptance, participant privacy, withdrawal and the remaining consent/safety limits.
+
+Versioned consent, private limits and safety (0.7.0-alpha.1): [CONSENT_SAFETY.md](docs/CONSENT_SAFETY.md) documents exact acceptance, pause/stop/re-entry, the transactional guard, bounded outage connections and remaining execution/recovery gates.

@@ -1,3 +1,4 @@
+import {GatewayConsent} from '../apps/gateway/consent.js';
 import {GatewayRelationships} from '../apps/gateway/relationships.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,7 +16,7 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient } from '../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
@@ -177,7 +178,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const inviteClient=new PrivateInvitationClient(signer),invites=new GatewayInvitations(gatewayDb.pool,store,client,inviteClient);
   const memberClient=new PrivateMemberClient(signer),memberService=new GatewayMembers(gatewayDb.pool,store,client,memberClient);
   const relationshipClient=new PrivateRelationshipClient(signer),relationshipService=new GatewayRelationships(store,client,relationshipClient);
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService);
+  const consentService=new GatewayConsent(store,client,new PrivateConsentClient(signer));
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -737,6 +739,151 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
     api('/api/households/'+graphHome.householdId+'/members/remove','POST',{operationId:randomUUID(),targetMembershipId:graphB.member},graphSession)]);
   assert.ok([200,404,409].includes(departureGraphRace[0]!.status));assert.equal(departureGraphRace[1]!.status,200);
   assert.equal((await graphDb.owner.query('SELECT status,end_reason FROM pactaris.relationships WHERE id=$1',[departureGraph.id])).rows[0].end_reason,'membershipEnded');
+  {
+  // Consent/safety through the public origin, private TLS and real independent stores.
+  const safeOwner=await store.account('https://idp.fixture.invalid/','safety-owner','Safety owner'),safeSession=randomBytes(32).toString('base64url');
+  await store.createSession(safeSession,safeOwner,'registration-csrf',600,1200);
+  const safeHome=await onboarding.create(safeOwner.id,randomUUID(),'Safety fixture'),safePlacement=(await store.placement(safeOwner.id,safeHome.householdId))!,safeDb=safePlacement.instanceId===ids[0]?a:b;
+  const safeOwnerMember=(await client.summary(safeOwner.id,safePlacement))!.membershipId!;
+  async function safeMember(label:string,role='participant'){
+   const account=await store.account('https://idp.fixture.invalid/','safety-'+label,'Private global '+label),member=randomUUID(),session=randomBytes(32).toString('base64url');
+   await safeDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role) VALUES($1,$2,$3,'active',$4)",[safeHome.householdId,member,account.id,role]);
+   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[account.id,safeHome.householdId,member]);
+   await store.createSession(session,account,'registration-csrf',600,1200);return {account,member,session};
+  }
+  const safeA=await safeMember('a'),safeB=await safeMember('b','admin'),safeC=await safeMember('c');
+  const safeBase='/api/households/'+safeHome.householdId;
+  const safety=(session=safeA.session)=>api(safeBase+'/safety','GET',undefined,session);
+  const consent=(action:string,input:Record<string,unknown>={},session=safeA.session)=>api(safeBase+'/consent/'+action,'POST',{operationId:randomUUID(),...input},session);
+  async function safeRelation(participants:string[],session=safeA.session){
+   const relation=randomUUID();assert.equal((await api(safeBase+'/relationships/propose','POST',{operationId:relation,proposal:{label:'Safety relation',scope:'Explicit context',participants,roles:[]}},session)).status,200);
+   for(const s of participants.map(id=>id===safeOwnerMember?safeSession:id===safeA.member?safeA.session:id===safeB.member?safeB.session:safeC.session))assert.equal((await api(safeBase+'/relationships/accept','POST',{operationId:randomUUID(),relationshipId:relation,version:'1'},s)).status,200);
+   return relation;
+  }
+  const safeRel=await safeRelation([safeA.member,safeB.member]);
+  const safeTerms={label:'Private negotiated agreement',scope:'Task scope',hard:'Shared hard limit',soft:'Shared soft limit',signal:'Shared signal',aftercare:'Shared aftercare',activities:['task','reminder'],validHours:24};
+  const safeAgreement=randomUUID();assert.equal((await consent('agreementPropose',{operationId:safeAgreement,relationshipId:safeRel,terms:safeTerms})).status,200);
+  const agreements=(session=safeA.session)=>consent('agreementList',{relationshipId:safeRel},session);
+  const check=(version='1',epoch?:string)=>safety().then(s=>consent('activityCheck',{agreementId:safeAgreement,version,activity:'task',epoch:epoch??s.data.state.epoch}));
+  async function acceptConsent(session:string,version='1',agreementId=safeAgreement,rel=safeRel){
+   const state=(await safety(session)).data.state,list=(await consent('agreementList',{relationshipId:rel},session)).data;
+   return consent('agreementAccept',{agreementId,version,epoch:state.epoch,memberEpoch:state.memberEpoch,limitsVersion:state.limitsVersion,relationshipEpoch:list.relationshipEpoch},session);
+  }
+  assert.equal((await check()).data.eligible,false);
+  assert.ok((await agreements()).data.agreements[0].decisions.every((d:any)=>d.decision==='pending'));
+  assert.equal((await agreements(safeSession)).status,404);assert.equal((await agreements(safeC.session)).status,404);
+  assert.equal((await acceptConsent(safeA.session)).status,200);assert.equal((await check()).data.eligible,false);
+  assert.equal((await acceptConsent(safeB.session)).status,200);assert.equal((await check()).data.eligible,true);
+  // Own limits are private; a structured block and any limit-version change invalidate prior acceptance.
+  const privateLimits={hard:'Never expose this private hard limit',soft:'Private soft limit',signal:'Private signal',aftercare:'Private aftercare',blockedActivities:['task']};
+  assert.equal((await consent('limitsUpdate',{limitsVersion:'1',limits:privateLimits})).status,200);
+  assert.ok(!(await safety(safeSession)).body.includes(privateLimits.hard));assert.ok(!(await agreements(safeB.session)).body.includes(privateLimits.hard));
+  assert.equal((await check()).data.eligible,false);assert.equal((await acceptConsent(safeA.session)).status,200);assert.equal((await check()).data.eligible,false);
+  assert.equal((await consent('limitsUpdate',{limitsVersion:'2',limits:{...privateLimits,blockedActivities:[]}})).status,200);
+  assert.equal((await acceptConsent(safeA.session)).status,200);assert.equal((await check()).data.eligible,true);
+  assert.equal((await consent('agreementRevise',{agreementId:safeAgreement,version:'1',terms:{...safeTerms,scope:'Revised scope'}},safeB.session)).status,200);
+  assert.equal((await check('2')).data.eligible,false);assert.equal((await acceptConsent(safeA.session,'1')).status,409);
+  assert.equal((await acceptConsent(safeA.session,'2')).status,200);assert.equal((await acceptConsent(safeB.session,'2')).status,200);
+  assert.equal((await check('2')).data.eligible,true);
+  assert.equal((await safeDb.owner.query('SELECT count(*)::int AS n FROM pactaris.agreement_versions WHERE agreement_id=$1',[safeAgreement])).rows[0].n,2);
+  await safeDb.owner.query("UPDATE pactaris.agreement_versions SET expires_at=now()-interval '1 second' WHERE agreement_id=$1 AND version=2",[safeAgreement]);
+  assert.equal((await check('2')).data.eligible,false);
+  await safeDb.owner.query("UPDATE pactaris.agreement_versions SET expires_at=now()+interval '24 hours' WHERE agreement_id=$1 AND version=2",[safeAgreement]);
+  const concurrentAgreement=randomUUID();assert.equal((await consent('agreementPropose',{operationId:concurrentAgreement,relationshipId:safeRel,terms:safeTerms})).status,200);
+  assert.equal((await acceptConsent(safeA.session,'1',concurrentAgreement)).status,200);
+  const consentRace=await Promise.all([acceptConsent(safeB.session,'1',concurrentAgreement),consent('agreementWithdraw',{agreementId:concurrentAgreement,version:'1'})]);
+  assert.ok([200,409].includes(consentRace[0]!.status));assert.equal(consentRace[1]!.status,200);
+  assert.equal((await consent('activityCheck',{agreementId:concurrentAgreement,version:'1',activity:'task',epoch:(await safety()).data.state.epoch})).data.eligible,false);
+  const separateRel=await safeRelation([safeA.member,safeC.member]),separateAgreement=randomUUID();
+  assert.equal((await consent('agreementPropose',{operationId:separateAgreement,relationshipId:separateRel,terms:safeTerms})).status,200);
+  for(const session of [safeA.session,safeC.session])assert.equal((await acceptConsent(session,'1',separateAgreement,separateRel)).status,200);
+  // A private relation hold does not pause unrelated relationships or grant an admin override.
+  assert.equal((await consent('relationshipPause',{relationshipId:safeRel})).status,200);assert.equal((await check('2')).data.eligible,false);
+  assert.equal((await consent('activityCheck',{agreementId:separateAgreement,version:'1',activity:'task',epoch:(await safety()).data.state.epoch})).data.eligible,true);
+  const aState=(await safety()).data.state,bState=(await safety(safeB.session)).data.state,bRel=(await agreements(safeB.session)).data;
+  assert.equal((await consent('relationshipResume',{relationshipId:safeRel,epoch:bState.epoch,memberEpoch:bState.memberEpoch,relationshipEpoch:bRel.relationshipEpoch},safeB.session)).status,200);
+  assert.equal((await check('2')).data.eligible,false);
+  const aRel=(await agreements()).data;
+  assert.equal((await consent('relationshipResume',{relationshipId:safeRel,epoch:aState.epoch,memberEpoch:aState.memberEpoch,relationshipEpoch:aRel.relationshipEpoch})).status,200);
+  assert.equal((await check('2')).data.eligible,false);
+  for(const session of [safeA.session,safeB.session])assert.equal((await acceptConsent(session,'2')).status,200);
+  assert.equal((await check('2')).data.eligible,true);
+  const consentGroup=await safeRelation([safeOwnerMember,safeA.member,safeB.member,safeC.member]),groupAgreement=randomUUID();
+  assert.equal((await consent('agreementPropose',{operationId:groupAgreement,relationshipId:consentGroup,terms:safeTerms})).status,200);
+  for(const session of [safeA.session,safeB.session,safeC.session])assert.equal((await acceptConsent(session,'1',groupAgreement,consentGroup)).status,200);
+  const groupCheck=()=>safety().then(st=>consent('activityCheck',{agreementId:groupAgreement,version:'1',activity:'task',epoch:st.data.state.epoch}));
+  assert.equal((await groupCheck()).data.eligible,false);assert.equal((await acceptConsent(safeSession,'1',groupAgreement,consentGroup)).status,200);assert.equal((await groupCheck()).data.eligible,true);
+  // Stop/re-entry quorum includes all four current members, not only this relationship or the owner.
+  const oldState=(await safety()).data.state,stopOperation=randomUUID();
+  const stop=await consent('householdStop',{operationId:stopOperation});assert.equal(stop.status,200);
+  const stopped=(await safety()).data.state;assert.notEqual(stopped.epoch,oldState.epoch);
+  assert.equal((await consent('householdStop',{operationId:stopOperation})).status,200);assert.equal((await safety()).data.state.epoch,stopped.epoch);
+  assert.equal((await consent('selfResume',{epoch:oldState.epoch,memberEpoch:oldState.memberEpoch})).status,409);
+  assert.equal((await check('2')).data.eligible,false);
+  for(const session of [safeSession,safeA.session,safeB.session]){const s=(await safety(session)).data.state;assert.equal((await consent('householdResume',{epoch:s.epoch,memberEpoch:s.memberEpoch},session)).status,200);}
+  assert.equal((await safety()).data.state.householdStatus,'paused');
+  assert.equal((await consent('selfPause',{},safeC.session)).status,200);
+  let cState=(await safety(safeC.session)).data.state;
+  assert.equal((await consent('householdResume',{epoch:cState.epoch,memberEpoch:cState.memberEpoch},safeC.session)).status,409);
+  assert.equal((await consent('selfResume',{epoch:cState.epoch,memberEpoch:cState.memberEpoch},safeC.session)).status,200);
+  cState=(await safety(safeC.session)).data.state;assert.equal((await consent('householdResume',{epoch:cState.epoch,memberEpoch:cState.memberEpoch},safeC.session)).status,200);
+  assert.equal((await safety()).data.state.householdStatus,'active');assert.equal((await check('2')).data.eligible,false);
+  for(const session of [safeA.session,safeB.session])assert.equal((await acceptConsent(session,'2')).status,200);
+  assert.equal((await check('2')).data.eligible,true);
+  // Guards fence queued work by safety epoch within the actual transaction lock.
+  const guardArgs=[safeHome.householdId,safePlacement.instanceId,safeA.account.id,safeA.member,safeAgreement,2,'task',(await safety()).data.state.epoch];
+  const protectedConnection=await safeDb.pool.connect();
+  await protectedConnection.query('BEGIN');assert.equal((await protectedConnection.query('SELECT pactaris.activity_guard($1,$2,$3,$4,$5,$6,$7,$8) AS allowed',guardArgs)).rows[0].allowed,true);
+  const stoppingWork=consent('householdStop',{},safeB.session);await protectedConnection.query('COMMIT');protectedConnection.release();assert.equal((await stoppingWork).status,200);
+  assert.equal((await safeDb.pool.query('SELECT pactaris.activity_guard($1,$2,$3,$4,$5,$6,$7,$8) AS allowed',guardArgs)).rows[0].allowed,false);
+  const concurrentState=(await safety(safeB.session)).data.state;
+  const pauseResume=await Promise.all([consent('selfResume',{epoch:concurrentState.epoch,memberEpoch:concurrentState.memberEpoch},safeB.session),consent('selfPause',{},safeB.session)]);
+  assert.ok([200,409].includes(pauseResume[0]!.status));assert.equal(pauseResume[1]!.status,200);assert.equal((await safety(safeB.session)).data.state.selfPaused,true);
+  // A prepared restrictive grant survives account and placement DB read failures, but cannot resume or read content.
+  const proof=randomBytes(32).toString('base64url'),ticketId=randomUUID();
+  assert.equal((await consent('safetyGrant',{operationId:ticketId,proofHash:hash(proof)})).status,200);
+  const local=(restriction:Record<string,unknown>,operationId=randomUUID(),secret=proof)=>api('/api/local-safety/'+ticketId,'POST',{operationId,proof:secret,restriction},'x'.repeat(43));
+  const originalSession=store.session,originalPlacement=store.placement;store.session=async()=>{throw Error('fixture manager outage');};store.placement=async()=>{throw Error('fixture manager outage');};
+  try{
+   assert.equal((await local({action:'selfPause'})).status,200);
+   assert.equal((await local({action:'agreementWithdraw',agreementId:safeAgreement,version:'2'})).status,200);
+   assert.equal((await local({action:'householdStop'})).status,200);
+   assert.equal((await local({action:'selfResume'})).status,400);
+   assert.equal((await local({action:'consentState'})).status,400);
+   assert.equal((await local({action:'householdStop'},randomUUID(),'x'.repeat(43))).status,404);
+  }finally{store.session=originalSession;store.placement=originalPlacement;}
+  assert.equal((await agreements()).data.agreements[0].revoked,true);assert.equal((await acceptConsent(safeA.session,'2')).status,409);
+  await safeDb.owner.query("UPDATE pactaris.local_safety_grants SET expires_at=now()-interval '1 second' WHERE id=$1",[ticketId]);
+  assert.equal((await local({action:'householdStop'})).status,404);
+  // Same-body retry/lost reply, replay rejection and final-outbox failure preserve atomicity.
+  const rollbackConsentId=randomUUID(),rollbackConsentBody=Buffer.from(JSON.stringify({operationId:rollbackConsentId,membershipId:safeA.member}));
+  const safetyHandler=services[safePlacement.instanceId===ids[0]?0:1]!,safetyPacket=await signer.signCommand(safeA.account.id,safeHome.householdId,safePlacement.instanceId,'selfPause',rollbackConsentId,rollbackConsentBody.toString());
+  const beforeEpoch=(await safety()).data.state.memberEpoch;
+  await safeDb.owner.query("CREATE FUNCTION pactaris.fixture_consent_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture final consent write'; END $$; CREATE TRIGGER fixture_consent_failure BEFORE INSERT ON pactaris.consent_outbox FOR EACH ROW EXECUTE FUNCTION pactaris.fixture_consent_failure()");
+  await assert.rejects(safetyHandler.consent(safetyPacket,safeHome.householdId,'selfPause',rollbackConsentBody));assert.equal((await safety()).data.state.memberEpoch,beforeEpoch);
+  for(const table of ['consent_receipts','consent_outbox'])assert.equal((await safeDb.owner.query('SELECT count(*)::int AS n FROM pactaris.'+table+' WHERE operation_id=$1',[rollbackConsentId])).rows[0].n,0);
+  const safetyJti=JSON.parse(Buffer.from(safetyPacket.split('.')[1]!,'base64url').toString()).jti;
+  assert.equal((await safeDb.owner.query('SELECT count(*)::int AS n FROM pactaris.delegation_uses WHERE jti=$1',[safetyJti])).rows[0].n,0);
+  await safeDb.owner.query('DROP TRIGGER fixture_consent_failure ON pactaris.consent_outbox; DROP FUNCTION pactaris.fixture_consent_failure()');
+  assert.equal((await safetyHandler.consent(safetyPacket,safeHome.householdId,'selfPause',rollbackConsentBody)).status,'applied');
+  await assert.rejects(safetyHandler.consent(safetyPacket,safeHome.householdId,'selfPause',rollbackConsentBody));
+  assert.equal((await consent('selfPause',{operationId:rollbackConsentId})).status,200);
+  const epochAfter=(await safety()).data.state.memberEpoch;assert.equal((await consent('selfPause',{operationId:rollbackConsentId})).status,200);assert.equal((await safety()).data.state.memberEpoch,epochAfter);
+  assert.equal((await consent('householdStop',{operationId:rollbackConsentId})).status,409);
+  await assert.rejects(safeDb.pool.query('SELECT * FROM pactaris.personal_limits'));await assert.rejects(safeDb.pool.query("UPDATE pactaris.agreement_versions SET revoked=false"));
+  const safeBackup=new pg.Pool({connectionString:url(safeDb.database,safeDb.backup,'fixture-only-password'),max:1});pools.push(safeBackup);
+  assert.ok((await safeBackup.query('SELECT * FROM pactaris.agreement_versions')).rowCount!>0);
+  await assert.rejects(safeBackup.query('SELECT pactaris.activity_guard($1,$2,$3,$4,$5,$6,$7,$8)',guardArgs));
+
+  const departedTicket=randomUUID(),departedProof=randomBytes(32).toString('base64url');
+  assert.equal((await consent('safetyGrant',{operationId:departedTicket,proofHash:hash(departedProof)},safeC.session)).status,200);
+  assert.equal((await api(safeBase+'/members/remove','POST',{operationId:randomUUID(),targetMembershipId:safeC.member},safeSession)).status,200);
+  const departedRestriction=()=>api('/api/local-safety/'+departedTicket,'POST',{operationId:randomUUID(),proof:departedProof,restriction:{action:'householdStop'}},'x'.repeat(43));
+  assert.equal((await departedRestriction()).status,404);
+  const safeRejoin=randomUUID();await safeDb.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[safeHome.householdId,safeRejoin,safeC.account.id]);
+  await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[safeC.account.id,safeHome.householdId,safeRejoin]);
+  assert.equal((await departedRestriction()).status,404);assert.equal((await safety(safeC.session)).data.state.limitsVersion,'1');
+  }
   // Separate concurrent creation IDs are budgeted under the same account lock.
   const racer=await store.account('https://idp.fixture.invalid/','registration-racer','Racer fixture');await store.createSession('s'.repeat(43),racer,'registration-csrf',60,120);
   const races=await Promise.all(Array.from({length:4},()=>api('/api/households','POST',{operationId:randomUUID(),name:'Race fixture'},'s'.repeat(43))));
