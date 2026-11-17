@@ -1200,7 +1200,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    await db.owner.query('DROP TRIGGER fixture_routine_failure ON pactaris.routine_outbox; DROP FUNCTION pactaris.fixture_routine_failure()');
    assert.equal((await handler.routine(packet,home.householdId,'progressRecord',body)).status,'applied');await assert.rejects(handler.routine(packet,home.householdId,'progressRecord',body));
    const wrong=await signer.signCommand(person.id,home.householdId,ids[place.instanceId===ids[0]?1:0]!,'routineRead',randomUUID(),body.toString());await assert.rejects(handler.routine(wrong,home.householdId,'routineRead',body));
-   for(const table of ['routines','routine_revisions','progress_events','routine_receipts','routine_outbox'])assert.equal((await db.pool.query('SELECT * FROM pactaris.'+table)).rowCount,0);
+   for(const table of ['routines','routine_revisions','progress_events','routine_receipts','routine_outbox'])await assert.rejects(db.pool.query('SELECT * FROM pactaris.'+table),{code:'42501'});
    await assert.rejects(db.pool.query('SELECT * FROM pactaris.routine_period($1,$2)',[fields,'2026-03-29']));
    const backup=new pg.Pool({connectionString:url(db.database,db.backup,'fixture-only-password'),max:1});pools.push(backup);
    assert.ok((await backup.query('SELECT * FROM pactaris.progress_events')).rowCount!>0);await assert.rejects(backup.query('DELETE FROM pactaris.progress_events'));
