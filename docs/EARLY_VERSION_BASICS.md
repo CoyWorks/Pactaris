@@ -57,3 +57,7 @@ Private daily/weekly habits and daily/weekly/single-date ritual/check-in definit
 ## Reward preparation checkpoint — 0.11.0-alpha.1
 
 The first #64 slice provides personal-private reward drafts with title/description/category/order, optional proposed point cost, saved versions, archive and restore. It works without partners, a balance or agreement and runs no reward/consequence. See [REWARD_CATALOG.md](REWARD_CATALOG.md). Next: partner task flow #17 and a reviewed sharing/redemption/ledger slice #64/#20; privacy/operations gates remain open.
+
+## Participant task checkpoint — 0.12.0-alpha.1
+
+The first #17 shared lifecycle now supports offers under current task agreements, recipient acceptance/refusal, start/submission, creator review/changes and safe cancellation/reopening. Pair and group agreements do not create a household-wide task board; only the two task parties see content. Existing private tasks remain unchanged, with shared household capacity enforced across both APIs. See [PARTICIPANT_TASKS.md](PARTICIPANT_TASKS.md). Next priorities remain scheduling/in-app notifications #18/#22 and the reviewed catalog sharing/redemption/ledger slice #64/#20.

@@ -1,3 +1,4 @@
+import {GatewayPartner} from '../apps/gateway/partner.js';
 import {GatewayCatalog} from '../apps/gateway/catalog.js';
 import {GatewayRoutines} from '../apps/gateway/routines.js';
 import {GatewayLibrary} from '../apps/gateway/library.js';
@@ -20,7 +21,7 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient,PrivateCatalogClient } from '../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient,PrivateCatalogClient,PrivatePartnerClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
@@ -187,7 +188,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const libraryService=new GatewayLibrary(store,client,new PrivateLibraryClient(signer));
   const routineService=new GatewayRoutines(store,client,new PrivateRoutineClient(signer));
   const catalogService=new GatewayCatalog(store,client,new PrivateCatalogClient(signer));
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService);
+  const partnerService=new GatewayPartner(store,client,new PrivatePartnerClient(signer));
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService,partnerService);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -1275,6 +1277,85 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.catalog_items WHERE household_id=$1 AND state=\'draft\'',[home.householdId])).rows[0].n,0);
    const rejoined=randomUUID();await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[home.householdId,rejoined,account.id]);
    assert.equal((await post('catalogList',{filter:'archived'})).data.items.length,0);assert.equal((await post('catalogRead',{itemId:id})).status,404);assert.equal((await post('catalogCreate',{operationId:id,fields})).status,409);
+  })();
+
+  await (async function verifyParticipantTaskLifecycle(){
+   const owner=await store.account('https://idp.fixture.invalid/','participant-owner','Participant owner'),ownerSession=randomBytes(32).toString('base64url');await store.createSession(ownerSession,owner,'registration-csrf',600,1200);
+   const home=await onboarding.create(owner.id,randomUUID(),'Participant workflow'),place=(await store.placement(owner.id,home.householdId))!,db=place.instanceId===ids[0]?a:b,base='/api/households/'+home.householdId;
+   const A={account:owner,session:ownerSession,member:(await client.summary(owner.id,place))!.membershipId!};
+   async function add(label:string,role='participant'){const account=await store.account('https://idp.fixture.invalid/','participant-'+label,label),session=randomBytes(32).toString('base64url'),member=randomUUID();await store.createSession(session,account,'registration-csrf',600,1200);await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role,display_name) VALUES($1,$2,$3,'active',$4,$5)",[home.householdId,member,account.id,role,label]);await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[account.id,home.householdId,member]);return {account,session,member};}
+   type Person=typeof A;
+   const post=(p:Person,action:string,input:Record<string,unknown>={})=>api(base+'/participant-tasks/'+action,'POST',{operationId:randomUUID(),...input},p.session);
+   const state=async(p:Person)=>(await api(base+'/safety','GET',undefined,p.session)).data.state;
+   const consent=(p:Person,action:string,input:Record<string,unknown>={})=>api(base+'/consent/'+action,'POST',{operationId:randomUUID(),...input},p.session);
+   const read=async(p:Person,taskId:string,afterVersion?:string)=>{const r=await post(p,'partnerRead',{taskId,...(afterVersion?{afterVersion}:{})});assert.equal(r.status,200,JSON.stringify(r.data));return r.data.task;};
+   const options=async(p:Person)=>{const r=await post(p,'partnerOptions');assert.equal(r.status,200,JSON.stringify(r.data));return r.data.choices;};
+   assert.deepEqual(await options(A),[]);const B=await add('Recipient'),C=await add('Unrelated admin','admin'),D=await add('Other participant');
+   const terms={label:'Negotiated task scope',scope:'Voluntary shared work',hard:'',soft:'',signal:'Pause',aftercare:'',activities:['task'],validHours:24};
+   async function acceptAgreement(p:Person,agreementId:string,relationshipId:string){const s=await state(p),l=(await consent(p,'agreementList',{relationshipId})).data;assert.equal((await consent(p,'agreementAccept',{agreementId,version:'1',epoch:s.epoch,memberEpoch:s.memberEpoch,limitsVersion:s.limitsVersion,relationshipEpoch:l.relationshipEpoch})).status,200);}
+   async function agreement(parties:Person[],activities=['task']){const relationshipId=randomUUID(),agreementId=randomUUID();assert.equal((await api(base+'/relationships/propose','POST',{operationId:relationshipId,proposal:{label:'Contextual relationship',scope:'Explicit shared scope',participants:parties.map(p=>p.member),roles:[]}},parties[0]!.session)).status,200);for(const p of parties)assert.equal((await api(base+'/relationships/accept','POST',{operationId:randomUUID(),relationshipId,version:'1'},p.session)).status,200);assert.equal((await consent(parties[0]!,'agreementPropose',{operationId:agreementId,relationshipId,terms:{...terms,activities}})).status,200);for(const p of parties)await acceptAgreement(p,agreementId,relationshipId);return {agreementId,relationshipId};}
+   const pair=await agreement([A,B]),fields={title:'A voluntary shared task',description:'Exact scope\nVisible to two participants',priority:'normal',dueAt:'2020-01-02T11:00:00.000Z'};
+   const offerBody=async(p:Person,to:Person,agreementId=pair.agreementId)=>{const c=(await options(p)).find((c:any)=>c.agreementId===agreementId);assert.ok(c);return {operationId:randomUUID(),assigneeId:to.member,agreementId:c.agreementId,agreementVersion:c.agreementVersion,epoch:c.epoch,safetyVersion:c.safetyVersion,fields};};
+   const offer=async(p:Person=A,to:Person=B,agreementId=pair.agreementId)=>{const body=await offerBody(p,to,agreementId),r=await post(p,'partnerOffer',body);assert.equal(r.status,200,JSON.stringify(r.data));assert.ok(!r.body.includes(fields.title));assert.ok(!r.body.includes('instance'));return r.data.taskId as string;};
+   const transitionBody=(d:any,action:string,extra:Record<string,unknown>={})=>({operationId:randomUUID(),taskId:d.taskId,version:d.version,...(!['partnerCancel','partnerDecline'].includes(action)?{epoch:d.epoch,safetyVersion:d.safetyVersion}:{}),...extra});
+   const move=async(p:Person,action:string,id:string,extra:Record<string,unknown>={})=>post(p,action,transitionBody(await read(p,id),action,extra));
+   const offered=await offerBody(A,B),initial=await post(A,'partnerOffer',offered);assert.equal(initial.status,200);const id=initial.data.taskId;
+   assert.equal((await post(A,'partnerOffer',offered)).status,200);assert.equal((await post(A,'partnerOffer',{...offered,fields:{...fields,title:'Different intent'}})).status,409);
+   assert.equal((await read(B,id)).state,'offered');assert.equal((await read(B,id)).role,'assignee');assert.equal((await read(A,id)).role,'creator');
+   assert.equal((await post(C,'partnerList',{filter:'active'})).data.tasks.length,0);assert.equal((await post(C,'partnerRead',{taskId:id})).status,404);
+   assert.equal((await post(A,'partnerOffer',{...await offerBody(A,B),assigneeId:C.member})).status,404);
+   assert.equal((await move(A,'partnerAccept',id)).status,404);assert.equal((await move(B,'partnerApprove',id)).status,404);assert.equal((await move(B,'partnerSubmit',id,{note:'Too early'})).status,409);
+   assert.equal((await move(B,'partnerAccept',id)).status,200);assert.equal((await move(B,'partnerStart',id)).status,200);
+   const submission=transitionBody(await read(B,id),'partnerSubmit',{note:'My first submission\nShared evidence text'});assert.equal((await post(B,'partnerSubmit',submission)).status,200);assert.equal((await post(B,'partnerSubmit',submission)).status,200);assert.equal((await post(B,'partnerSubmit',{...submission,note:'Different'})).status,409);
+   assert.equal((await move(A,'partnerChanges',id,{note:'Please review this detail'})).status,200);assert.equal((await move(B,'partnerStart',id)).status,200);assert.equal((await move(B,'partnerSubmit',id,{note:'Updated submission'})).status,200);assert.equal((await move(A,'partnerApprove',id)).status,200);assert.equal((await read(A,id)).state,'done');
+   assert.equal((await move(A,'partnerReopen',id)).status,200);assert.equal((await read(B,id)).state,'offered');assert.equal((await move(B,'partnerStart',id)).status,409);assert.equal((await move(B,'partnerDecline',id)).status,200);
+   const history=await read(A,id);assert.equal(history.events.length,10);assert.ok(history.nextEventCursor);assert.ok((await read(A,id,history.nextEventCursor)).events.length>0);
+   // A four-person agreement is not an all-to-all task board or role hierarchy.
+   const group=await agreement([A,B,C,D]),groupTask=await offer(D,A,group.agreementId);
+   assert.equal((await post(C,'partnerRead',{taskId:groupTask})).status,404);assert.equal((await post(B,'partnerRead',{taskId:groupTask})).status,404);
+   assert.equal((await move(A,'partnerAccept',groupTask)).status,200);assert.equal((await move(A,'partnerStart',groupTask)).status,200);assert.equal((await move(A,'partnerSubmit',groupTask,{note:'My own submission'})).status,200);assert.equal((await move(D,'partnerApprove',groupTask)).status,200);
+   const rewardScope=await agreement([A,C],['reward']);assert.ok(!(await options(A)).some((c:any)=>c.agreementId===rewardScope.agreementId));
+   const rejectedScope={...await offerBody(A,B),assigneeId:C.member,agreementId:rewardScope.agreementId,safetyVersion:(await db.owner.query('SELECT pactaris.partner_snapshot($1,$2,1) AS v',[home.householdId,rewardScope.agreementId])).rows[0].v};assert.equal((await post(A,'partnerOffer',rejectedScope)).data.code,'partner_paused');
+   // Both actor and counterpart pause/re-consent cycles fence old progress packets.
+   const protectedTask=await offer();assert.equal((await move(B,'partnerAccept',protectedTask)).status,200);assert.equal((await move(B,'partnerStart',protectedTask)).status,200);
+   const stale=transitionBody(await read(B,protectedTask),'partnerSubmit',{note:'Delayed work'});assert.equal((await consent(B,'selfPause')).status,200);assert.equal((await post(B,'partnerSubmit',stale)).data.code,'partner_paused');
+   let s=await state(B);assert.equal((await consent(B,'selfResume',{epoch:s.epoch,memberEpoch:s.memberEpoch})).status,200);await acceptAgreement(B,pair.agreementId,pair.relationshipId);assert.equal((await post(B,'partnerSubmit',stale)).data.code,'partner_paused');assert.equal((await move(B,'partnerSubmit',protectedTask,{note:'Fresh work'})).status,200);
+   const staleReview=transitionBody(await read(A,protectedTask),'partnerApprove');assert.equal((await consent(B,'selfPause')).status,200);s=await state(B);assert.equal((await consent(B,'selfResume',{epoch:s.epoch,memberEpoch:s.memberEpoch})).status,200);await acceptAgreement(B,pair.agreementId,pair.relationshipId);assert.equal((await post(A,'partnerApprove',staleReview)).data.code,'partner_paused');
+   const review=await read(A,protectedTask),reviews=await Promise.all([post(A,'partnerApprove',transitionBody(review,'partnerApprove')),post(A,'partnerChanges',transitionBody(review,'partnerChanges',{note:'Concurrent feedback'}))]);assert.deepEqual(reviews.map(r=>r.status).sort(),[200,409]);
+   if((await read(A,protectedTask)).state!=='done')assert.equal((await move(B,'partnerCancel',protectedTask)).status,200);
+   // Limits and expiry remain authoritative, not merely hidden UI buttons.
+   const blocked=await offer();assert.equal((await move(B,'partnerAccept',blocked)).status,200);
+   const limits={hard:'Private block',soft:'',signal:'',aftercare:'',blockedActivities:['task']};assert.equal((await consent(B,'limitsUpdate',{limitsVersion:(await state(B)).limitsVersion,limits})).status,200);assert.equal((await move(B,'partnerStart',blocked)).data.code,'partner_paused');assert.equal((await move(B,'partnerCancel',blocked)).status,200);
+   assert.equal((await consent(B,'limitsUpdate',{limitsVersion:(await state(B)).limitsVersion,limits:{...limits,blockedActivities:[]}})).status,200);await acceptAgreement(B,pair.agreementId,pair.relationshipId);
+   const expiring=await agreement([A,B]),expiredTask=await offer(A,B,expiring.agreementId);await db.owner.query("UPDATE pactaris.agreement_versions SET expires_at=now()-interval '1 second' WHERE household_id=$1 AND agreement_id=$2",[home.householdId,expiring.agreementId]);assert.equal((await read(B,expiredTask)).eligible,false);assert.equal((await move(B,'partnerAccept',expiredTask)).data.code,'partner_paused');assert.equal((await move(A,'partnerCancel',expiredTask)).status,200);
+   // Combined private/shared capacity and downgrade cannot evict or block refusal.
+   await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','1') WHERE household_id=$1",[home.householdId]);
+   const ownState=await state(A),privateId=randomUUID(),privateFields={title:'Private capacity',description:'',priority:'normal',dueAt:null,assignment:'unassigned'};
+   assert.equal((await api(base+'/workspace/taskCreate','POST',{operationId:privateId,fields:privateFields,epoch:ownState.epoch,memberEpoch:ownState.memberEpoch},A.session)).status,200);
+   assert.equal((await post(A,'partnerOffer',await offerBody(A,B))).data.code,'partner_capacity');assert.equal((await api(base+'/workspace/taskArchive','POST',{operationId:randomUUID(),taskId:privateId,version:'1'},A.session)).status,200);
+   const capacityTask=await offer();assert.equal((await api(base+'/workspace/taskCreate','POST',{operationId:randomUUID(),fields:privateFields,epoch:ownState.epoch,memberEpoch:ownState.memberEpoch},A.session)).data.code,'workspace_capacity');
+   await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','0') WHERE household_id=$1",[home.householdId]);assert.equal((await read(B,capacityTask)).state,'offered');assert.equal((await move(B,'partnerDecline',capacityTask)).status,200);assert.equal((await post(A,'partnerOffer',await offerBody(A,B))).data.code,'partner_capacity');
+   await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','1') WHERE household_id=$1",[home.householdId]);
+   const concurrentOffers=await Promise.all([post(A,'partnerOffer',await offerBody(A,B)),post(A,'partnerOffer',await offerBody(A,B))]);assert.deepEqual(concurrentOffers.map(r=>r.status).sort(),[200,409]);const atomicTask=concurrentOffers.find(r=>r.status===200)!.data.taskId;
+   await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','25') WHERE household_id=$1",[home.householdId]);
+   assert.equal((await move(B,'partnerAccept',atomicTask)).status,200);assert.equal((await move(B,'partnerStart',atomicTask)).status,200);
+   const current=await read(B,atomicTask),op=randomUUID(),payload=Buffer.from(JSON.stringify({...transitionBody(current,'partnerSubmit',{note:'Atomic submission'}),operationId:op,membershipId:B.member})),handler=services[place.instanceId===ids[0]?0:1]!;
+   const packet=await signer.signCommand(B.account.id,home.householdId,place.instanceId,'partnerSubmit',op,payload.toString());
+   await db.owner.query("CREATE FUNCTION pactaris.fixture_partner_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture final participant task write'; END $$; CREATE TRIGGER fixture_partner_failure BEFORE INSERT ON pactaris.partner_outbox FOR EACH ROW EXECUTE FUNCTION pactaris.fixture_partner_failure()");
+   await assert.rejects(handler.partner(packet,home.householdId,'partnerSubmit',payload));assert.equal((await read(B,atomicTask)).version,current.version);
+   for(const table of ['partner_receipts','partner_outbox'])assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.'+table+' WHERE operation_id=$1',[op])).rows[0].n,0);
+   assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.partner_events WHERE household_id=$1 AND task_id=$2 AND version=$3',[home.householdId,atomicTask,String(Number(current.version)+1)])).rows[0].n,0);
+   await db.owner.query('DROP TRIGGER fixture_partner_failure ON pactaris.partner_outbox; DROP FUNCTION pactaris.fixture_partner_failure()');assert.equal((await handler.partner(packet,home.householdId,'partnerSubmit',payload)).status,'applied');await assert.rejects(handler.partner(packet,home.householdId,'partnerSubmit',payload));
+   const wrong=await signer.signCommand(B.account.id,home.householdId,ids[place.instanceId===ids[0]?1:0]!,'partnerSubmit',op,payload.toString());await assert.rejects(handler.partner(wrong,home.householdId,'partnerSubmit',payload));
+   assert.equal((await api(base+'/participant-tasks/partnerOffer','POST',await offerBody(A,B),A.session,{origin:'https://wrong.fixture.invalid'})).status,403);
+   assert.equal((await api('/api/households/'+households[1]+'/participant-tasks/partnerRead','POST',{operationId:randomUUID(),taskId:atomicTask},A.session)).status,404);
+   for(const table of ['partner_tasks','partner_events','partner_receipts','partner_outbox'])await assert.rejects(db.pool.query('SELECT * FROM pactaris.'+table),{code:'42501'});await assert.rejects(db.pool.query('SELECT pactaris.partner_snapshot($1,$2,1)',[home.householdId,pair.agreementId]));
+   const backup=new pg.Pool({connectionString:url(db.database,db.backup,'fixture-only-password'),max:1});pools.push(backup);assert.ok((await backup.query('SELECT * FROM pactaris.partner_events')).rowCount!>0);await assert.rejects(backup.query('DELETE FROM pactaris.partner_tasks'));
+   // Stop blocks protected review; cancellation and decline remain available.
+   const refusal=await offer();assert.equal((await consent(A,'householdStop')).status,200);assert.equal((await read(A,atomicTask)).eligible,false);assert.equal((await move(A,'partnerApprove',atomicTask)).data.code,'partner_paused');assert.equal((await move(B,'partnerDecline',refusal)).status,200);
+   assert.equal((await commands.execute(B.account.id,place,'leave',randomUUID(),undefined,B.member)).status,'left');assert.equal((await read(A,atomicTask)).state,'cancelled');
+   assert.ok((await read(A,atomicTask)).events.some((e:any)=>e.action==='membershipEnded'));
+   const rejoined=randomUUID();await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[home.householdId,rejoined,B.account.id]);await gatewayDb.owner.query('UPDATE pactaris.account_households SET membership_id=$1 WHERE household_id=$2 AND account_id=$3',[rejoined,home.householdId,B.account.id]);assert.equal((await post(B,'partnerRead',{taskId:atomicTask})).status,404);assert.equal((await post(B,'partnerList',{filter:'closed'})).data.tasks.length,0);
   })();
 
   // Separate concurrent creation IDs are budgeted under the same account lock.

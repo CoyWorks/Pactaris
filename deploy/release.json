@@ -1,5 +1,5 @@
 {
-  "version": "0.11.0-alpha.1",
+  "version": "0.12.0-alpha.1",
   "protocol": 2,
   "migrations": [
     {
@@ -133,6 +133,13 @@
       "id": "0012_reward_catalog",
       "path": "migrations/instance/0012_reward_catalog.sql",
       "sha256": "7e78794dc611e43535d3340aaeffe7004bf9e0832c7944e544def7b3d4ede4b3",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0013_participant_tasks",
+      "path": "migrations/instance/0013_participant_tasks.sql",
+      "sha256": "3df12cfa3c5adaa9d2341207145feb9288afcc979288deef16b118911dee4120",
       "backwardCompatible": true
     }
   ]

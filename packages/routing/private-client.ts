@@ -297,3 +297,34 @@ export class PrivateCatalogClient{
   }catch(error){if(error instanceof CatalogError)throw error;throw new CatalogError('unavailable');}
  }
 }
+
+export class PrivatePartnerClient{
+ constructor(private signer:DelegationSigner){}
+ async execute(accountId:string,placement:Placement,action:import('../auth/partner.js').PartnerAction,input:Record<string,unknown>):Promise<import('../auth/partner.js').PartnerResult>{
+  const {PartnerError,partnerStates,isPartnerAction}=await import('../auth/partner.js'),{documentText,documentVersion}=await import('../auth/library.js'),{utcInstant}=await import('../auth/routines.js');
+  const snapshot=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{32}$/.test(v);
+  try{
+   if(!uuid(input.operationId))throw new PartnerError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new PartnerError('invalid');
+   const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body);
+   if(response.status===403||response.status===404)throw new PartnerError('denied');if(response.status===400)throw new PartnerError('invalid');if(response.status===409){const code=(response.data as {code?:string})?.code;throw new PartnerError(code==='partner_paused'?'paused':code==='partner_capacity'?'capacity':'conflict');}
+   const r=response.data as import('../auth/partner.js').PartnerResult;
+   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['partnerOptions','partnerRead','partnerList'].includes(action)?'listed':'applied'))throw Error('routing.response');
+   const out:import('../auth/partner.js').PartnerResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
+   const summary=(s:import('../auth/partner.js').PartnerSummary)=>{
+    if(!s||!uuid(s.taskId)||!uuid(s.creatorId)||!uuid(s.assigneeId)||s.creatorId===s.assigneeId||!documentVersion(s.version)||!partnerStates.includes(s.state)||!documentText(s.title,120)||!documentText(s.description,500,true,true)||!documentText(s.counterpart,80,true)||!['low','normal','high'].includes(s.priority)||(s.dueAt!==null&&!utcInstant(s.dueAt))||!['creator','assignee'].includes(s.role)||s.role!==(s.creatorId===input.membershipId?'creator':s.assigneeId===input.membershipId?'assignee':undefined))throw Error('routing.response');
+    return {taskId:s.taskId,version:s.version,state:s.state,creatorId:s.creatorId,assigneeId:s.assigneeId,role:s.role,counterpart:s.counterpart,title:s.title,description:s.description,priority:s.priority,dueAt:s.dueAt};
+   };
+   if(r.taskId!==undefined){if(!uuid(r.taskId))throw Error('routing.response');out.taskId=r.taskId;}
+   if(action==='partnerList'||action==='partnerOptions'){if(r.nextCursor!==null&&!uuid(r.nextCursor))throw Error('routing.response');out.nextCursor=r.nextCursor;}
+   if(action==='partnerList'){if(!Array.isArray(r.tasks)||r.tasks.length>10)throw Error('routing.response');out.tasks=r.tasks.map(summary);}
+   if(action==='partnerOptions'){
+    if(!Array.isArray(r.choices)||r.choices.length>10)throw Error('routing.response');out.choices=r.choices.map(c=>{if(!uuid(c.agreementId)||!documentVersion(c.agreementVersion)||!documentVersion(c.epoch)||!snapshot(c.safetyVersion)||!documentText(c.label,80)||!Array.isArray(c.assignees)||c.assignees.length<1||c.assignees.length>7||c.assignees.some(m=>!uuid(m.membershipId)||m.membershipId===input.membershipId||!documentText(m.name,80,true)))throw Error('routing.response');return {agreementId:c.agreementId,agreementVersion:c.agreementVersion,label:c.label,epoch:c.epoch,safetyVersion:c.safetyVersion,assignees:c.assignees.map(m=>({membershipId:m.membershipId,name:m.name}))};});
+   }
+   if(action==='partnerRead'){
+    const s=r.task;if(!s||!uuid(s.agreementId)||!documentVersion(s.agreementVersion)||!documentText(s.agreementLabel,80)||!documentVersion(s.epoch)||!snapshot(s.safetyVersion)||typeof s.eligible!=='boolean'||!Array.isArray(s.events)||s.events.length>10||(s.nextEventCursor!==null&&!documentVersion(s.nextEventCursor)))throw Error('routing.response');
+    const events=s.events.map(e=>{if(!documentVersion(e.version)||!(isPartnerAction(e.action)||e.action==='membershipEnded')||!uuid(e.actorId)||![s.creatorId,s.assigneeId].includes(e.actorId)||!documentText(e.note,500,true,true)||!Number.isFinite(Date.parse(e.at)))throw Error('routing.response');return {version:e.version,action:e.action,actorId:e.actorId,note:e.note,at:e.at};});
+    out.task={...summary(s),agreementId:s.agreementId,agreementVersion:s.agreementVersion,agreementLabel:s.agreementLabel,epoch:s.epoch,safetyVersion:s.safetyVersion,eligible:s.eligible,events,nextEventCursor:s.nextEventCursor};
+   }return out;
+  }catch(error){if(error instanceof PartnerError)throw error;throw new PartnerError('unavailable');}
+ }
+}

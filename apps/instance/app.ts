@@ -1,3 +1,4 @@
+import {isPartnerAction,PartnerError} from '../../packages/auth/partner.js';
 import {isCatalogAction,CatalogError} from '../../packages/auth/catalog.js';
 import {isRoutineAction,RoutineError} from '../../packages/auth/routines.js';
 import {isLibraryAction,LibraryError} from '../../packages/auth/library.js';
@@ -15,7 +16,7 @@ import { InvitationError } from './invitations.js';
 import { CommandError } from './commands.js';
 import manifest from '../../package.json' with { type: 'json' };
 
-export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web'), households?: Pick<InstanceHouseholds,'summary'> & Partial<Pick<InstanceHouseholds,'command'|'invitation'|'membership'|'relationship'|'consent'|'workspace'|'library'|'routine'|'catalog'>>) {
+export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web'), households?: Pick<InstanceHouseholds,'summary'> & Partial<Pick<InstanceHouseholds,'command'|'invitation'|'membership'|'relationship'|'consent'|'workspace'|'library'|'routine'|'catalog'|'partner'>>) {
   const app = express();
   app.disable('x-powered-by');
   // Identity always comes from the future verified OIDC session, never proxy identity headers.
@@ -40,7 +41,8 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
       res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;
     }
     try{
-      if(isCatalogAction(action)){if(!households.catalog)throw new CatalogError('unavailable');res.json(await households.catalog(authorization.slice(7),id,action,req.body));}
+      if(isPartnerAction(action)){if(!households.partner)throw new PartnerError('unavailable');res.json(await households.partner(authorization.slice(7),id,action,req.body));}
+      else if(isCatalogAction(action)){if(!households.catalog)throw new CatalogError('unavailable');res.json(await households.catalog(authorization.slice(7),id,action,req.body));}
       else if(isRoutineAction(action)){if(!households.routine)throw new RoutineError('unavailable');res.json(await households.routine(authorization.slice(7),id,action,req.body));}
       else if(isLibraryAction(action)){if(!households.library)throw new LibraryError('unavailable');res.json(await households.library(authorization.slice(7),id,action,req.body));}
       else if(isWorkspaceAction(action)){if(!households.workspace)throw new WorkspaceError('unavailable');res.json(await households.workspace(authorization.slice(7),id,action,req.body));}
@@ -51,6 +53,7 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
       else res.json(await households.command(authorization.slice(7),id,action,req.body));
     }
     catch(error){
+      if(error instanceof PartnerError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:409).json({code:'partner_'+error.kind,messageKey:'partner.'+error.kind});return;}
       if(error instanceof CatalogError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:409).json({code:'catalog_'+error.kind,messageKey:'catalog.'+error.kind});return;}
       if(error instanceof RoutineError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:409).json({code:'routines_'+error.kind,messageKey:'routines.'+error.kind});return;}
       if(error instanceof LibraryError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:409).json({code:'library_'+error.kind,messageKey:'library.'+error.kind});return;}

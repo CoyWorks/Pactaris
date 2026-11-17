@@ -95,3 +95,7 @@ Additive Instance 0011 adds private routine definitions/configuration revisions/
 ## Private reward catalog checkpoint — 0.11.0-alpha.1
 
 Additive Instance 0012 adds private catalog versions/receipts/outbox and exact-membership departure archival. Use the preserving updater with Instance before gateway. No new configuration, credentials, Identity issuer/client/flows/Brand/web certificate, TLS/proxy/domain changes are needed. Keep old migration checksums and separate runtime/migrator/backup roles. Preserve the production tsconfig/test separation and reduced-stack CI introduced by #72. See [REWARD_CATALOG.md](REWARD_CATALOG.md).
+
+## Participant task checkpoint — 0.12.0-alpha.1
+
+Additive Instance 0013 adds participant task history/receipts/outbox, departure cancellation and combined private/shared task-capacity triggers. Activate Instance before gateway through the preserving updater; retain all old migration checksums, credentials/config/data and independent Identity issuer/client/flows/Brand/web certificate/TLS/domain/proxy settings. No new operator input is needed. Preserve the production build/test separation and reduced-stack checks from #72. See [PARTICIPANT_TASKS.md](PARTICIPANT_TASKS.md); code fallback does not undo the additive schema or restore withdrawn authority.
