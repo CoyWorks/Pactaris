@@ -1,0 +1,37 @@
+
+name: Pactaris AI Developer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  codex:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Pactaris
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          prompt: |
+            You are the AI developer for Pactaris.
+
+            Read README.md and AGENTS.md.
+
+            Identify the current project version,
+            technology stack and main components.
+
+            Give a short summary of the project.
+
+            Do not modify any files.
+            Do not run deployments.
