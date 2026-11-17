@@ -248,3 +248,29 @@ export class PrivateLibraryClient{
   }catch(error){if(error instanceof LibraryError)throw error;throw new LibraryError('unavailable');}
  }
 }
+
+export class PrivateRoutineClient{
+ constructor(private signer:DelegationSigner){}
+ async execute(accountId:string,placement:Placement,action:import('../auth/routines.js').RoutineAction,input:Record<string,unknown>):Promise<import('../auth/routines.js').RoutineResult>{
+  const {RoutineError,calendarDate}=await import('../auth/routines.js'),{documentText,documentVersion}=await import('../auth/library.js');
+  try{
+   if(!uuid(input.operationId))throw new RoutineError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new RoutineError('invalid');
+   const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body);
+   if(response.status===403||response.status===404)throw new RoutineError('denied');if(response.status===400)throw new RoutineError('invalid');if(response.status===409)throw new RoutineError((response.data as {code?:string})?.code==='routines_paused'?'paused':'conflict');
+   const r=response.data as import('../auth/routines.js').RoutineResult;
+   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['routineRead','routineList'].includes(action)?'listed':'applied'))throw Error('routing.response');
+   const out:import('../auth/routines.js').RoutineResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
+   const summary=(s:import('../auth/routines.js').RoutineSummary)=>{
+    if(!s||!uuid(s.routineId)||!documentVersion(s.version)||!documentVersion(s.revision)||!documentText(s.title,120)||!documentText(s.category,60,true)||!['habit','ritual','checkin'].includes(s.kind)||!['draft','active','paused','archived'].includes(s.state)||!['daily','weekly','once'].includes(s.period)||!['minimum','maximum'].includes(s.mode)||!Number.isInteger(s.target)||s.target<1||s.target>10000||typeof s.timeZone!=='string')throw Error('routing.response');
+    new Intl.DateTimeFormat('en',{timeZone:s.timeZone});return {routineId:s.routineId,kind:s.kind,version:s.version,revision:s.revision,state:s.state,title:s.title,category:s.category,timeZone:s.timeZone,period:s.period,mode:s.mode,target:s.target};
+   };
+   for(const k of ['routineId','eventId'] as const)if(r[k]!==undefined){if(!uuid(r[k]))throw Error('routing.response');out[k]=r[k];}
+   if(action==='routineList'){if(!Array.isArray(r.routines)||r.routines.length>10||(r.nextCursor!==null&&!uuid(r.nextCursor)))throw Error('routing.response');out.routines=r.routines.map(summary);out.nextCursor=r.nextCursor;}
+   if(action==='routineRead'){
+    const s=r.routine;if(!s||!documentText(s.description,500,true,true)||(s.date!==null&&!calendarDate(s.date))||!['text','rating','boolean'].includes(s.responseType)||typeof s.historical!=='boolean'||typeof s.periodClosed!=='boolean'||!documentVersion(s.epoch)||!documentVersion(s.memberEpoch)||!calendarDate(s.periodDate)||![s.periodStart,s.periodEnd].every(v=>Number.isFinite(Date.parse(v)))||!Number.isSafeInteger(s.periodTotal)||s.periodTotal<0||!['pending','reached','within','over'].includes(s.result)||!Array.isArray(s.entries)||s.entries.length>3||(s.nextCursor!==null&&!uuid(s.nextCursor)))throw Error('routing.response');
+    const entries=s.entries.map(e=>{if(!uuid(e.eventId)||!Number.isFinite(Date.parse(e.occurredAt))||!Number.isInteger(e.count)||e.count<1||e.count>10000||!documentText(e.text,500,true,true)||(e.rating!==null&&(!Number.isInteger(e.rating)||e.rating<1||e.rating>5))||(e.confirmed!==null&&typeof e.confirmed!=='boolean')||typeof e.reversed!=='boolean')throw Error('routing.response');return {eventId:e.eventId,occurredAt:e.occurredAt,count:e.count,text:e.text,rating:e.rating,confirmed:e.confirmed,reversed:e.reversed};});
+    out.routine={...summary(s),description:s.description,date:s.date,responseType:s.responseType,historical:s.historical,epoch:s.epoch,memberEpoch:s.memberEpoch,periodDate:s.periodDate,periodStart:s.periodStart,periodEnd:s.periodEnd,periodClosed:s.periodClosed,periodTotal:s.periodTotal,result:s.result,entries,nextCursor:s.nextCursor};
+   }return out;
+  }catch(error){if(error instanceof RoutineError)throw error;throw new RoutineError('unavailable');}
+ }
+}

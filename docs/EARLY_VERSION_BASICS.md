@@ -49,3 +49,7 @@ The owner-only dashboard/navigation, name/timezone settings and private unassign
 ## Library/notes checkpoint — 0.9.0-alpha.1
 
 Rules/protocols and personal notes now have an owner-only draft workflow, explicit current-audience publication, saved versions, categories/order/search and archival. Rules/protocol acknowledgement is exact-version and distinct from consent; note text deletion is live-Instance only. Contract and remaining scope: [LIBRARY_NOTES.md](LIBRARY_NOTES.md). Next: basic habits (#63) and ritual/check-in definitions (#19), then reward catalog preparation (#64). Broader task sharing, export/retention/restore and live mobile acceptance remain gates.
+
+## Habits/check-ins checkpoint — 0.10.0-alpha.1
+
+Private daily/weekly habits and daily/weekly/single-date ritual/check-in definitions now support drafts, explicit activation, personal progress, bounded history, saved configuration revisions and reversal. Owner-only setup needs no partner or agreement. See [HABITS_CHECKINS.md](HABITS_CHECKINS.md) for calendar/DST, safety, privacy and remaining #63/#19 criteria. Next: private reward catalog preparation #64.

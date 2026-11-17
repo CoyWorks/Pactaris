@@ -85,3 +85,7 @@ Additive Instance 0009 adds household settings/private tasks and preserves confi
 ## Rules and notes checkpoint — 0.9.0-alpha.1
 
 Additive Instance 0010 introduces document versions, selected/current-household publication and acknowledgements behind narrow grants/FORCE RLS. Activate Instance before gateway via the preserving updater. No new operator config, Identity setup or TLS/proxy edits are needed; retain all prior migration checksums, secrets/data, separate credentials and issuer/client/Brand/web certificate. Author departure archives current sharing under the membership lifecycle transaction. Note deletion removes live saved text but is not trusted off-host/backup deletion replay; application fallback cannot restore withdrawn/deleted authority. See [LIBRARY_NOTES.md](LIBRARY_NOTES.md).
+
+## Habits/check-ins checkpoint — 0.10.0-alpha.1
+
+Additive Instance 0011 adds private routine definitions/configuration revisions/progress/receipts/outbox and departure archival. Activate Instance before gateway through the preserving updater. Keep all existing migration checksums, data/config/secrets, separate runtime/migration/backup credentials and Identity issuer/client/flows/Brand/web certificate, domains, backend TLS and proxies. No new operator inputs are needed. Code fallback cannot recreate ended membership authority or roll back saved progress/schema. See [HABITS_CHECKINS.md](HABITS_CHECKINS.md).

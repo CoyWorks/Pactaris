@@ -1,3 +1,5 @@
+import {isRoutineAction,routineInput,RoutineError} from '../../packages/auth/routines.js';
+import type {GatewayRoutines} from './routines.js';
 import {isLibraryAction,libraryInput,LibraryError} from '../../packages/auth/library.js';
 import type {GatewayLibrary} from './library.js';
 import {isWorkspaceAction,workspaceInput,WorkspaceError} from '../../packages/auth/workspace.js';
@@ -34,7 +36,7 @@ export function cookie(req:express.Request,name:string):string|undefined {
 function setCookie(res:express.Response,name:string,value:string,seconds:number) {
   res.append('Set-Cookie',`${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${seconds}`);
 }
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -295,6 +297,23 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       if(!['documentRead','documentList'].includes(action)&&!await store.throttle('library:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
       res.json(await library.execute(session.account.id,req.params.householdId,action,input));
     }catch(error){libraryFailure(res,error);}
+  });
+  function routineFailure(res:express.Response,error:unknown){
+    const kind=error instanceof RoutineError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,paused:409,unavailable:503}[kind]).json({code:'routines_'+kind,messageKey:('routines.'+kind) as MessageKey});
+  }
+  app.get('/api/households/:householdId/routines',async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;if(!uuid(req.params.householdId)||Object.keys(req.query).some(k=>!['kind','filter','after'].includes(k)))throw new RoutineError('invalid');
+      const input={kind:req.query.kind??'habit',filter:req.query.filter??'current',...(req.query.after!==undefined?{after:req.query.after}:{})};
+      routineInput('routineList',{operationId:randomUUID(),...input});if(!routines)throw new RoutineError('unavailable');res.json(await routines.list(session.account.id,req.params.householdId,input));
+    }catch(error){routineFailure(res,error);}
+  });
+  app.post('/api/households/:householdId/routines/:action',async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+      const action=req.params.action;if(!uuid(req.params.householdId)||!isRoutineAction(action))throw new RoutineError('invalid');const input=routineInput(action,req.body);
+      if(!routines)throw new RoutineError('unavailable');if(!['routineRead','routineList','routinePause','routineArchive','progressReverse'].includes(action)&&!await store.throttle('routine:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+      res.json(await routines.execute(session.account.id,req.params.householdId,action,input));
+    }catch(error){routineFailure(res,error);}
   });
   app.use('/api',(_req,res)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});});
   frontend(app,webRoot,['/','/households/:householdId','/join']);errors(app);return app;

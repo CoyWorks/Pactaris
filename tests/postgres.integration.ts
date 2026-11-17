@@ -1,3 +1,4 @@
+import {GatewayRoutines} from '../apps/gateway/routines.js';
 import {GatewayLibrary} from '../apps/gateway/library.js';
 import {GatewayWorkspace} from '../apps/gateway/workspace.js';
 import {GatewayConsent} from '../apps/gateway/consent.js';
@@ -18,7 +19,7 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient } from '../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
@@ -183,7 +184,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const consentService=new GatewayConsent(store,client,new PrivateConsentClient(signer));
   const workspaceService=new GatewayWorkspace(store,client,new PrivateWorkspaceClient(signer));
   const libraryService=new GatewayLibrary(store,client,new PrivateLibraryClient(signer));
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService);
+  const routineService=new GatewayRoutines(store,client,new PrivateRoutineClient(signer));
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -1110,6 +1112,103 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[libOwner.id,libHome.householdId,replacement]);
   assert.deepEqual((await libList('note')).data.documents,[]);assert.equal((await libRead(ruleId)).status,404);
   assert.equal((await libPost('documentCreate',{operationId:ruleId,kind:'rule',fields:libFields})).status,409);
+  }
+
+  // Owner-only everyday routines: real private HTTPS, database transactions and calendar periods.
+  {
+   const person=await store.account('https://idp.fixture.invalid/','routine-owner','Routine owner'),session=randomBytes(32).toString('base64url');
+   await store.createSession(session,person,'registration-csrf',600,1200);
+   const home=await onboarding.create(person.id,randomUUID(),'Solo routines'),place=(await store.placement(person.id,home.householdId))!,db=place.instanceId===ids[0]?a:b;
+   const membership=(await client.summary(person.id,place))!.membershipId!,base='/api/households/'+home.householdId;
+   const post=(action:string,input:Record<string,unknown>={},actor=session)=>api(base+'/routines/'+action,'POST',{operationId:randomUUID(),...input},actor);
+   const detail=async(routineId:string,extra:Record<string,unknown>={})=>{const r=await post('routineRead',{routineId,day:null,...extra});assert.equal(r.status,200,JSON.stringify(r.data));return r.data.routine;};
+   const safety=async()=> (await api(base+'/safety','GET',undefined,session)).data.state;
+   const consent=(action:string,input:Record<string,unknown>={})=>api(base+'/consent/'+action,'POST',{operationId:randomUUID(),...input},session);
+   const fields={title:'My own practice',description:'Private reflection\nSecond line',category:'Preparation',timeZone:'Europe/Amsterdam',period:'daily',date:null,mode:'minimum',target:2,responseType:'text'};
+   const entry={count:1,text:'Personal progress',rating:null,confirmed:null};
+   const make=async(kind='habit',patch:Record<string,unknown>={})=>{const id=randomUUID();assert.equal((await post('routineCreate',{operationId:id,kind,fields:{...fields,...patch}})).status,200);return id;};
+   const activate=async(id:string)=>{const d=await detail(id);assert.equal((await post('routineActivate',{routineId:id,version:d.version,epoch:d.epoch,memberEpoch:d.memberEpoch})).status,200);return detail(id);};
+   const record=(d:any,input:Record<string,unknown>={})=>post('progressRecord',{routineId:d.routineId,version:d.version,revision:d.revision,epoch:d.epoch,memberEpoch:d.memberEpoch,occurredAt:null,entry,...input});
+   const habit=await make();let d=await detail(habit);assert.equal(d.state,'draft');assert.equal(d.result,'pending');
+   assert.equal((await record(d)).status,409);d=await activate(habit);
+   const event=randomUUID();assert.equal((await record(d,{operationId:event})).status,200);assert.equal((await record(d,{operationId:event})).status,200);
+   assert.equal((await record(d,{operationId:event,entry:{...entry,count:2}})).status,409);assert.equal((await detail(habit)).periodTotal,1);
+   assert.equal((await record(d)).status,200);assert.equal((await detail(habit)).result,'reached');
+   assert.equal((await post('progressReverse',{routineId:habit,eventId:event})).status,200);assert.equal((await detail(habit)).periodTotal,1);
+   assert.equal((await post('progressReverse',{routineId:habit,eventId:randomUUID()})).status,404);
+   assert.equal((await record(d,{occurredAt:new Date(Date.now()+86400000).toISOString()})).status,400);
+   assert.equal((await record(d,{occurredAt:new Date(Date.now()-91*86400000).toISOString()})).status,400);
+   for(const [day,hours] of [['2026-03-29',23],['2026-10-25',25]] as const){const p=await detail(habit,{day});assert.equal((Date.parse(p.periodEnd)-Date.parse(p.periodStart))/3600000,hours);assert.equal(p.periodDate,day);}
+   const weekly=await make('habit',{period:'weekly'});assert.equal((await detail(weekly,{day:'2026-03-29'})).periodDate,'2026-03-23');
+   assert.equal((await detail(weekly,{day:'2000-01-01'})).periodDate,'1999-12-27');
+   const stamp=new Date(Date.now()-3600000).toISOString();let w=await activate(weekly);assert.equal((await record(w,{occurredAt:stamp})).status,200);
+   const expectedMonday=new Date(stamp);expectedMonday.setUTCDate(expectedMonday.getUTCDate()-((expectedMonday.getUTCDay()+6)%7));
+   assert.equal((await detail(weekly,{day:stamp.slice(0,10)})).periodTotal,1);
+   // New configuration has its own totals; pause/resume retains the same revision.
+   assert.equal((await post('routineUpdate',{routineId:habit,version:d.version,fields:{...fields,mode:'maximum',target:1}})).status,200);
+   assert.equal((await record(d)).status,409);d=await detail(habit);assert.equal(d.revision,'2');assert.equal(d.state,'draft');assert.equal(d.periodTotal,0);
+   assert.equal((await detail(habit,{revision:'1'})).periodTotal,1);assert.equal((await detail(habit,{revision:'1'})).historical,true);
+   d=await activate(habit);assert.equal((await record(d,{entry:{...entry,count:2}})).status,200);assert.equal((await detail(habit)).result,'over');
+   assert.equal((await post('routinePause',{routineId:habit,version:d.version})).status,200);assert.equal((await record(d)).status,409);
+   d=await activate(habit);assert.equal(d.revision,'2');assert.equal(d.periodTotal,2);
+   // Progress pagination is bounded, including reversed records.
+   for(let i=0;i<3;i++)assert.equal((await record(d)).status,200);
+   const page=await detail(habit);assert.equal(page.entries.length,3);assert.ok(page.nextCursor);assert.equal((await detail(habit,{after:page.nextCursor})).entries.length,1);
+   // Fresh private reflection definitions never need another member or agreement.
+   const checkin=await make('checkin',{target:1}),ritual=await make('ritual',{target:1,responseType:'boolean'});
+   const reflection=await activate(checkin),practice=await activate(ritual);
+   assert.equal((await record(practice)).status,400);assert.equal((await record(practice,{entry:{...entry,confirmed:true}})).status,200);
+   const stale=await detail(habit);assert.equal((await consent('selfPause')).status,200);
+   assert.equal((await record(stale)).data.code,'routines_paused');let state=await safety();
+   assert.equal((await consent('selfResume',{epoch:state.epoch,memberEpoch:state.memberEpoch})).status,200);
+   assert.equal((await record(stale)).data.code,'routines_paused');d=await detail(habit);assert.equal((await record(d)).status,200);
+   const race=await Promise.all([record(d),consent('selfPause')]);assert.ok([200,409].includes(race[0]!.status));assert.equal(race[1]!.status,200);
+   assert.equal((await consent('householdStop')).status,200);state=await safety();assert.equal(state.selfPaused,true);
+   const submitted=await Promise.all([record(reflection),record(reflection)]);assert.deepEqual(submitted.map(x=>x.status).sort(),[200,409]);
+   assert.deepEqual(await safety(),state);assert.equal((await record(practice)).data.code,'routines_paused');
+   const recorded=submitted.find(x=>x.status===200)!.data.eventId;
+   assert.equal((await post('progressReverse',{routineId:checkin,eventId:recorded})).status,200);assert.equal((await record(reflection)).status,200);
+   // Archived progress can still be corrected while stopped; no automatic reactivation.
+   assert.equal((await post('routineArchive',{routineId:checkin,version:reflection.version})).status,200);
+   const archived=await detail(checkin);assert.equal(archived.state,'archived');assert.equal((await record(archived)).status,409);
+   const latest=archived.entries.find((e:any)=>!e.reversed);assert.ok(latest);assert.equal((await post('progressReverse',{routineId:checkin,eventId:latest.eventId})).status,200);
+   assert.equal((await post('routineRestore',{routineId:checkin,version:archived.version})).status,200);assert.equal((await detail(checkin)).state,'draft');
+   // Typed rating/boolean and single-date reflection use the same period engine.
+   const yesterday=new Date(Date.now()-86400000).toISOString();
+   const once=await make('checkin',{target:1,timeZone:'UTC',period:'once',date:yesterday.slice(0,10),responseType:'rating'}),one=await activate(once);
+   assert.equal((await record(one,{entry:{...entry,rating:4}})).status,400);assert.equal((await record(one,{occurredAt:yesterday,entry:{...entry,rating:4}})).status,200);
+   assert.equal((await detail(once)).entries[0].rating,4);
+   const boolean=await make('checkin',{target:1,responseType:'boolean'}),yesno=await activate(boolean);assert.equal((await record(yesno,{entry:{...entry,confirmed:false}})).status,200);assert.equal((await detail(boolean)).entries[0].confirmed,false);
+   // Another household administrator cannot read or change private definitions/responses.
+   const peer=await store.account('https://idp.fixture.invalid/','routine-peer','Routine peer'),peerSession=randomBytes(32).toString('base64url'),peerMember=randomUUID();
+   await store.createSession(peerSession,peer,'registration-csrf',600,1200);
+   await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role) VALUES($1,$2,$3,'active','admin')",[home.householdId,peerMember,peer.id]);
+   await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id) VALUES($1,$2)',[peer.id,home.householdId]);
+   assert.equal((await post('routineRead',{routineId:habit,day:null},peerSession)).status,404);
+   assert.equal((await post('progressReverse',{routineId:habit,eventId:event},peerSession)).status,404);
+   assert.equal((await api(base+'/routines','GET',undefined,peerSession)).data.routines.length,0);
+   assert.equal((await api(base+'/routines/routineCreate','POST',{operationId:randomUUID(),kind:'habit',fields},session,{origin:'https://wrong.fixture.invalid'})).status,403);
+   assert.equal((await api('/api/households/'+households[1]+'/routines','GET',undefined,session)).status,404);
+   assert.equal((await api(base+'/routines?kind=habit&membershipId='+membership,'GET',undefined,session)).status,400);
+   // Last-write failure rolls back progress, receipt, audit, outbox and JWT consumption.
+   const handler=services[place.instanceId===ids[0]?0:1]!,op=randomUUID(),body=Buffer.from(JSON.stringify({operationId:op,routineId:boolean,version:yesno.version,revision:yesno.revision,epoch:yesno.epoch,memberEpoch:yesno.memberEpoch,occurredAt:yesterday,entry:{...entry,confirmed:true},membershipId:membership}));
+   const packet=await signer.signCommand(person.id,home.householdId,place.instanceId,'progressRecord',op,body.toString());
+   await db.owner.query("CREATE FUNCTION pactaris.fixture_routine_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture last write'; END $$; CREATE TRIGGER fixture_routine_failure BEFORE INSERT ON pactaris.routine_outbox FOR EACH ROW EXECUTE FUNCTION pactaris.fixture_routine_failure()");
+   await assert.rejects(handler.routine(packet,home.householdId,'progressRecord',body));
+   for(const table of ['progress_events','routine_receipts','routine_outbox']){const col=table==='progress_events'?'id':'operation_id';assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.'+table+' WHERE '+col+'=$1',[op])).rows[0].n,0);}
+   assert.equal((await db.owner.query("SELECT count(*)::int n FROM pactaris.audit_events WHERE parameters->>'operationId'=$1",[op])).rows[0].n,0);
+   await db.owner.query('DROP TRIGGER fixture_routine_failure ON pactaris.routine_outbox; DROP FUNCTION pactaris.fixture_routine_failure()');
+   assert.equal((await handler.routine(packet,home.householdId,'progressRecord',body)).status,'applied');await assert.rejects(handler.routine(packet,home.householdId,'progressRecord',body));
+   const wrong=await signer.signCommand(person.id,home.householdId,ids[place.instanceId===ids[0]?1:0]!,'routineRead',randomUUID(),body.toString());await assert.rejects(handler.routine(wrong,home.householdId,'routineRead',body));
+   for(const table of ['routines','routine_revisions','progress_events','routine_receipts','routine_outbox'])assert.equal((await db.pool.query('SELECT * FROM pactaris.'+table)).rowCount,0);
+   await assert.rejects(db.pool.query('SELECT * FROM pactaris.routine_period($1,$2)',[fields,'2026-03-29']));
+   const backup=new pg.Pool({connectionString:url(db.database,db.backup,'fixture-only-password'),max:1});pools.push(backup);
+   assert.ok((await backup.query('SELECT * FROM pactaris.progress_events')).rowCount!>0);await assert.rejects(backup.query('DELETE FROM pactaris.progress_events'));
+   // Departure archives old membership content. Rejoining does not restore access.
+   assert.equal((await commands.execute(person.id,place,'leave',randomUUID(),undefined,membership)).status,'left');
+   assert.equal((await db.owner.query('SELECT state FROM pactaris.routines WHERE household_id=$1 AND id=$2',[home.householdId,habit])).rows[0].state,'archived');
+   const rejoined=randomUUID();await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[home.householdId,rejoined,person.id]);
+   assert.equal((await post('routineRead',{routineId:habit,day:null})).status,404);assert.equal((await api(base+'/routines','GET',undefined,session)).data.routines.length,0);
   }
 
   // Separate concurrent creation IDs are budgeted under the same account lock.
