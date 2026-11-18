@@ -13,3 +13,7 @@ The current installer verifies provider containers and liveness inside the conta
 ## OIDC application import
 
 An operator-imported blueprint for the first Instance is provided in `blueprints/pactaris-instance1.yaml`. See [IDENTITY_OIDC.md](../../docs/IDENTITY_OIDC.md) for configurable deployment values, credential preservation, import steps and verification limits. This prepares the provider; the Instance callback/session runtime is not implemented yet.
+
+## Central SMTP
+
+For the shared account SMTP settings and verification/recovery acceptance, see [Central account email](../../docs/CENTRAL_SMTP.md).
