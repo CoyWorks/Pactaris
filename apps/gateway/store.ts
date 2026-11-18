@@ -16,9 +16,9 @@ export interface GatewayStore {
   consumeLogin(cookie:string,state:string):Promise<LoginAttempt|undefined>;
   account(issuer:string,subject:string,name:string,verifiedEmail?:string):Promise<Account>;
   createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number,verifiedEmail?:string):Promise<void>;
-  session(token:string,idle:number):Promise<Session|undefined>;
+  session(token:string,idle:number,requireVerifiedEmail?:boolean):Promise<Session|undefined>;
   logout(token:string):Promise<void>;
-  sessionsForAccount(accountId:string,token:string):Promise<{sessions:SessionView[];truncated:boolean}>;
+  sessionsForAccount(accountId:string,token:string,requireVerifiedEmail?:boolean):Promise<{sessions:SessionView[];truncated:boolean}>;
   revokeSessionById(accountId:string,token:string,id:string):Promise<string|undefined>;
   revokeOtherSessions(accountId:string,token:string):Promise<string[]>;
   placements(accountId:string,after?:string):Promise<Placement[]>;
@@ -59,10 +59,11 @@ export class PgGatewayStore implements GatewayStore {
       FROM pactaris.accounts a WHERE a.id=$2 AND a.status='active'`,[hash(token),account.id,csrfToken,absolute,idle,email]);
     if(r.rowCount!==1)throw Error('authentication.suspended');
   }
-  async session(token:string,idle:number) {
+  async session(token:string,idle:number,requireVerifiedEmail=false) {
     const r=await this.pool.query(`UPDATE pactaris.sessions s SET idle_expires_at=LEAST(s.expires_at,now()+$2*interval '1 second')
       FROM pactaris.accounts a WHERE s.token_hash=$1 AND a.id=s.account_id AND a.status='active' AND s.expires_at>now() AND s.idle_expires_at>now()
-      RETURNING a.id,a.display_name,s.csrf_token,s.expires_at,a.locale_format,a.time_zone`,[hash(token),idle]);
+      AND (NOT $3::boolean OR s.recipient_email=a.verified_email)
+      RETURNING a.id,a.display_name,s.csrf_token,s.expires_at,a.locale_format,a.time_zone`,[hash(token),idle,requireVerifiedEmail]);
     const row=r.rows[0];return row?{account:{id:row.id,displayName:row.display_name},csrfToken:row.csrf_token,expiresAt:row.expires_at.toISOString(),
       ...(row.locale_format&&row.time_zone?{presentation:{format:row.locale_format,timeZone:row.time_zone}}:{})}:undefined;
   }
@@ -75,11 +76,13 @@ export class PgGatewayStore implements GatewayStore {
     [accountId,value?.format??null,value?.timeZone??null]);
   }
   async logout(token:string){await this.pool.query('DELETE FROM pactaris.sessions WHERE token_hash=$1',[hash(token)]);}
-  async sessionsForAccount(accountId:string,token:string) {
+  async sessionsForAccount(accountId:string,token:string,requireVerifiedEmail=false) {
     const result=await this.pool.query<{id:string;is_current:boolean;created_at:Date;expires_at:Date}>(`
-      SELECT public_id AS id, token_hash=$2 AS is_current, created_at, LEAST(expires_at,idle_expires_at) AS expires_at
-      FROM pactaris.sessions WHERE account_id=$1 AND expires_at>now() AND idle_expires_at>now()
-      ORDER BY is_current DESC,created_at DESC,public_id LIMIT 51`,[accountId,hash(token)]);
+      SELECT s.public_id AS id, s.token_hash=$2 AS is_current, s.created_at, LEAST(s.expires_at,s.idle_expires_at) AS expires_at
+      FROM pactaris.sessions s JOIN pactaris.accounts a ON a.id=s.account_id
+      WHERE s.account_id=$1 AND a.status='active' AND s.expires_at>now() AND s.idle_expires_at>now()
+      AND (NOT $3::boolean OR s.recipient_email=a.verified_email)
+      ORDER BY is_current DESC,s.created_at DESC,s.public_id LIMIT 51`,[accountId,hash(token),requireVerifiedEmail]);
     return {sessions:result.rows.slice(0,50).map(row=>({id:row.id,current:row.is_current,
       createdAt:row.created_at.toISOString(),expiresAt:row.expires_at.toISOString()})),truncated:result.rows.length>50};
   }

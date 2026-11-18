@@ -37,3 +37,12 @@ The updater keeps mandatory backups, checksummed additive migrations and indepen
 Tests cover signed verified/unverified/malformed claims, wrong signatures/issuer/audience/nonce, email alias preservation, same-email distinct accounts, replacement/removal, suspended-account immutability, session projection and upgrading a populated pre-migration gateway with its old session rows intact. Native PostgreSQL/HTTPS integration also exercises the existing two-Instance create/leave and routing boundaries.
 
 Before invitations can ship, [#70](https://github.com/CoyWorks/Pactaris/issues/70) must bind membership history, commands and central hints to an exact membership ID. Rejoining must create a new membership, without restoring old consent/roles, and delayed old leave/create receipts must not affect it. #8 then adds explicit preview/accept/decline/revoke, single-use opaque tokens, recipient proof freshness, member quota reservations and durable routing recovery.
+
+
+## Require verified email for Pactaris sessions
+
+The gateway can enforce the provider's verified email assertion before it creates a session. Keep the default compatibility mode until the installed Authentik provider, local enrollment, recovery and configured social sources have passed their actual sign-in checks. See [CENTRAL_SMTP.md](CENTRAL_SMTP.md).
+
+Set `session.requireVerifiedEmail` to `true` in the installed gateway configuration and restart the gateway API and worker, or apply the gateway update with that setting in place. The strict policy requires a validated OIDC ID token with a supported email address and a Boolean verified claim. A mail address in an editable Authentik profile does not establish verification. Old browser sessions without a session-bound verified address need to sign in again. An existing session also fails strict validation if its verified address differs from the account's current provider assertion.
+
+With test accounts, confirm that local verification and each enabled social source can reach Pactaris, that an unverified account sees a verification prompt, and that an old unverified session is denied after activation. Restore `false` and restart the gateway if the installed provider does not yet emit the required claim. Keep the issuer and existing provider account mapping stable.

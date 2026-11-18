@@ -8,5 +8,5 @@
   "oidc": {"issuer":"https://identity.pactaris.app/application/o/pactaris-instance1/","clientId":"CONFIGURE_CLIENT_ID","clientSecretFile":"/etc/pactaris/bootstrap/instance1-oidc.secret"},
   "delegation": {"keyId":"gateway-v1","privateKeyFile":"/etc/pactaris/bootstrap/login/delegation.key"},
   "trustedProxyAddresses": ["127.0.0.1","::1"],
-  "session": {"idleSeconds":1800,"absoluteSeconds":28800}
+  "session": {"idleSeconds":1800,"absoluteSeconds":28800,"requireVerifiedEmail":false}
 }

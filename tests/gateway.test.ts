@@ -49,10 +49,12 @@ class FixtureStore implements GatewayStore {
 }
 const config=()=>parseGatewayConfig(JSON.parse(readFileSync('config/gateway.example.json','utf8')));
 const headers={host:'pactaris.app'};
-function fixture(onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>){
+function fixture(onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,options:{requireVerifiedEmail?:boolean;omitEmail?:boolean}={}){
   const store=new FixtureStore();let finish=0,summary=0,unavailable=false,revoked=false;
-  const oidc:OidcLogin={start:async a=>'https://identity.example.invalid/authorize?state='+a.state,finish:async()=>{finish++;return {issuer:'https://identity.example.invalid/',subject:'subject',name:'Fixture user',verifiedEmail:'private-fixture@example.invalid'};}};
-  const app=createGatewayApp(config(),store,oidc,{summary:async(account,p)=>{summary++;if(unavailable)throw Error('https://secret:password@private-node.invalid');if(revoked)return;return {id:p.householdId,name:'Fixture dynamic'};}},undefined,onboarding);
+  const oidc:OidcLogin={start:async a=>'https://identity.example.invalid/authorize?state='+a.state,finish:async()=>{finish++;return {issuer:'https://identity.example.invalid/',subject:'subject',name:'Fixture user',verifiedEmail:options.omitEmail?undefined:'private-fixture@example.invalid'};}};
+  const gatewayConfig=config();
+  gatewayConfig.session.requireVerifiedEmail=options.requireVerifiedEmail??false;
+  const app=createGatewayApp(gatewayConfig,store,oidc,{summary:async(account,p)=>{summary++;if(unavailable)throw Error('https://secret:password@private-node.invalid');if(revoked)return;return {id:p.householdId,name:'Fixture dynamic'};}},undefined,onboarding);
   return {app,store,get finish(){return finish;},get summaries(){return summary;},setUnavailable(){unavailable=true;},setRevoked(){revoked=true;}};
 }
 const cookies=(response:{headers:Record<string,unknown>})=>(Array.isArray(response.headers['set-cookie'])?response.headers['set-cookie']:[response.headers['set-cookie']] as string[]).map(v=>v.split(';')[0]!).filter(v=>!v.endsWith('='));
@@ -237,4 +239,24 @@ test('account date and time settings accept supported values and cannot target a
   assert.equal(f.store.presentation.has(accountB),false);
   assert.deepEqual((await save({presentation:null})).json(),{presentation:null});
   assert.equal((await inject(f.app,{url:'/api/session',headers:{...headers,cookie}})).json().presentation,undefined);
+});
+
+
+test('verified-email policy rejects unsigned or missing provider assertions before creating a session',async()=>{
+  const f=fixture(undefined,{requireVerifiedEmail:true,omitEmail:true});
+  const start=await inject(f.app,{url:'/auth/login',headers});
+  assert.equal(start.statusCode,302);
+  const state=new URL(String(start.headers.location)).searchParams.get('state');
+  const callback=await inject(f.app,{url:'/auth/oidc/callback?code=fixture-code&state='+state,
+    headers:{...headers,cookie:cookies(start).join('; '),'x-email-verified':'true'}});
+  assert.equal(callback.statusCode,403);
+  assert.equal(callback.json().messageKey,'account.verifyEmail');
+  assert.equal(f.store.accountInput,undefined);
+  assert.equal(f.store.sessions.size,0);
+  const verified=fixture(undefined,{requireVerifiedEmail:true});
+  await login(verified);
+  assert.equal(verified.store.sessions.size,1);
+  const compat=fixture(undefined,{omitEmail:true});
+  await login(compat);
+  assert.equal(compat.store.sessions.size,1);
 });

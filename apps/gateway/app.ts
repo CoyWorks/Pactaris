@@ -75,14 +75,18 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     const attempt=await store.consumeLogin(binding,states[0]!);
     if(!attempt){loginFailure(req,res,400,'login_failed','errors.loginFailed');return;}
     try {
-      const identity=await oidc.finish(url,attempt),account=await store.account(identity.issuer,identity.subject,identity.name,identity.verifiedEmail);
+      const identity=await oidc.finish(url,attempt),email=normalizeEmail(identity.verifiedEmail);
+      if(config.session.requireVerifiedEmail&&!email){
+        loginFailure(req,res,403,'email_verification_required','account.verifyEmail');return;
+      }
+      const account=await store.account(identity.issuer,identity.subject,identity.name,email);
       const previous=cookie(req,SESSION);if(previous)await store.logout(previous);
-      const sessionToken=token();await store.createSession(sessionToken,account,token(),config.session.idleSeconds,config.session.absoluteSeconds,identity.verifiedEmail);
+      const sessionToken=token();await store.createSession(sessionToken,account,token(),config.session.idleSeconds,config.session.absoluteSeconds,email);
       setCookie(res,SESSION,sessionToken,config.session.absoluteSeconds);res.redirect(303,'/');
     }catch{loginFailure(req,res,400,'login_failed','errors.loginFailed');}
   });
   async function authenticate(req:express.Request,res:express.Response):Promise<Session|undefined> {
-    const id=cookie(req,SESSION),session=id?await store.session(id,config.session.idleSeconds):undefined;
+    const id=cookie(req,SESSION),session=id?await store.session(id,config.session.idleSeconds,config.session.requireVerifiedEmail):undefined;
     if(!session){res.status(401).json({code:'authentication_required',messageKey:'errors.authenticationRequired'});return;}
     return session;
   }
@@ -112,7 +116,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
   });
   app.get('/api/account/sessions',async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;
-    res.json(await store.sessionsForAccount(session.account.id,cookie(req,SESSION)!));
+    res.json(await store.sessionsForAccount(session.account.id,cookie(req,SESSION)!,config.session.requireVerifiedEmail));
   });
   app.delete('/api/account/sessions/:id',async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;

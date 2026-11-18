@@ -112,6 +112,22 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await store.account('https://other-idp.fixture.invalid/','subject-a','Fixture user',email)).id,sameSubjectOtherIssuer.id);
   assert.equal((await gatewayDb.pool.query('SELECT count(*)::int AS n FROM pactaris.accounts WHERE verified_email=$1',[email])).rows[0].n,3);
   await (async()=>{
+    const legacy='legacy-unverified-fixture',verified='verified-email-fixture';
+    await store.createSession(legacy,account,'csrf',60,120);
+    await store.createSession(verified,account,'csrf',60,120,email);
+    try{
+      assert.ok(await store.session(legacy,60));
+      assert.equal(await store.session(legacy,60,true),undefined);
+      assert.ok(await store.session(verified,60,true));
+      assert.equal((await store.sessionsForAccount(account.id,verified,true)).sessions.length,1);
+      await store.account('https://idp.fixture.invalid/','subject-a','Fixture user','updated@example.invalid');
+      assert.equal(await store.session(verified,60,true),undefined);
+    }finally{
+      await store.account('https://idp.fixture.invalid/','subject-a','Fixture user',email);
+      await store.logout(legacy);await store.logout(verified);
+    }
+  })();
+  await (async()=>{
     const token='presentation-fixture',preferences={format:'nl-NL',timeZone:'Europe/Amsterdam'};
     await store.createSession(token,account,'csrf',60,120);
     try{
