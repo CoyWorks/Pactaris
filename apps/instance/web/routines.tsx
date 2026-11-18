@@ -11,9 +11,10 @@ const blank=(kind:RoutineKind,timeZone:string):RoutineFields=>({title:'',descrip
 type Draft={action:string;body:Record<string,unknown>};
 export function RoutinesPanel({householdId,session,language,format,timeZone,section}:{householdId:string;session:{csrfToken:string};language:string;format:string;timeZone:string;section:'habits'|'checkins'}){
  const t=createTranslator(language),[kind,setKind]=useState<RoutineKind>(section==='habits'?'habit':'checkin'),[filter,setFilter]=useState('current'),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[listing,setListing]=useState<RoutineResult>(),[detail,setDetail]=useState<RoutineDetail>(),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[busy,setBusy]=useState(false),[draft,setDraft]=useState<Draft>(),[editor,setEditor]=useState<{fields:RoutineFields;routineId?:string;version?:string}>(),[day,setDay]=useState(''),[eventTime,setEventTime]=useState(''),[count,setCount]=useState(1),[text,setText]=useState(''),[rating,setRating]=useState(3),[confirmed,setConfirmed]=useState(false),[reverse,setReverse]=useState<string>();
+ const [showTrend,setShowTrend]=useState(false);
  const writing=useRef(false),base='/api/households/'+householdId+'/routines';
  async function read(id:string,selectedDay:string|null=null,revision?:string,after?:string,signal?:AbortSignal){
-  const r=await fetch(base+'/routineRead',{method:'POST',signal,cache:'no-store',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({operationId:crypto.randomUUID(),routineId:id,day:selectedDay,...(revision?{revision}:{}),...(after?{after}:{})})}),data=await r.json();if(!r.ok)throw data;return data.routine as RoutineDetail;
+  const r=await fetch(base+'/routineRead',{method:'POST',signal,cache:'no-store',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({operationId:crypto.randomUUID(),routineId:id,day:selectedDay,...(revision?{revision}:{}),...(after?{after}:{}),...(showTrend&&kind==='habit'?{includeTrend:true}:{})})}),data=await r.json();if(!r.ok)throw data;return data.routine as RoutineDetail;
  }
  const detailId=detail?.routineId,detailRevision=detail?.revision;
  useEffect(()=>{
@@ -26,7 +27,7 @@ export function RoutinesPanel({householdId,session,language,format,timeZone,sect
   }
   const resume=()=>{if(timer)clearTimeout(timer);if(document.hidden)active?.abort();else void load();};void load();document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);
   return()=>{gone=true;if(timer)clearTimeout(timer);active?.abort();document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);};
- },[base,kind,filter,cursor,refresh,detailId,detailRevision,day]);
+ },[base,kind,filter,cursor,refresh,detailId,detailRevision,day,showTrend]);
  async function open(id:string,selectedDay:string|null=null,revision?:string,after?:string){
   setBusy(true);const controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),12000);
   try{const d=await read(id,selectedDay,revision,after,controller.signal);setDetail(d);setDay(d.periodDate);setEditor(undefined);setReverse(undefined);setText('');setCount(1);setEventTime('');setRating(3);setConfirmed(false);}
@@ -58,6 +59,12 @@ export function RoutinesPanel({householdId,session,language,format,timeZone,sect
   {detail&&<article className="document-detail"><h3>{detail.title}</h3><p className="document-body">{detail.description}</p><p>{t(stateKeys[detail.state]??'library.draft')} <span>{t('routines.revision')} <span>{detail.revision}</span></span></p>{detail.historical&&<p>{t('routines.historical')}</p>}
    <label>{t('routines.historyDay')}<input type="date" value={day} onChange={e=>setDay(e.target.value)}/></label><p><time dateTime={detail.periodStart}>{formatTime(new Date(detail.periodStart),format,detail.timeZone)}</time><span>{t('routines.periodEnd')}</span><time dateTime={detail.periodEnd}>{formatTime(new Date(detail.periodEnd),format,detail.timeZone)}</time></p>
    <p>{t('routines.total')} <strong>{detail.periodTotal}</strong> <span>{t(detail.mode==='minimum'?'routines.minimum':'routines.maximum')} <strong>{detail.target}</strong></span></p><p>{t(detail.kind==='checkin'&&detail.periodTotal>0?'routines.responseRecorded':resultKeys[detail.result]??'routines.pending')}</p>{detail.mode==='maximum'&&<p>{t('routines.maximumNotice')}</p>}{detail.kind==='checkin'&&<p>{t('routines.reflectionNotice')}</p>}
+   {detail.kind==='habit'&&<div>
+    <button type="button" aria-expanded={showTrend} onClick={()=>setShowTrend(current=>!current)}>
+     {t(showTrend?'routines.hideTrend':'routines.showTrend')}
+    </button>
+    {showTrend&&detail.trend&&<HabitTrend detail={detail} language={language} format={format}/>}
+   </div>}
    {detail.historical?<button type="button" disabled={busy} onClick={()=>{void open(detail.routineId,day||null);}}>{t('routines.currentRevision')}</button>:<div className="workspace-actions">
     {detail.state!=='archived'&&<button type="button" disabled={blocked} onClick={()=>setEditor({routineId:detail.routineId,version:detail.version,fields:{title:detail.title,description:detail.description,category:detail.category,timeZone:detail.timeZone,period:detail.period,date:detail.date,mode:detail.mode,target:detail.target,responseType:detail.responseType}})}>{t('workspace.edit')}</button>}
     {(detail.state==='draft'||detail.state==='paused')&&<button type="button" disabled={blocked} onClick={()=>{void change('routineActivate',{routineId:detail.routineId,version:detail.version,epoch:detail.epoch,memberEpoch:detail.memberEpoch});}}>{t('routines.activate')}</button>}
@@ -78,4 +85,22 @@ export function RoutinesPanel({householdId,session,language,format,timeZone,sect
   </article>}
   {listing?.nextCursor&&<button type="button" onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}<button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>
  </section>;
+}
+
+
+function HabitTrend({detail,language,format}:{detail:RoutineDetail;language:string;format:string}){
+ const t=createTranslator(language),trend=detail.trend??[];
+ const dates=new Intl.DateTimeFormat(format,{dateStyle:'medium',timeZone:'UTC'});
+ const numbers=new Intl.NumberFormat(format);
+ const max=Math.max(detail.target,...trend.map(item=>item.count));
+ return <figure className="habit-trend">
+  <figcaption>{t('routines.trendTitle')}</figcaption>
+  <p>{t('routines.trendDescription')}</p>
+  <p>{t('workspace.timeZone')} <span>{detail.timeZone}</span></p>
+  {trend.length?<ul>{trend.map(({date,count})=><li key={date}>
+   <time dateTime={date}>{dates.format(new Date(date+'T00:00:00Z'))}</time>
+   <meter min={0} max={max} value={count} aria-hidden="true"/>
+   <span>{numbers.format(count)}</span>
+  </li>)}</ul>:<p>{t('routines.trendEmpty')}</p>}
+ </figure>;
 }

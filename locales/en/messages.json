@@ -624,5 +624,10 @@
   "account.verifyEmail": "Verify your email address with your sign-in provider, then return to Pactaris and sign in again.",
   "cli.publicSmoke": "Public gateway and Identity smoke check results.",
   "cli.publicSmokeInvalid": "Provide the public HTTPS application origin and the exact HTTPS OIDC issuer.",
-  "inbox.unreadBadge": "Unread"
+  "inbox.unreadBadge": "Unread",
+  "routines.showTrend": "Show recent habit counts",
+  "routines.hideTrend": "Hide recent habit counts",
+  "routines.trendTitle": "Recorded counts by period",
+  "routines.trendDescription": "Up to seven periods for this habit version. Periods without a recorded entry show zero.",
+  "routines.trendEmpty": "No periods to display."
 }

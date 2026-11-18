@@ -38,3 +38,9 @@ Local validation covers strict input, keyed owner-only screens, translations/bui
 ## Remaining scope
 
 Custom periods, scheduled breaks, partner assignment/review/sharing, reminders/job scheduling, Web Push, charts, exports/retention/deletion and agreed outcomes remain open under #18/#19/#20/#22/#23/#29/#41/#63. The next everyday feature is private reward catalog preparation #64, without automatic grants or consequences. No paid/free quota decision is introduced here.
+
+## Private habit count chart
+
+Choose **Show recent habit counts** in a habit's details. The app displays up to seven daily or weekly periods ending at the selected period, using that habit version's time zone. The Instance sums unreversed records, with zero for periods that have no recorded count. Older versions use their own schedule and records.
+
+The chart is optional and uses only counts from the current habit owner's exact membership. A household role does not grant access to someone else's chart. Dates and numbers follow the account's formatting locale. Reports across households or shared members remain future scope in #41.

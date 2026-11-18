@@ -211,6 +211,13 @@
       "path": "migrations/gateway/0011_registry_placement_index.sql",
       "sha256": "84ed9ce27ab8ad41057fa8b79e2542e3ad556d76d4aa25c06b37efc9c6b338af",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0020_private_habit_trend",
+      "path": "migrations/instance/0020_private_habit_trend.sql",
+      "sha256": "dd5631de3aa495454642128428a7954155302c5057051bbfbd37cd5872fe1e55",
+      "backwardCompatible": true
     }
   ]
 }

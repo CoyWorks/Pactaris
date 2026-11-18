@@ -22,7 +22,14 @@ export class InstanceRoutines{
    const used=await db.query('INSERT INTO pactaris.delegation_uses(jti,expires_at) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING jti',[verified.jti,verified.expiresAt]);
    if(!used.rowCount)throw new DelegationError('routines.replay');
    const result=await db.query('SELECT pactaris.routine_command($1,$2,$3,$4,$5,$6,$7) AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint]);
-   await db.query('COMMIT');return result.rows[0].result as RoutineResult;
+   const response=result.rows[0].result as RoutineResult;
+   if(action==='routineRead'&&input.includeTrend===true&&response.routine?.kind==='habit'){
+    const routine=response.routine;
+    const chart=await db.query('SELECT pactaris.habit_trend($1,$2,$3,$4,$5,$6,$7) AS trend',
+     [householdId,this.config.instanceId,verified.accountId,input.membershipId,routine.routineId,routine.revision,routine.periodDate]);
+    routine.trend=chart.rows[0].trend;
+   }
+   await db.query('COMMIT');return response;
   }catch(error){
    await db.query('ROLLBACK');
    if(error&&typeof error==='object'&&'code'in error&&error.code==='P0001'&&'message'in error&&typeof error.message==='string'){

@@ -1241,6 +1241,14 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    assert.equal((await record(d,{operationId:event,entry:{...entry,count:2}})).status,409);assert.equal((await detail(habit)).periodTotal,1);
    assert.equal((await record(d)).status,200);assert.equal((await detail(habit)).result,'reached');
    assert.equal((await post('progressReverse',{routineId:habit,eventId:event})).status,200);assert.equal((await detail(habit)).periodTotal,1);
+   await (async()=>{
+    assert.equal((await detail(habit)).trend,undefined);
+    const chart=await detail(habit,{includeTrend:true});
+    assert.equal(chart.trend.length,7);
+    assert.deepEqual(chart.trend.at(-1),{date:chart.periodDate,count:1});
+    assert.equal(chart.trend.reduce((total:number,bucket:{count:number})=>total+bucket.count,0),1);
+    assert.equal((await post('routineRead',{routineId:habit,day:null,includeTrend:'true'})).status,400);
+   })();
    assert.equal((await post('progressReverse',{routineId:habit,eventId:randomUUID()})).status,404);
    assert.equal((await record(d,{occurredAt:new Date(Date.now()+86400000).toISOString()})).status,400);
    assert.equal((await record(d,{occurredAt:new Date(Date.now()-91*86400000).toISOString()})).status,400);
@@ -1291,6 +1299,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role) VALUES($1,$2,$3,'active','admin')",[home.householdId,peerMember,peer.id]);
    await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id) VALUES($1,$2)',[peer.id,home.householdId]);
    assert.equal((await post('routineRead',{routineId:habit,day:null},peerSession)).status,404);
+   assert.equal((await post('routineRead',{routineId:habit,day:null,includeTrend:true},peerSession)).status,404);
    assert.equal((await post('progressReverse',{routineId:habit,eventId:event},peerSession)).status,404);
    assert.equal((await api(base+'/routines','GET',undefined,peerSession)).data.routines.length,0);
    assert.equal((await api(base+'/routines/routineCreate','POST',{operationId:randomUUID(),kind:'habit',fields},session,{origin:'https://wrong.fixture.invalid'})).status,403);
