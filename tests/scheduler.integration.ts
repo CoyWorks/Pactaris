@@ -15,9 +15,12 @@ test('scheduler concurrent claims, restart rollback and live pause serialization
   for(const [role,flags] of [[owner,'NOBYPASSRLS'],[runtime,'NOBYPASSRLS'],[backup,'BYPASSRLS']])await root.query(`CREATE ROLE "${role}" LOGIN PASSWORD 'fixture-only-password' NOSUPERUSER NOCREATEDB NOCREATEROLE ${flags}`);
   await root.query(`CREATE DATABASE "${name}" OWNER "${owner}"`);
   db=new pg.Pool({connectionString:url(owner),max:3});worker=new pg.Pool({connectionString:url(runtime),max:4});
-  // Temporary reviewed manifest: forbidden deploy files in the checkout stay intact.
-  const manifest=JSON.parse(await readFile('deploy/release.json','utf8')),path='migrations/instance/0016_task_scheduling.sql',sql=await readFile(path,'utf8');
-  manifest.migrations.push({component:'instance',id:'0016_task_scheduling',path,sha256:createHash('sha256').update(sql).digest('hex'),backwardCompatible:true});
+  // Use the registered release migration; verify it matches the SQL bytes.
+  const manifest=JSON.parse(await readFile('deploy/release.json','utf8'));
+  const entry=manifest.migrations.filter((item:{component:string;id:string})=>item.component==='instance'&&item.id==='0016_task_scheduling');
+  assert.equal(entry.length,1,'scheduler migration must be registered exactly once');
+  const sql=await readFile('migrations/instance/0016_task_scheduling.sql','utf8');
+  assert.equal(entry[0].sha256,createHash('sha256').update(sql).digest('hex'),'scheduler manifest checksum');
   await mkdir(join(folder,'deploy'));await cp('migrations',join(folder,'migrations'),{recursive:true});await writeFile(join(folder,'deploy/release.json'),JSON.stringify(manifest));
   await migrate(db,folder,'instance',runtime,backup);await migrate(db,folder,'instance',runtime,backup);
   // Reuse only the fresh synthetic setup; never reactivate an ended membership.
