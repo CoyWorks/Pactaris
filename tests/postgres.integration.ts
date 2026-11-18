@@ -1,3 +1,4 @@
+import {listRegistryInstances,listRegistryPlacements} from '../packages/routing/inventory.js';
 import {GatewayPartner} from '../apps/gateway/partner.js';
 import {GatewayCatalog} from '../apps/gateway/catalog.js';
 import {GatewayRoutines} from '../apps/gateway/routines.js';
@@ -232,6 +233,16 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await assert.rejects(registerInstance(gatewayDb.migrator,{id:ids[0]!,endpoint:disabled.endpoint,tlsServerName:disabled.tls_server_name,caFile:disabled.ca_file}));
   await gatewayDb.owner.query("UPDATE pactaris.instances SET status='active' WHERE id=$1",[ids[0]]);
   for(const [i,id] of households.entries())await gatewayDb.owner.query('INSERT INTO pactaris.placements(household_id,instance_id,version) VALUES($1,$2,1)',[id,ids[i===2?1:0]]);
+  await (async()=>{
+    const inventory=await listRegistryInstances(gatewayDb.pool,null);
+    assert.equal(inventory.instances.find(i=>i.id===ids[0])?.activePlacements,'2');
+    assert.equal(inventory.instances.find(i=>i.id===ids[1])?.activePlacements,'1');
+    assert.ok(inventory.instances.every(i=>Object.keys(i).sort().join(',')==='activePlacements,disabledPlacements,id,status'));
+    const placements=await listRegistryPlacements(gatewayDb.pool,ids[0]!,null);
+    assert.deepEqual(placements?.placements.map(p=>p.householdId),households.slice(0,2).sort());
+    assert.equal((await listRegistryPlacements(gatewayDb.pool,ids[0]!,households.slice(0,2).sort().at(-1)!))?.placements.length,0);
+    assert.equal(await listRegistryPlacements(gatewayDb.pool,randomUUID(),null),undefined);
+  })();
   // Include a stale/forged hint to another household: Instance membership remains authoritative.
   for(const id of households)await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id) VALUES($1,$2)',[account.id,id]);
   const placements=await store.placements(account.id),client=new PrivateHouseholdClient(signer),summaries=[];

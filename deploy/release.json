@@ -204,6 +204,13 @@
       "path": "migrations/instance/0019_workspace_unread_inbox.sql",
       "sha256": "2077969433dfa46759a50a74ade652a644d97df615ff4e046b19230ff8a04b11",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0011_registry_placement_index",
+      "path": "migrations/gateway/0011_registry_placement_index.sql",
+      "sha256": "84ed9ce27ab8ad41057fa8b79e2542e3ad556d76d4aa25c06b37efc9c6b338af",
+      "backwardCompatible": true
     }
   ]
 }

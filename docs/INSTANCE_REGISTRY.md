@@ -56,3 +56,16 @@ For this pilot only, the operator uses the root-only non-superuser/non-BYPASS mi
 | Override another person's consent/pause | No | No | No |
 
 Self permissions require future handlers to bind the target to the authenticated membership. They do not implement those mutations or bypass last-owner lifecycle handling. Resource visibility must come from trusted Instance queries/composite constraints, never request-supplied visibility/participant arrays. Current unexposed domain tables remain RLS-denied. This module does not replace PostgreSQL RLS, current consent/pause checks, versioned entitlements or API authorization.
+
+## Read the gateway inventory
+
+From the gateway host as root, run the inventory command in the active gateway release. It reports routing state from the central registry and the time that it was read. It returns a maximum of 50 rows per page.
+
+```bash
+cd /opt/pactaris/gateway/current
+APP_CONFIG=/opt/pactaris/gateway/config.json node dist/server/scripts/instance-inventory.js
+```
+
+Use `--instance INSTANCE_UUID` to list registered household IDs for one Instance. If the result includes a `nextCursor`, pass it to `--after CURSOR` with the same filter. A registry entry remains visible when its Instance cannot be reached. Counts describe stored active and disabled placements. They do not reflect live database contents or worker health.
+
+The output excludes backend addresses, credentials, member lists and household names. This command runs locally with the existing registry read grants. It performs no remote enrollment, relocation or registry write. A separate MFA-protected manager UI and live per-Instance reporting remain in #57 and #59.
