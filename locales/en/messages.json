@@ -621,5 +621,7 @@
   "cli.backupEmpty": "The database dump was empty. The checkpoint is incomplete.",
   "cli.monitor": "Local health report for {component}.",
   "cli.monitorFailed": "The local health report could not be collected.",
-  "account.verifyEmail": "Verify your email address with your sign-in provider, then return to Pactaris and sign in again."
+  "account.verifyEmail": "Verify your email address with your sign-in provider, then return to Pactaris and sign in again.",
+  "cli.publicSmoke": "Public gateway and Identity smoke check results.",
+  "cli.publicSmokeInvalid": "Provide the public HTTPS application origin and the exact HTTPS OIDC issuer."
 }
