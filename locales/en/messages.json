@@ -615,5 +615,8 @@
   "account.presentationSave": "Save date and time settings",
   "account.presentationReset": "Use app defaults",
   "account.presentationSaved": "Date and time settings saved.",
-  "account.presentationInvalid": "Enter a supported locale and an IANA time zone."
+  "account.presentationInvalid": "Enter a supported locale and an IANA time zone.",
+  "cli.backupPlan": "Database backup preview for {component}. Use --apply to create a checkpoint.",
+  "cli.backupComplete": "Database checkpoint completed for {component} at {path}.",
+  "cli.backupEmpty": "The database dump was empty. The checkpoint is incomplete."
 }

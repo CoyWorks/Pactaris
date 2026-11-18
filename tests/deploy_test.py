@@ -199,6 +199,42 @@ class DeploymentTests(unittest.TestCase):
             self.assertEqual(list(base.glob('backups/*/database.sql')), [])
             self.assertEqual(list(base.glob('backups/*/pactaris-pg-*')), [])
 
+    def test_identity_marks_only_completed_database_checkpoints(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder) / 'identity'
+            base.mkdir()
+            (base / 'config.json').write_text('{}')
+            (base / 'identity.env').write_text('PG_PASS=fixture-only')
+            state = {'release': str(base / 'current'), 'revision': 'a' * 40}
+            self.assertFalse((deploy.checkpoint(base, {}, None) / 'backup.completed.json').exists())
+            def broken_dump(args, **kwargs):
+                kwargs['output'].write(b'partial')
+                self.assertEqual(kwargs['error_file'].name, 'pg_dump.stderr.log')
+                raise deploy.DeployError('cli.commandFailed', tool='docker', code=1)
+            with patch.object(deploy, 'run', side_effect=broken_dump), self.assertRaises(deploy.DeployError):
+                deploy.checkpoint(base, {}, state)
+            self.assertEqual(list(base.glob('backups/*/database.sql')), [])
+            self.assertEqual(len(list(base.glob('backups/*/database.sql.partial'))), 1)
+            self.assertEqual(list(base.glob('backups/*/backup.completed.json')), [])
+            with patch.object(deploy, 'run', side_effect=lambda args, **kwargs: kwargs['output'].write(b'fixture dump')):
+                backup = deploy.checkpoint(base, {}, state)
+            self.assertEqual((backup / 'database.sql').read_bytes(), b'fixture dump')
+            marker = json.loads((backup / 'backup.completed.json').read_text())
+            self.assertEqual(marker['scope'], 'database-checkpoint')
+            self.assertEqual(marker['bytes'], len(b'fixture dump'))
+            self.assertEqual(marker['revision'], state['revision'])
+
+    def test_on_demand_backup_plan_only_reads_deployment_state(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder) / 'identity'
+            base.mkdir()
+            (base / 'state.json').write_text(json.dumps({'revision': 'b' * 40}))
+            with patch.object(deploy, 'checkpoint', side_effect=AssertionError('preview must not dump')), patch('sys.stdout', new_callable=io.StringIO) as output:
+                code = deploy.main(['backup', '--component', 'identity', '--root', folder])
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(output.getvalue())['messageKey'], 'cli.backupPlan')
+            self.assertEqual(list(base.iterdir()), [base / 'state.json'])
+
     def test_command_failure_logs_stderr_privately_without_console_credentials(self):
         with tempfile.TemporaryDirectory() as folder, patch('sys.stdout', new_callable=io.StringIO) as output:
             log = Path(folder) / 'error.log'

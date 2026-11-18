@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse
 import contextlib
+from datetime import datetime, timezone
 import fcntl
 import hashlib
 import http.client
@@ -224,7 +225,6 @@ def health(base, cfg, release):
     for worker in (False, True):
         run(['systemctl', 'is-active', '--quiet', unit_name(base, worker)])
     heartbeat = read_json(Path(cfg['worker']['heartbeatFile']))
-    from datetime import datetime, timezone
     checked = datetime.fromisoformat(heartbeat['checkedAt'].replace('Z', '+00:00'))
     if heartbeat.get('state') != 'ready' or (datetime.now(timezone.utc) - checked).total_seconds() > cfg['worker']['intervalSeconds'] * 2 + 15:
         fail('worker_health')
@@ -304,21 +304,34 @@ def checkpoint(base, cfg, previous):
     shutil.copy2(base / 'config.json', backup / 'config.json')
     if previous:
         atomic_json(backup / 'state.json', previous)
+    partial = backup / 'database.sql.partial'
     if base.name == 'identity':
-        if previous:
-            with open(backup / 'database.sql', 'xb') as output:
-                os.chmod(output.name, 0o600)
-                run(compose(base, Path(previous['release'])) + ['exec', '-T', 'postgresql', 'pg_dump', '-U', 'authentik', '-d', 'authentik'], output=output)
         shutil.copy2(base / 'identity.env', backup / 'identity.env')
+        if previous:
+            with open(partial, 'xb') as output:
+                os.chmod(output.name, 0o600)
+                run(compose(base, Path(previous['release'])) + ['exec', '-T', 'postgresql', 'pg_dump', '-U', 'authentik', '-d', 'authentik'],
+                    output=output, error_file=backup / 'pg_dump.stderr.log')
+                output.flush()
+                os.fsync(output.fileno())
     else:
-        partial = backup / 'database.sql.partial'
         backup_url_file = cfg['database'].get('backupUrlFile')
         backup_url = Path(backup_url_file).read_text().strip() if backup_url_file else cfg['database']['url']
         with postgres_environment(backup_url, backup) as env, open(partial, 'xb') as output:
             os.chmod(output.name, 0o600)
             run(['pg_dump', '--no-owner', '--no-password'], env=env, output=output,
                 error_file=backup / 'pg_dump.stderr.log')
+            output.flush()
+            os.fsync(output.fileno())
+    if partial.is_file():
+        if partial.stat().st_size == 0:
+            raise DeployError('cli.backupEmpty')
         os.replace(partial, backup / 'database.sql')
+        atomic_json(backup / 'backup.completed.json', {
+            'component': base.name, 'revision': previous['revision'] if previous else None,
+            'completedAt': datetime.now(timezone.utc).isoformat(), 'scope': 'database-checkpoint',
+            'bytes': (backup / 'database.sql').stat().st_size,
+        })
     return backup
 
 def activate_link(base, release):
@@ -392,12 +405,38 @@ def archive_staged_update(base, release, existing):
     destination.chmod(0o700)
     emit('cli.updateArchived', path=str(destination))
 
+def on_demand_checkpoint(args, base, existing):
+    if not existing:
+        raise DeployError('cli.missing')
+    if not args.apply:
+        emit('cli.backupPlan', component=args.component, revision=existing['revision'])
+        return 0
+    if os.geteuid() != 0:
+        fail('root_required_for_apply')
+    safe_root(str(base))
+    safe_root(str(base / 'backups'))
+    lock_path = base / 'operation.lock'
+    fd = os.open(lock_path, os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise DeployError('cli.locked')
+        state = read_json(base / 'state.json')
+        cfg = validate_config(args.component, read_json(base / 'config.json'))
+        backup = checkpoint(base, cfg, state)
+    emit('cli.backupComplete', component=args.component, path=str(backup))
+    return 0
+
+
 def deploy(args):
     if args.component not in COMPONENTS:
         fail('component')
     root = Path(args.root)
     base = root / args.component
     existing = read_json(base / 'state.json') if (base / 'state.json').exists() else None
+    if args.action == 'backup':
+        return on_demand_checkpoint(args, base, existing)
     if args.action == 'status':
         if not existing:
             if (base / 'config.json').exists() or (base / 'releases').is_dir():
@@ -596,7 +635,7 @@ class Parser(argparse.ArgumentParser):
 
 def main(argv=None):
     parser = Parser(add_help=False)
-    parser.add_argument('action', choices=('install', 'update', 'status', 'resume'))
+    parser.add_argument('action', choices=('install', 'update', 'status', 'resume', 'backup'))
     parser.add_argument('--component', choices=COMPONENTS, required=True)
     parser.add_argument('--root', required=True)
     parser.add_argument('--config')

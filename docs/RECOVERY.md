@@ -86,3 +86,17 @@ The protected gateway log subsequently showed `RangeError: Maximum call stack si
 Production compilation now uses `tsconfig.build.json`, which includes apps/packages/scripts and excludes tests. The normal all-source typecheck still checks every test. Four existing isolated scenario blocks (consent/safety, workspace, library and routines) now execute as separately checked awaited async functions, preserving their order/assertions/transactions and shared teardown. The complete typecheck passes at the same 512 KiB stack limit that reproduced the old failure. CI enforces this limit, checks that the fresh production artifact contains no tests and still executes the real PostgreSQL/HTTPS integration fixture. This is a compiler/build-scope repair; it changes no application authorization, migrations or runtime data.
 
 Retry the installed gateway with the normal preserving updater, then verify status and the public login/logout flow. Host recovery remains unconfirmed until the operator observes the new build and activation. Protected diagnostic logs remain available if a different build problem is exposed.
+
+
+## On-demand database checkpoint
+
+From a reviewed checkout, preview a checkpoint for an installed component. Repeat with `--apply` as root to run the dump without a deployment or service restart.
+
+```bash
+bash /opt/pactaris-source/backup.sh --component identity
+bash /opt/pactaris-source/backup.sh --component identity --apply
+```
+
+Use `gateway` or `instance` for those components. Pass `--root` for a nondefault installation root. The same per-component lock serializes checkpoints and updates. The command reports the resulting private directory. A successful SQL dump and metadata are published as `database.sql` and `backup.completed.json`. A failed dump stays partial. On Identity this also prevents a truncated dump from being mistaken for a usable checkpoint. Keep checkpoint copies of configuration and credentials private.
+
+These local checkpoints cover the database and deployment configuration snapshot. Retain referenced secret files, Identity media and Instance file storage independently. Encrypted off-host copies, restore and reconciliation drills, and retention and recovery targets are tracked in #29. A checkpoint on the original VM alone cannot protect against loss of that VM.
