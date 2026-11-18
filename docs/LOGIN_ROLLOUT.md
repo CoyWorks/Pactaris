@@ -92,6 +92,8 @@ Preserve the working identity.coyworks.nl backend/proxy until a separate Identit
 
 Do not publish/route `/internal/` APIs as browser features. After validating the gateway, retire/restrict the old browser-facing Instance test site; keep its operational/private upstream connectivity. A normal user never sees a server chooser, Instance URL, data-plane token or IdP secret.
 
+Use the [Pactaris CloudPanel access-log format](CLOUDPANEL_ACCESS_LOGS.md) on the public app and Identity vhosts to keep callback queries and household identifiers out of access logs.
+
 ## 5. Acceptance on the real host
 
 Before DNS/public ingress is ready, local gateway readiness can be tested without bypassing certificate checks:
