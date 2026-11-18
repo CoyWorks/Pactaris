@@ -125,7 +125,15 @@ BEGIN
   BEGIN
    PERFORM pactaris.generate_task_series(j.household_id,j.series_id,j.version,instance);RETURN 'processed';
   EXCEPTION WHEN OTHERS THEN
-   code=CASE WHEN SQLERRM='partner.capacity' THEN 'capacity' ELSE 'failed' END;
+   -- Entitlement capacity is an expected temporary condition, not a broken job.
+   -- Do not consume the transient-failure budget or dead-letter this series.
+   IF SQLERRM='partner.capacity' OR SQLERRM='workspace.capacity' THEN
+    UPDATE pactaris.task_generation_jobs
+      SET attempts=0,state='pending',run_after=now()+interval '1 hour',last_code='capacity'
+      WHERE household_id=j.household_id AND series_id=j.series_id AND version=j.version;
+    RETURN 'capacity';
+   END IF;
+   code='failed';
    UPDATE pactaris.task_generation_jobs SET attempts=attempts+1,state=CASE WHEN attempts>=4 THEN 'dead' ELSE 'pending' END,
     run_after=now()+make_interval(secs=>least(3600,60*power(2,attempts)::int)),last_code=code
     WHERE household_id=j.household_id AND series_id=j.series_id AND version=j.version;
