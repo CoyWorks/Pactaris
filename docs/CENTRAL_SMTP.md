@@ -72,6 +72,6 @@ Provider documents: [Email configuration](https://docs.goauthentik.io/install-co
 
 ## Pactaris session recovery
 
-The household selector includes **Sign out other Pactaris sessions**. After confirmation, the gateway removes the account's other application sessions and keeps the current browser signed in. The command requires the current session, the application origin and CSRF proof. It also clears matching local restrictive safety routes from the handling gateway process. Authentik independently controls provider sessions, MFA and recovery codes.
+Open **Manage Pactaris sessions** in the household selector. The list shows the current session first, followed by up to 49 other active Pactaris sessions with their sign-in and current expiry times. Select one session to sign it out or select **Sign out other Pactaris sessions** to close all of them. The current browser stays signed in. The command requires the current session, the application origin and CSRF proof. It also clears matching local restrictive safety routes from the handling gateway process. Authentik independently controls provider sessions, MFA and recovery codes.
 
-Verify with a test account in two browsers. Sign out the other sessions from the first browser and confirm the second browser loses API access on refresh.
+Verify with a test account in two browsers. Sign out the second session from the first browser and confirm the second browser loses API access on refresh. Repeat with a fresh second session to verify the bulk action. The list omits browser fingerprints, IP addresses and token hashes.

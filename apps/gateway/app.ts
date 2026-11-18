@@ -93,6 +93,22 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     }else res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});
   }
   app.get('/api/session',async(req,res)=>{const session=await authenticate(req,res);if(session)res.json(session);});
+  app.get('/api/account/sessions',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    res.json(await store.sessionsForAccount(session.account.id,cookie(req,SESSION)!));
+  });
+  app.delete('/api/account/sessions/:id',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){
+      res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;
+    }
+    if(!uuid(req.params.id)){
+      res.status(404).json({code:'not_found',messageKey:'errors.notFound'});return;
+    }
+    const removed=await store.revokeSessionById(session.account.id,cookie(req,SESSION)!,req.params.id);
+    if(removed)consent?.revokeSessionHash(removed);
+    res.status(204).end();
+  });
   app.post('/api/account/revoke-other-sessions',async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;
     if(!csrfAllowed(req,session)){

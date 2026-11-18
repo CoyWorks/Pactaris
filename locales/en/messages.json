@@ -578,5 +578,16 @@
   "invitations.delivery.queued": "Email queued",
   "invitations.delivery.sent": "Email accepted by the mail server",
   "invitations.delivery.failed": "Email delivery failed. Share the link directly if it is still valid.",
-  "invitations.delivery.inactive": "Email delivery stopped"
+  "invitations.delivery.inactive": "Email delivery stopped",
+  "account.showSessions": "Manage Pactaris sessions",
+  "account.hideSessions": "Hide Pactaris sessions",
+  "account.sessionsDescription": "These are your active Pactaris sessions.",
+  "account.sessionsTruncated": "Showing your current session and up to 49 other sessions. Sign out other sessions to close them all.",
+  "account.currentSession": "This session",
+  "account.otherSession": "Other session",
+  "account.sessionStarted": "Signed in",
+  "account.sessionExpires": "Current expiry",
+  "account.revokeOne": "Sign out this session",
+  "account.revokeOneConfirm": "Sign out this other Pactaris session?",
+  "account.sessionRevoked": "The selected session was signed out."
 }

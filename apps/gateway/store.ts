@@ -5,6 +5,7 @@ export const hash = (token: string) => createHash('sha256').update(token).digest
 export type LoginAttempt = {state:string;nonce:string;verifier:string};
 export type Account = {id:string;displayName:string};
 export type Session = {account:Account;csrfToken:string;expiresAt:string};
+export type SessionView = {id:string;current:boolean;createdAt:string;expiresAt:string};
 export type Placement = {householdId:string;instanceId:string;endpoint:string;tlsServerName:string;caFile:string;version:string};
 export interface GatewayStore {
   probe():Promise<void>;
@@ -15,6 +16,8 @@ export interface GatewayStore {
   createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number,verifiedEmail?:string):Promise<void>;
   session(token:string,idle:number):Promise<Session|undefined>;
   logout(token:string):Promise<void>;
+  sessionsForAccount(accountId:string,token:string):Promise<{sessions:SessionView[];truncated:boolean}>;
+  revokeSessionById(accountId:string,token:string,id:string):Promise<string|undefined>;
   revokeOtherSessions(accountId:string,token:string):Promise<string[]>;
   placements(accountId:string,after?:string):Promise<Placement[]>;
   placement(accountId:string,householdId:string):Promise<Placement|undefined>;
@@ -61,6 +64,20 @@ export class PgGatewayStore implements GatewayStore {
     const row=r.rows[0];return row?{account:{id:row.id,displayName:row.display_name},csrfToken:row.csrf_token,expiresAt:row.expires_at.toISOString()}:undefined;
   }
   async logout(token:string){await this.pool.query('DELETE FROM pactaris.sessions WHERE token_hash=$1',[hash(token)]);}
+  async sessionsForAccount(accountId:string,token:string) {
+    const result=await this.pool.query<{id:string;is_current:boolean;created_at:Date;expires_at:Date}>(`
+      SELECT public_id AS id, token_hash=$2 AS is_current, created_at, LEAST(expires_at,idle_expires_at) AS expires_at
+      FROM pactaris.sessions WHERE account_id=$1 AND expires_at>now() AND idle_expires_at>now()
+      ORDER BY is_current DESC,created_at DESC,public_id LIMIT 51`,[accountId,hash(token)]);
+    return {sessions:result.rows.slice(0,50).map(row=>({id:row.id,current:row.is_current,
+      createdAt:row.created_at.toISOString(),expiresAt:row.expires_at.toISOString()})),truncated:result.rows.length>50};
+  }
+  async revokeSessionById(accountId:string,token:string,id:string) {
+    const result=await this.pool.query<{token_hash:string}>(
+      'DELETE FROM pactaris.sessions WHERE account_id=$1 AND token_hash<>$2 AND public_id=$3 RETURNING token_hash',
+      [accountId,hash(token),id]);
+    return result.rows[0]?.token_hash;
+  }
   async revokeOtherSessions(accountId:string,token:string):Promise<string[]> {
     const result=await this.pool.query(
       'DELETE FROM pactaris.sessions WHERE account_id=$1 AND token_hash<>$2 RETURNING token_hash',

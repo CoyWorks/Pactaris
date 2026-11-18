@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
 import { inject } from 'light-my-request';
 import { readFileSync } from 'node:fs';
 import { createGatewayApp } from '../apps/gateway/app.js';
@@ -10,15 +11,28 @@ import type { OnboardingService } from '../apps/gateway/onboarding.js';
 const accountA='10000000-0000-4000-8000-000000000001',accountB='10000000-0000-4000-8000-000000000002';
 const householdA='20000000-0000-4000-8000-000000000001',householdB='20000000-0000-4000-8000-000000000002';
 class FixtureStore implements GatewayStore {
-  attempts=new Map<string,LoginAttempt>();sessions=new Map<string,Session>();calls=0;limited=false;accountInput?:unknown[];
+  attempts=new Map<string,LoginAttempt>();sessions=new Map<string,Session & {id:string;createdAt:string}>();calls=0;limited=false;accountInput?:unknown[];
   async probe(){}
   async throttle(){return !this.limited;}
   async beginLogin(cookie:string,a:LoginAttempt){this.attempts.set(hash(cookie),a);}
   async consumeLogin(cookie:string,state:string){const a=this.attempts.get(hash(cookie));if(a?.state!==state)return;this.attempts.delete(hash(cookie));return a;}
   async account(...input:unknown[]):Promise<Account>{this.accountInput=input;return {id:accountA,displayName:'Fixture user'};}
-  async createSession(token:string,account:Account,csrfToken:string){this.sessions.set(hash(token),{account,csrfToken,expiresAt:new Date(Date.now()+100000).toISOString()});}
-  async session(token:string){return this.sessions.get(hash(token));}
+  async createSession(token:string,account:Account,csrfToken:string){this.sessions.set(hash(token),{account,csrfToken,id:randomUUID(),createdAt:new Date().toISOString(),expiresAt:new Date(Date.now()+100000).toISOString()});}
+  async session(token:string){
+    const s=this.sessions.get(hash(token));
+    return s&&{account:s.account,expiresAt:s.expiresAt,csrfToken:s.csrfToken};
+  }
   async logout(token:string){this.sessions.delete(hash(token));}
+  async sessionsForAccount(accountId:string,token:string){
+    const sessions=[...this.sessions].filter(([,session])=>session.account.id===accountId)
+      .map(([key,{id,createdAt,expiresAt}])=>({id,createdAt,expiresAt,current:key===hash(token)}));
+    return {sessions,truncated:false};
+  }
+  async revokeSessionById(accountId:string,token:string,id:string){
+    for(const [key,session] of this.sessions){
+      if(key!==hash(token)&&session.account.id===accountId&&session.id===id){this.sessions.delete(key);return key;}
+    }
+  }
   async revokeOtherSessions(accountId:string,token:string){
     const removed:string[]=[];
     for(const [key,session] of this.sessions)if(key!==hash(token)&&session.account.id===accountId){removed.push(key);this.sessions.delete(key);}
@@ -76,6 +90,26 @@ test('revoking other sessions requires the current session, same origin and CSRF
   assert.equal((await revoke(trusted)).statusCode,204);
   assert.equal((await readSession(otherCookie)).statusCode,401);
   assert.equal((await readSession(cookie)).statusCode,200);
+});
+test('individual session management exposes account-scoped IDs and preserves the active browser',async()=>{
+  const f=fixture(),path='/api/account/sessions';
+  const {cookie:other}=await login(f),{cookie}=await login(f);
+  await f.store.createSession('foreign-session',{id:accountB,displayName:'Foreign fixture'},'foreign-csrf');
+  assert.equal((await inject(f.app,{url:path,headers})).statusCode,401);
+  const listed=(await inject(f.app,{url:path,headers:{...headers,cookie}})).json();
+  assert.equal(listed.sessions.length,2);
+  for(const item of listed.sessions)assert.deepEqual(Object.keys(item).sort(),['createdAt','current','expiresAt','id']);
+  const csrf=(await inject(f.app,{url:'/api/session',headers:{...headers,cookie}})).json().csrfToken;
+  const trusted={...headers,cookie,origin:'https://pactaris.app','x-csrf-token':csrf};
+  const remove=(id:string,requestHeaders=trusted)=>inject(f.app,{method:'DELETE',url:path+'/'+id,headers:requestHeaders});
+  const selected=listed.sessions.find((item:{current:boolean})=>!item.current).id,current=listed.sessions.find((item:{current:boolean})=>item.current).id;
+  assert.equal((await remove(selected,{...trusted,'x-csrf-token':'invalid'})).statusCode,403);
+  assert.equal((await remove(selected,{...trusted,origin:'https://untrusted.invalid'})).statusCode,403);
+  assert.equal((await remove(current)).statusCode,204);
+  assert.equal((await remove(selected)).statusCode,204);
+  assert.equal((await remove(selected)).statusCode,204);
+  assert.equal((await inject(f.app,{url:'/api/session',headers:{...headers,cookie:other}})).statusCode,401);
+  assert.equal((await inject(f.app,{url:'/api/session',headers:{...headers,cookie}})).statusCode,200);
 });
 test('public create/leave bind the account to its session, require CSRF and reject routing/role injection',async()=>{
   const operation='40000000-0000-4000-8000-000000000001';let creates=0,leaves=0;

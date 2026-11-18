@@ -176,6 +176,13 @@
       "path": "migrations/gateway/0008_invitation_mail.sql",
       "sha256": "13201a83670eb8e368f664a59ca91be2979bf1886b7ffe99f4673a975947df9c",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0009_session_public_ids",
+      "path": "migrations/gateway/0009_session_public_ids.sql",
+      "sha256": "56f248f64e6273244c704d46b042e87e42cc1ce974a61d1ec0dc97d53fad1541",
+      "backwardCompatible": true
     }
   ]
 }

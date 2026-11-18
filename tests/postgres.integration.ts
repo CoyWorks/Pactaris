@@ -116,6 +116,13 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
     await store.createSession('other-fixture',account,'csrf',60,120);
     await store.createSession('foreign-fixture',other,'csrf',60,120);
     try {
+      const own=await store.sessionsForAccount(account.id,'active-fixture'),foreign=await store.sessionsForAccount(other.id,'foreign-fixture');
+      assert.equal(own.sessions.length,2);assert.equal(own.sessions[0]?.current,true);
+      assert.equal(await store.revokeSessionById(account.id,'active-fixture',foreign.sessions[0]!.id),undefined);
+      assert.equal(await store.revokeSessionById(account.id,'active-fixture',own.sessions[0]!.id),undefined);
+      assert.equal(await store.revokeSessionById(account.id,'active-fixture',own.sessions[1]!.id),hash('other-fixture'));
+      assert.equal(await store.session('other-fixture',60),undefined);
+      await store.createSession('other-fixture',account,'csrf',60,120);
       assert.deepEqual(await store.revokeOtherSessions(account.id,'active-fixture'),[hash('other-fixture')]);
       assert.equal(await store.session('other-fixture',60),undefined);
       assert.ok(await store.session('active-fixture',60));
