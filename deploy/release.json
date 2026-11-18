@@ -183,6 +183,13 @@
       "path": "migrations/gateway/0009_session_public_ids.sql",
       "sha256": "56f248f64e6273244c704d46b042e87e42cc1ce974a61d1ec0dc97d53fad1541",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0018_task_inbox_preferences",
+      "path": "migrations/instance/0018_task_inbox_preferences.sql",
+      "sha256": "78d7a339f9254b8c5c00b49f31b2106873566c389e73af232ba716f305391c1d",
+      "backwardCompatible": true
     }
   ]
 }

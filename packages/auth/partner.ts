@@ -12,15 +12,21 @@ export type AssignmentPolicy={policyId:string;version:string;agreementLabel:stri
 export type PartnerChoice={agreementId:string;agreementVersion:string;label:string;epoch:string;safetyVersion:string;assignees:{membershipId:string;name:string}[]};
 export type PartnerSummary=PartnerFields&{availableAt?:string|null;taskId:string;version:string;state:PartnerState;creatorId:string;assigneeId:string;role:'creator'|'assignee';counterpart:string};
 export type PartnerDetail=PartnerSummary&{agreementId:string;agreementVersion:string;agreementLabel:string;assignmentMode:'offer'|'direct'|'explicit';policyVersion:string|null;epoch:string;safetyVersion:string;eligible:boolean;events:{version:string;action:PartnerAction|'membershipEnded';actorId:string;note:string;at:string}[];nextEventCursor:string|null};
-export type PartnerResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';scheduling?:boolean;seriesId?:string;series?:TaskSeries[];taskId?:string;policyId?:string;balance?:string;inbox?:{id:string;taskId:string;kind:'assigned'|'submitted'|'reviewed';read:boolean;at:string}[];policies?:AssignmentPolicy[];choices?:PartnerChoice[];tasks?:PartnerSummary[];task?:PartnerDetail;nextCursor?:string|null};
+export type InboxPreferences={assigned:boolean;submitted:boolean;reviewed:boolean};
+export type PartnerResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';scheduling?:boolean;seriesId?:string;series?:TaskSeries[];taskId?:string;policyId?:string;balance?:string;inboxPreferences?:InboxPreferences;inbox?:{id:string;taskId:string;kind:'assigned'|'submitted'|'reviewed';read:boolean;at:string}[];policies?:AssignmentPolicy[];choices?:PartnerChoice[];tasks?:PartnerSummary[];task?:PartnerDetail;nextCursor?:string|null};
 export class PartnerError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'unavailable'){super('partner.'+kind);}}
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
+export function validInboxPreferences(value:unknown):value is InboxPreferences{
+ return record(value)&&Object.keys(value).sort().join(',')==='assigned,reviewed,submitted'&&
+  typeof value.assigned==='boolean'&&typeof value.submitted==='boolean'&&typeof value.reviewed==='boolean';
+}
 export function partnerInput(action:PartnerAction,value:unknown):Record<string,unknown>&{operationId:string}{
  if(!record(value)||!uuid(value.operationId))throw new PartnerError('invalid');const keys=['operationId'];
  if(action==='partnerSeriesList')keys.push(...('after'in value?['after']:[]));
  else if(action==='partnerSeriesCancel')keys.push('seriesId','version');
  else if(action==='partnerSeriesCreate'||action==='partnerSeriesUpdate'){keys.push('policyId','policyVersion','fields','schedule','epoch','safetyVersion');if(action==='partnerSeriesUpdate')keys.push('seriesId','version');}
- else if(action==='partnerPoints'||action==='partnerPolicyList'){}
+ else if(action==='partnerPoints'||action==='partnerPolicyList'||action==='partnerInboxPreferences'){}
+ else if(action==='partnerInboxConfigure')keys.push('preferences');
  else if(action==='partnerInbox')keys.push(...('after'in value?['after']:[]));
  else if(action==='partnerInboxRead'||action==='partnerPointsReverse')keys.push('taskId');
  else if(action==='partnerPolicyPropose')keys.push('assigneeId','agreementId','agreementVersion','mode','epoch','safetyVersion');
@@ -31,6 +37,7 @@ export function partnerInput(action:PartnerAction,value:unknown):Record<string,u
  else if(action==='partnerOffer'||action==='partnerAssign'){keys.push('assigneeId','agreementId','agreementVersion','fields','epoch','safetyVersion');if(action==='partnerAssign')keys.push('policyId','policyVersion');}
  else {keys.push('taskId','version');if(!['partnerCancel','partnerDecline'].includes(action))keys.push('epoch','safetyVersion');if(['partnerSubmit','partnerChanges'].includes(action))keys.push('note');}
  if(Object.keys(value).sort().join(',')!==keys.sort().join(',')||['seriesId','taskId','assigneeId','agreementId','policyId','after'].some(k=>k in value&&!uuid(value[k]))||['version','policyVersion','agreementVersion','epoch','afterVersion'].some(k=>k in value&&!documentVersion(value[k]))||('safetyVersion'in value&&(typeof value.safetyVersion!=='string'||!/^[a-f0-9]{32}$/.test(value.safetyVersion)))||('note'in value&&!documentText(value.note,500,false,true)))throw new PartnerError('invalid');
+ if(action==='partnerInboxConfigure'&&!validInboxPreferences(value.preferences))throw new PartnerError('invalid');
  if(action==='partnerPolicyPropose'&&!['direct','explicit'].includes(value.mode as string))throw new PartnerError('invalid');
  if(action==='partnerList'&&!(typeof value.filter==='string'&&['active','closed','todo'].includes(value.filter)))throw new PartnerError('invalid');
  if('schedule'in value&&!validTaskSchedule(value.schedule))throw new PartnerError('invalid');

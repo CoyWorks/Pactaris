@@ -48,3 +48,10 @@ Optional third-party review, proof uploads #21, dispute resolution, editing/re-n
 ## Standing authority implementation checkpoint
 
 Current source adds explicitly adopted, versioned directional task authority, direct one-off assignment and optional per-task acceptance while preserving existing offers. See [STANDING_TASK_AUTHORITY.md](STANDING_TASK_AUTHORITY.md) for the API, lifecycle, migration, verification limits and remaining scope. The earlier 0.12 state table/checkpoint is historical; scheduled series and rewards remain follow-up work.
+
+
+## Task inbox preferences
+
+Open the private task inbox and choose **Task inbox preferences**. Active participants can enable or disable new task assignments and offers, submissions, and reviews for their own membership. All three are enabled by default, including for memberships created before this migration. Changes affect new inbox entries and preserve existing entries. A task still appears in the assignee's task lists when its notice is disabled.
+
+The Instance applies the recipient's selection during inbox insertion. Gateway/Instance calls require the usual current session, exact membership and origin/CSRF checks. There are no email or push subscriptions in these settings. Quiet hours and preferences for external channels remain follow-up in #22 and #23.

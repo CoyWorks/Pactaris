@@ -1385,9 +1385,20 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
     assert.equal((await adopt(B,policy)).status,200);
     const active=(await policies(A)).find((p:any)=>p.policyId===policy.policyId);assert.equal(active.version,'2');
     assert.equal((await read(B,legacy)).state,'offered');assert.equal((await read(B,legacy)).assignmentMode,'offer');assert.equal((await move(B,'partnerDecline',legacy)).status,200);
+    const defaultPrefs={assigned:true,submitted:true,reviewed:true},quietPrefs={...defaultPrefs,assigned:false};
+    await (async()=>{
+      assert.deepEqual((await post(B,'partnerInboxPreferences',{})).data.inboxPreferences,defaultPrefs);
+      assert.equal((await post(B,'partnerInboxConfigure',{preferences:{assigned:false}})).status,400);
+      assert.equal((await post(A,'partnerInboxConfigure',{membershipId:randomUUID(),preferences:quietPrefs})).status,400);
+      assert.deepEqual((await post(B,'partnerInboxConfigure',{preferences:quietPrefs})).data.inboxPreferences,quietPrefs);
+      assert.deepEqual((await post(A,'partnerInboxPreferences',{})).data.inboxPreferences,defaultPrefs);
+      assert.deepEqual((await post(B,'partnerInboxPreferences',{})).data.inboxPreferences,quietPrefs);
+      assert.ok((await post(B,'partnerInbox',{})).data.inbox.some((notice:{taskId:string})=>notice.taskId===legacy));
+    })();
     body={...await offerBody(A,B),policyId:active.policyId,policyVersion:active.version};
     const direct=await post(A,'partnerAssign',body);assert.equal(direct.status,200,JSON.stringify(direct.data));
     assert.equal((await post(A,'partnerAssign',body)).status,200);
+    assert.ok(!(await post(B,'partnerInbox',{})).data.inbox.some((notice:{taskId:string})=>notice.taskId===direct.data.taskId));
     const task=direct.data.taskId,d=await read(B,task);assert.equal(d.state,'assigned');assert.equal(d.assignmentMode,'direct');assert.equal(d.policyVersion,'2');assert.equal(d.events[0].action,'partnerAssign');assert.ok(!d.events.some((e:any)=>e.action==='partnerAccept'));
     const todo=await post(B,'partnerList',{filter:'todo'});assert.equal(todo.status,200);assert.ok(todo.data.tasks.some((t:any)=>t.taskId===task));assert.ok(!(await post(A,'partnerList',{filter:'todo'})).data.tasks.some((t:any)=>t.taskId===task));assert.equal((await post(C,'partnerList',{filter:'todo'})).data.tasks.length,0);
     assert.ok((await post(B,'partnerList',{filter:'active'})).data.tasks.some((t:any)=>t.taskId===task&&t.state==='assigned'));
@@ -1398,6 +1409,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
     assert.equal((await move(B,'partnerAccept',task)).status,409);assert.equal((await post(C,'partnerRead',{taskId:task})).status,404);
     assert.equal((await post(B,'partnerAssign',{...await offerBody(B,A),policyId:active.policyId,policyVersion:active.version})).status,404);
     assert.equal((await move(B,'partnerStart',task)).status,200);assert.equal((await move(B,'partnerSubmit',task,{note:'Direct work'})).status,200);assert.equal((await move(A,'partnerApprove',task)).status,200);
+    assert.ok((await post(B,'partnerInbox',{})).data.inbox.some((notice:{taskId:string;kind:string})=>notice.taskId===task&&notice.kind==='reviewed'));
+    await post(B,'partnerInboxConfigure',{preferences:defaultPrefs});
     assert.equal((await move(A,'partnerReopen',task)).status,200);assert.equal((await read(B,task)).state,'assigned');
     // Direct assignments obey pauses, exact versions, capacity and revocation.
     assert.equal((await consent(B,'selfPause')).status,200);assert.equal((await move(B,'partnerStart',task)).data.code,'partner_paused');

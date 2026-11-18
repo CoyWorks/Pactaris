@@ -21,7 +21,10 @@ export class InstancePartner{
    await db.query('BEGIN');
    const used=await db.query('INSERT INTO pactaris.delegation_uses(jti,expires_at) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING jti',[verified.jti,verified.expiresAt]);
    if(!used.rowCount)throw new DelegationError('partner.replay');
-   const result=await db.query('SELECT pactaris.partner_command($1,$2,$3,$4,$5,$6,$7) AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint]);
+   const args=[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input];
+   const result=action==='partnerInboxPreferences'||action==='partnerInboxConfigure'
+    ?await db.query('SELECT pactaris.task_inbox_preference_command($1,$2,$3,$4,$5,$6) AS result',args)
+    :await db.query('SELECT pactaris.partner_command($1,$2,$3,$4,$5,$6,$7) AS result',[...args,fingerprint]);
    await db.query('COMMIT');return result.rows[0].result as PartnerResult;
   }catch(error){
    await db.query('ROLLBACK');

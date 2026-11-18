@@ -1,7 +1,11 @@
 import React,{useEffect,useState} from 'react';
 import {createTranslator} from '../../../packages/i18n/index.js';
-import type {PartnerResult} from '../../../packages/auth/partner.js';
+import type {InboxPreferences,PartnerResult} from '../../../packages/auth/partner.js';
 
+const preferenceLabels={
+ assigned:'inbox.prefAssigned',submitted:'inbox.prefSubmitted',reviewed:'inbox.prefReviewed'
+} as const;
+const kinds=['assigned','submitted','reviewed'] as const;
 const labels={assigned:'inbox.assigned',submitted:'inbox.submitted',reviewed:'inbox.reviewed'} as const;
 
 export function TaskInbox({householdId,csrfToken,language}:{householdId:string;csrfToken:string;language:string}){
@@ -11,7 +15,9 @@ export function TaskInbox({householdId,csrfToken,language}:{householdId:string;c
  const [failed,setFailed]=useState(false);
  const [after,setAfter]=useState<string>();
  const [revision,setRevision]=useState(0);
- async function request(action:string,body:Record<string,string>,signal?:AbortSignal):Promise<PartnerResult>{
+ const [showPreferences,setShowPreferences]=useState(false),[preferences,setPreferences]=useState<InboxPreferences>();
+ const [preferenceError,setPreferenceError]=useState(false),[saved,setSaved]=useState(false),[saving,setSaving]=useState(false);
+ async function request(action:string,body:Record<string,unknown>,signal?:AbortSignal):Promise<PartnerResult>{
   const response=await fetch('/api/households/'+householdId+'/participant-tasks/'+action,{
    method:'POST',cache:'no-store',signal,headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},
    body:JSON.stringify({operationId:crypto.randomUUID(),...body})
@@ -37,7 +43,47 @@ export function TaskInbox({householdId,csrfToken,language}:{householdId:string;c
   document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);
   return()=>{stopped=true;active?.abort();clearInterval(timer);document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);};
  },[householdId,csrfToken,revision,after]);
+ useEffect(()=>{
+  if(!showPreferences)return;
+  const controller=new AbortController();
+  let stale=false;
+  const timeout=setTimeout(()=>controller.abort(),12000);
+  setPreferenceError(false);
+  void request('partnerInboxPreferences',{},controller.signal).then(result=>{
+   if(!result.inboxPreferences)throw Error('inbox.preferences');
+   if(!stale)setPreferences(result.inboxPreferences);
+  }).catch(()=>{if(!stale)setPreferenceError(true);}).finally(()=>clearTimeout(timeout));
+  return()=>{stale=true;controller.abort();clearTimeout(timeout);};
+ },[showPreferences,householdId,csrfToken]);
+ async function savePreferences(event:React.FormEvent){
+  event.preventDefault();
+  if(!preferences||saving)return;
+  setSaving(true);setSaved(false);setPreferenceError(false);
+  try{
+   const result=await request('partnerInboxConfigure',{preferences},AbortSignal.timeout(12000));
+   if(!result.inboxPreferences)throw Error('inbox.preferences');
+   setPreferences(result.inboxPreferences);setSaved(true);
+  }catch{setPreferenceError(true);}finally{setSaving(false);}
+ }
  return <section><h3>{t('inbox.title')}</h3>
+  <button type="button" aria-expanded={showPreferences} disabled={saving} onClick={()=>{
+   setPreferences(undefined);setSaved(false);setShowPreferences(!showPreferences);
+  }}>{t('inbox.preferences')}</button>
+  {showPreferences&&<div>
+   {preferenceError&&<p role="alert">{t('inbox.error')}</p>}
+   {saved&&<p role="status">{t('inbox.preferencesSaved')}</p>}
+   {preferences&&<form onSubmit={event=>void savePreferences(event)}>
+    <p>{t('inbox.preferencesDescription')}</p>
+    <fieldset disabled={saving}><legend>{t('inbox.preferences')}</legend>
+     {kinds.map(kind=><label key={kind}>
+      <input type="checkbox" checked={preferences[kind]} onChange={event=>{
+       setPreferences({...preferences,[kind]:event.target.checked});setSaved(false);
+      }}/> {t(preferenceLabels[kind])}
+     </label>)}
+    </fieldset>
+    <button type="submit" disabled={saving}>{t('inbox.preferencesSave')}</button>
+   </form>}
+  </div>}
   {failed&&<p role="alert">{t('inbox.error')}</p>}
   {balance!==undefined&&<p>{t('inbox.balance')} <strong>{balance}</strong></p>}
   {items?.length===0&&<p>{t('inbox.empty')}</p>}
