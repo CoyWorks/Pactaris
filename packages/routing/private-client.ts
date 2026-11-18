@@ -301,19 +301,26 @@ export class PrivateCatalogClient{
 export class PrivatePartnerClient{
  constructor(private signer:DelegationSigner){}
  async execute(accountId:string,placement:Placement,action:import('../auth/partner.js').PartnerAction,input:Record<string,unknown>):Promise<import('../auth/partner.js').PartnerResult>{
-  const {PartnerError,partnerStates,isPartnerAction}=await import('../auth/partner.js'),{documentText,documentVersion}=await import('../auth/library.js'),{utcInstant}=await import('../auth/routines.js');
+  const {PartnerError,partnerStates,isPartnerAction,validTaskSchedule}=await import('../auth/partner.js'),{documentText,documentVersion}=await import('../auth/library.js'),{utcInstant}=await import('../auth/routines.js');
   const snapshot=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{32}$/.test(v);
   try{
    if(!uuid(input.operationId))throw new PartnerError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new PartnerError('invalid');
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
    if(response.status===403||response.status===404)throw new PartnerError('denied');if(response.status===400)throw new PartnerError('invalid');if(response.status===409){const code=(response.data as {code?:string})?.code;throw new PartnerError(code==='partner_paused'?'paused':code==='partner_capacity'?'capacity':'conflict');}
    const r=response.data as import('../auth/partner.js').PartnerResult;
-   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['partnerPolicyList','partnerOptions','partnerRead','partnerList'].includes(action)?'listed':'applied'))throw Error('routing.response');
+   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['partnerSeriesList','partnerPolicyList','partnerOptions','partnerRead','partnerList'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/partner.js').PartnerResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
    const summary=(s:import('../auth/partner.js').PartnerSummary)=>{
     if(!s||!uuid(s.taskId)||!uuid(s.creatorId)||!uuid(s.assigneeId)||s.creatorId===s.assigneeId||!documentVersion(s.version)||!partnerStates.includes(s.state)||!documentText(s.title,120)||!documentText(s.description,500,true,true)||!documentText(s.counterpart,80,true)||!['low','normal','high'].includes(s.priority)||(s.dueAt!==null&&!utcInstant(s.dueAt))||!['creator','assignee'].includes(s.role)||s.role!==(s.creatorId===input.membershipId?'creator':s.assigneeId===input.membershipId?'assignee':undefined))throw Error('routing.response');
-    return {taskId:s.taskId,version:s.version,state:s.state,creatorId:s.creatorId,assigneeId:s.assigneeId,role:s.role,counterpart:s.counterpart,title:s.title,description:s.description,priority:s.priority,dueAt:s.dueAt};
+    if(s.availableAt!==undefined&&s.availableAt!==null&&!utcInstant(s.availableAt))throw Error('routing.response');
+    return {availableAt:s.availableAt,taskId:s.taskId,version:s.version,state:s.state,creatorId:s.creatorId,assigneeId:s.assigneeId,role:s.role,counterpart:s.counterpart,title:s.title,description:s.description,priority:s.priority,dueAt:s.dueAt};
    };
+   if(r.scheduling!==undefined){if(typeof r.scheduling!=='boolean')throw Error('routing.response');out.scheduling=r.scheduling;}
+   if(r.seriesId!==undefined){if(!uuid(r.seriesId))throw Error('routing.response');out.seriesId=r.seriesId;}
+   if(action==='partnerSeriesList'){
+    if(!Array.isArray(r.series)||r.series.length>10||(r.nextCursor!==null&&!uuid(r.nextCursor)))throw Error('routing.response');out.nextCursor=r.nextCursor;
+    out.series=r.series.map(s=>{const f=s.fields;if(!uuid(s.policyId)||!uuid(s.seriesId)||!documentVersion(s.version)||!uuid(s.creatorId)||!uuid(s.assigneeId)||![s.creatorId,s.assigneeId].includes(input.membershipId as string)||!['active','blocked','cancelled','finished'].includes(s.state)||!validTaskSchedule(s.schedule)||!f||!documentText(f.title,120)||!documentText(f.description,500,true,true)||!['low','normal','high'].includes(f.priority)||(f.dueAt!==null&&!utcInstant(f.dueAt)))throw Error('routing.response');return {policyId:s.policyId,seriesId:s.seriesId,version:s.version,creatorId:s.creatorId,assigneeId:s.assigneeId,state:s.state,fields:{title:f.title,description:f.description,priority:f.priority,dueAt:f.dueAt},schedule:s.schedule};});
+   }
    if(r.policyId!==undefined){if(!uuid(r.policyId))throw Error('routing.response');out.policyId=r.policyId;}
    if(action==='partnerPolicyList'){
     if(!Array.isArray(r.policies)||r.policies.length>25)throw Error('routing.response');

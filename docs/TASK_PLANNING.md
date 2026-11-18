@@ -53,3 +53,7 @@ Current source adds explicitly adopted, versioned directional task authority, di
 ## Direct task/to-do implementation — 0.13.0-alpha.1
 
 Standing assignment policies from #73 now provide the agreed direct/per-task modes. The follow-up adds preferred adopted-policy selection and a server-filtered personal to-do view with immediate assigned-task visibility. Existing task history is preserved across the additive upgrade. See [STANDING_TASK_AUTHORITY.md](STANDING_TASK_AUTHORITY.md). The recurrence, background worker and reward/ledger sections above remain planned follow-up work.
+
+## Scheduler source checkpoint (#18)
+
+Versioned standing-authority series, availability-filtered occurrences and a durable Instance worker are now implemented in source. Calendar/catch-up, revision/cancellation, shared capacity, retry/dead-letter and current-scope enforcement are documented in [TASK_SCHEDULER.md](TASK_SCHEDULER.md). Release-manifest registration was outside the authorized edit scope, so the current release does not activate this migration. Reward/notification delivery and owner-only series drafts remain open; see the exact verification and rollout limits in that contract.

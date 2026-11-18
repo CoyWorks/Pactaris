@@ -155,6 +155,13 @@
       "path": "migrations/instance/0015_assignment_todo.sql",
       "sha256": "82b07e2c213a60e8ef16414225777e41115d9fa4f999a5ab2ee8721b2528e7c5",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0016_task_scheduling",
+      "path": "migrations/instance/0016_task_scheduling.sql",
+      "sha256": "cf532d5ba221a4b996f5c9b3ba97192d885dff87da620214f1efd8aa563910a7",
+      "backwardCompatible": true
     }
   ]
 }
