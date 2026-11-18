@@ -74,6 +74,20 @@ DELETE FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-0000
 UPDATE pactaris.task_generation_jobs SET cursor_date=current_date+3,run_after=now() WHERE series_id='70000000-0000-4000-8000-000000000002';
 SELECT pactaris.run_task_scheduler('10000000-0000-4000-8000-000000000002');
 SELECT scheduler_test.check((SELECT count(*)=7 FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000002'),'autonomous extension beyond initial window');
+-- Capacity is a recoverable wait, not a dead-letter or safety-scope failure.
+-- Remove one synthetic future occurrence, preserving the other six.
+DELETE FROM pactaris.partner_outbox WHERE operation_id IN (SELECT id FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000002' AND occurrence_date=current_date+7);
+DELETE FROM pactaris.partner_receipts WHERE operation_id IN (SELECT id FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000002' AND occurrence_date=current_date+7);
+DELETE FROM pactaris.partner_events WHERE task_id IN (SELECT id FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000002' AND occurrence_date=current_date+7);
+DELETE FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000002' AND occurrence_date=current_date+7;
+UPDATE pactaris.task_generation_jobs SET cursor_date=current_date+7,run_after=now() WHERE series_id='70000000-0000-4000-8000-000000000002';
+UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','0');
+SELECT scheduler_test.check(pactaris.run_task_scheduler('10000000-0000-4000-8000-000000000002')='capacity','capacity returns waiting state');
+SELECT scheduler_test.check((SELECT state='pending' AND attempts=0 AND last_code='capacity' AND run_after>now() FROM pactaris.task_generation_jobs WHERE series_id='70000000-0000-4000-8000-000000000002'),'capacity stays eligible for retry');
+UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','100');
+UPDATE pactaris.task_generation_jobs SET run_after=now() WHERE series_id='70000000-0000-4000-8000-000000000002';
+SELECT scheduler_test.check(pactaris.run_task_scheduler('10000000-0000-4000-8000-000000000002')='processed','capacity retry succeeds once quota returns');
+SELECT scheduler_test.check((SELECT count(*)=7 FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000002'),'capacity retry produces exactly one replacement occurrence');
 -- A decision renewal changes the persisted safety fingerprint (ABA fence).
 UPDATE pactaris.agreement_decisions SET decided_at=now()+interval '1 second';
 UPDATE pactaris.task_generation_jobs SET run_after=now() WHERE series_id='70000000-0000-4000-8000-000000000002';
