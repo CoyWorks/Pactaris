@@ -4,12 +4,13 @@ import {hash,type PgGatewayStore,type Placement} from './store.js';
 import {normalizeEmail} from '../../packages/auth/email.js';
 import {uuid,type InvitationAction} from '../../packages/auth/delegation.js';
 import type {HouseholdClient,PrivateInvitationClient} from '../../packages/routing/private-client.js';
+import type {InvitationMail} from './invitation-mail.js';
 import {InvitationError,type InvitationResult} from '../instance/invitations.js';
 export type InvitationView={invitationId:string;status:string;operationId?:string;householdId?:string;name?:string;role?:string;termsVersion?:string;expiresAt?:string};
 type Route=Placement&{invitationId:string;creatorAccountId:string;creatorMembershipId:string;createOperationId:string;requestHash:string};
 const tokenValid=(value:string)=>/^[A-Za-z0-9_-]{43}$/.test(value);
 export class GatewayInvitations {
- constructor(private pool:pg.Pool,private store:PgGatewayStore,private households:HouseholdClient,private client:Pick<PrivateInvitationClient,'execute'>){}
+ constructor(private pool:pg.Pool,private store:PgGatewayStore,private households:HouseholdClient,private client:Pick<PrivateInvitationClient,'execute'>,private mail?:InvitationMail){}
  private select=`SELECT r.id AS "invitationId",r.household_id AS "householdId",r.instance_id AS "instanceId",r.placement_version::text AS version,
  r.creator_account_id AS "creatorAccountId",r.creator_membership_id AS "creatorMembershipId",r.create_operation_id AS "createOperationId",r.request_hash AS "requestHash",
  i.endpoint,i.tls_server_name AS "tlsServerName",i.ca_file AS "caFile" FROM pactaris.invitation_routes r
@@ -47,12 +48,17 @@ export class GatewayInvitations {
    await db.query('COMMIT');
   }catch(error){await db.query('ROLLBACK');throw error;}finally{db.release();}
   const result=await this.client.execute(accountId,route,'inviteCreate',{operationId,invitationId:route.invitationId,membershipId:route.creatorMembershipId,tokenHash:hash(token),recipientHash:hash(token+':'+email)});
+  if(this.mail&&result.status==='pending'&&result.expiresAt&&Number.isFinite(Date.parse(result.expiresAt))){
+   await this.mail.enqueue(route.invitationId,email,token,result.expiresAt);
+  }
   return {invitationId:route.invitationId,status:result.status,expiresAt:result.expiresAt};
  }
  async list(accountId:string,householdId:string){
   const own=await this.own(accountId,householdId);
   const result=await this.client.execute(accountId,own.placement,'inviteList',{operationId:randomUUID(),membershipId:own.membershipId});
-  return {invitations:(result.invitations??[]).map(i=>({invitationId:i.invitationId,status:i.status,role:i.role,expiresAt:i.expiresAt}))};
+  const invitations=result.invitations??[],delivery=await this.mail?.statuses(invitations.map(i=>i.invitationId));
+  return {emailEnabled:!!this.mail,invitations:invitations.map(i=>({invitationId:i.invitationId,status:i.status,role:i.role,
+    expiresAt:i.expiresAt,delivery:delivery?.get(i.invitationId)}))};
  }
  async revoke(accountId:string,householdId:string,invitationId:string,operationId:string){
   const own=await this.own(accountId,householdId);
@@ -111,6 +117,22 @@ export class GatewayInvitations {
    await db.query('COMMIT');
   }catch(error){await db.query('ROLLBACK');throw error;}finally{db.release();}
   return {invitationId:route.invitationId,operationId:result.operationId,householdId:route.householdId,status:state};
+ }
+ async deliverMail(){
+  await this.mail?.work(async(id,db)=>{
+   const rows=await db.query(this.select+` AND r.id=$1 AND EXISTS(
+    SELECT 1 FROM pactaris.accounts a WHERE a.id=r.creator_account_id AND a.status='active')`,[id]);
+   const route=rows.rows[0] as Route|undefined;
+   if(!route)return false;
+   try{
+    const result=await this.client.execute(route.creatorAccountId,route,'inviteList',
+      {operationId:randomUUID(),membershipId:route.creatorMembershipId});
+    return !!result.invitations?.some(i=>i.invitationId===id&&i.status==='pending'&&Date.parse(i.expiresAt)>Date.now());
+   }catch(error){
+    if(error instanceof InvitationError&&error.kind==='denied')return false;
+    throw error;
+   }
+  });
  }
  async reconcile(){
   const claimed=await this.pool.query(`UPDATE pactaris.invitation_acceptances SET next_check_at=now()+interval '60 seconds' WHERE id IN

@@ -44,7 +44,29 @@ In Authentik, set the Email stages for local enrollment verification and recover
 
 With a fresh test account, check registration, receipt and consumption of the verification link, then sign in to Pactaris. Check password recovery, rejection of an expired or consumed link and authenticator enrollment and recovery for the administrator. Keep an active operator session during MFA rollout until a second operator sign-in and its recovery path succeed.
 
-The Pactaris household invitation flow currently creates links for manual delivery. Sending those automatically and tracking delivery requires the application mail job work in #24.
+## Automatic invitation email
+
+Enable invitation email once on the central gateway. Each Instance keeps deciding whether its invitation is valid. The gateway uses the configured relay to send a generic message with a link at the configured Pactaris origin. Use the same relay as Identity if desired. Keep SMTP access and encryption keys on the central hosts.
+
+Create a JSON file such as `/opt/pactaris/gateway/data/invitation-mail.json`, owned by root and readable by the gateway service group only (mode 0640). In `/opt/pactaris/gateway/config.json`, set `"invitationMailFile": "/opt/pactaris/gateway/data/invitation-mail.json"`. The file uses this shape:
+
+```json
+{
+  "host": "smtp.example.org",
+  "port": 587,
+  "tls": "starttls",
+  "from": "mailer@example.org",
+  "username": "mailer@example.org",
+  "password": "replace-on-the-gateway-host",
+  "encryptionKey": "replace-with-64-hex-characters"
+}
+```
+
+Generate the queue encryption key with `openssl rand -hex 32`. Retain it across updates while work is queued and protect backups containing it. Use `"tls": "implicit"` with the provider's implicit TLS port if required. Omit both login fields for an authorized relay without SMTP authentication. Disable link tracking/wrapping for these messages so the invite fragment stays intact and avoids provider tracking URLs.
+
+Update the gateway using `bash /opt/pactaris-source/update.sh --component gateway`. When modifying settings on a running revision, restart the gateway API and worker to reload the file. Invites can still be shared manually. The queue encrypts the address and invitation token, removes them at terminal state, and retries temporary failures at bounded intervals. The worker revalidates each invitation immediately before delivery. SMTP acceptance means that the relay accepted the message. Delivery may repeat if the process stops after relay acceptance and before the database records it. The invitation itself is single-use.
+
+Verify with a test dynamic and mailbox. Create an invitation, check that the generic email reaches the mailbox with a link on the public app origin, and use the invited account to review it. Exercise a temporary relay failure and revoke a queued invitation before retrying. Retain manual sharing as a fallback until delivery is verified.
 
 Provider documents: [Email configuration](https://docs.goauthentik.io/install-config/email/), [Email stage](https://docs.goauthentik.io/add-secure-apps/flows-stages/stages/email/), [Verified OIDC email](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/verify-email-address/).
 

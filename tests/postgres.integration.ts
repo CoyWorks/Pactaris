@@ -25,6 +25,7 @@ import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,Pri
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
+import {InvitationMail} from '../apps/gateway/invitation-mail.js';
 import { GatewayInvitations } from '../apps/gateway/invitations.js';
 import { hash } from '../apps/gateway/store.js';
 import { PgOnboardingStore,OnboardingService } from '../apps/gateway/onboarding.js';
@@ -401,10 +402,35 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const first=await makeInvite('first@example.invalid');assert.equal(first.response.status,201);
   assert.equal((await api(baseInvite,'POST',{email:first.email,token:first.token,operationId:first.operationId},ownerSession)).data.invitationId,first.id);
   assert.equal((await api(baseInvite,'POST',{email:'changed@example.invalid',token:first.token,operationId:first.operationId},ownerSession)).status,409);
+  await (async()=>{
+   let sends=0;
+   const mail=new InvitationMail(gatewayDb.pool,randomBytes(32),async job=>{
+    assert.equal(job.id,first.id);assert.equal(job.token,first.token);assert.equal(job.email,first.email);
+    if(++sends===1)throw Error('fixture relay temporarily unavailable');
+   });
+   const service=new GatewayInvitations(gatewayDb.pool,store,client,inviteClient,mail);
+   const args=[inviteOwner.id,inviteHousehold.householdId,first.operationId,first.token,first.email] as const;
+   await service.create(...args);await service.create(...args);
+   const queued=await gatewayDb.owner.query('SELECT payload FROM pactaris.invitation_mail WHERE invitation_id=$1',[first.id]);
+   assert.equal(queued.rowCount,1);
+   assert.ok(!queued.rows[0].payload.includes(first.email)&&!queued.rows[0].payload.includes(first.token));
+   await service.deliverMail();await service.deliverMail();assert.equal(sends,1);
+   await gatewayDb.owner.query('UPDATE pactaris.invitation_mail SET next_attempt_at=now() WHERE invitation_id=$1',[first.id]);
+   await Promise.all([service.deliverMail(),service.deliverMail()]);assert.equal(sends,2);
+   const terminal=await gatewayDb.owner.query('SELECT status,payload FROM pactaris.invitation_mail WHERE invitation_id=$1',[first.id]);
+   assert.deepEqual(terminal.rows[0],{status:'sent',payload:null});
+   const cancelled=await service.create(inviteOwner.id,inviteHousehold.householdId,randomUUID(),
+    randomBytes(32).toString('base64url'),'cancelled@example.invalid');
+   await service.revoke(inviteOwner.id,inviteHousehold.householdId,cancelled.invitationId,randomUUID());
+   await service.deliverMail();
+   assert.equal(sends,2);
+   const retired=await gatewayDb.owner.query('SELECT status,payload FROM pactaris.invitation_mail WHERE invitation_id=$1',[cancelled.invitationId]);
+   assert.deepEqual(retired.rows[0],{status:'inactive',payload:null});
+  })();
   const reservationRace=await Promise.all(['second','third','fourth'].map(n=>makeInvite(n+'@example.invalid')));
   assert.equal(reservationRace.filter(r=>r.response.status===201).length,2);assert.equal(reservationRace.filter(r=>r.response.status===409).length,1);
   assert.equal((await makeInvite('overflow@example.invalid')).response.status,409);
-  assert.equal((await api(baseInvite,'GET',undefined,ownerSession)).data.invitations.length,3);
+  assert.equal((await api(baseInvite,'GET',undefined,ownerSession)).data.invitations.filter((item:{status:string})=>item.status==='pending').length,3);
   const receiver=await store.account('https://idp.fixture.invalid/','invite-first','Invited fixture',first.email);
   const receiverSession='i'.repeat(43);await store.createSession(receiverSession,receiver,'registration-csrf',60,120,first.email);
   const withoutProof='j'.repeat(43);await store.createSession(withoutProof,receiver,'registration-csrf',60,120);

@@ -1,16 +1,17 @@
 import React,{useEffect,useState} from 'react';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 type Session={account:{id:string;displayName:string};csrfToken:string};
-type Invite={invitationId:string;status:string;role:string;expiresAt:string};
+type Invite={invitationId:string;status:string;role:string;expiresAt:string;delivery?:string};
 const errorKey=(key:unknown):MessageKey=>(['invitations.invalid','invitations.denied','invitations.conflict','invitations.capacity','invitations.proof','invitations.unavailable','errors.rateLimited','errors.request'] as unknown[]).includes(key)?key as MessageKey:'invitations.unavailable';
 function secret(){const data=crypto.getRandomValues(new Uint8Array(32));return btoa(String.fromCharCode(...data)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');}
 export function InvitationManager({householdId,session,language,format,timeZone}:{householdId:string;session:Session;language:string;format:string;timeZone:string}){
+ const [emailEnabled,setEmailEnabled]=useState(false);
  const t=createTranslator(language),[items,setItems]=useState<Invite[]>(),[allowed,setAllowed]=useState(false),[email,setEmail]=useState(''),[draft,setDraft]=useState<{id:string;token:string}>(),[link,setLink]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[refresh,setRefresh]=useState(0),[copied,setCopied]=useState(false),[revokeIds,setRevokeIds]=useState<Record<string,string>>({});
  useEffect(()=>{
   const controller=new AbortController();let gone=false;
   void fetch('/api/households/'+householdId+'/invitations',{cache:'no-store',signal:controller.signal}).then(async r=>{
    if(r.status===404||r.status===403){if(!gone)setAllowed(false);return;}
-   const body=await r.json();if(!r.ok)throw Error('list');if(!gone){setAllowed(true);setItems(body.invitations);}
+   const body=await r.json();if(!r.ok)throw Error('list');if(!gone){setAllowed(true);setItems(body.invitations);setEmailEnabled(body.emailEnabled===true);}
   }).catch(()=>{if(!gone)setError('invitations.unavailable');});
   return()=>{gone=true;controller.abort();};
  },[householdId,session.account.id,refresh]);
@@ -30,9 +31,12 @@ export function InvitationManager({householdId,session,language,format,timeZone}
   }catch{setError('invitations.unavailable');}finally{setBusy(false);}
  }
  const stateKeys:Record<string,MessageKey>={pending:'invitations.state.pending',accepted:'invitations.state.accepted',declined:'invitations.state.declined',revoked:'invitations.state.revoked',inactive:'invitations.state.inactive'};
+ const deliveryKeys:Record<string,MessageKey>={queued:'invitations.delivery.queued',sent:'invitations.delivery.sent',
+  failed:'invitations.delivery.failed',inactive:'invitations.delivery.inactive'};
  const stateKey=(value:string):MessageKey=>stateKeys[value]??'invitations.state.inactive';
  if(!allowed)return error?<p role="alert">{t(error)}</p>:null;
  return <section><h2>{t('invitations.title')}</h2><p>{t('invitations.createDescription')}</p>
+  {emailEnabled&&<p>{t('invitations.emailEnabled')}</p>}
   {error&&<p role="alert">{t(error)}</p>}
   <form onSubmit={event=>{void create(event);}}><label htmlFor="invite-email">{t('invitations.email')}</label>
    <input id="invite-email" type="email" autoComplete="off" maxLength={254} required value={email} disabled={busy||!!draft} onChange={e=>setEmail(e.target.value)}/>
@@ -43,6 +47,7 @@ export function InvitationManager({householdId,session,language,format,timeZone}
    <button type="button" onClick={()=>{void (async()=>{try{if(!navigator.clipboard)throw Error('clipboard');await navigator.clipboard.writeText(link);setCopied(true);}catch{setError('invitations.copyManual');}})();}}>{t('invitations.copy')}</button>{copied&&<p>{t('invitations.copied')}</p>}
   </div>}
   {!!items?.length&&<ul>{items.map(i=><li key={i.invitationId}><code>{i.invitationId}</code><p>{t(stateKey(i.status))}</p><p>{t('invitations.expires')} <time dateTime={i.expiresAt} title={timeZone}>{formatTime(new Date(i.expiresAt),format,timeZone)}</time></p>
+   {i.delivery&&deliveryKeys[i.delivery]&&<p>{t(deliveryKeys[i.delivery]!)}</p>}
    {i.status==='pending'&&<button type="button" disabled={busy} onClick={()=>{void revoke(i.invitationId);}}>{t('invitations.revoke')}</button>}
   </li>)}</ul>}
  </section>;

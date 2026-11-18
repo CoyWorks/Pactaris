@@ -169,6 +169,13 @@
       "path": "migrations/instance/0017_task_rewards_inbox.sql",
       "sha256": "6be349112fb8011291a882062cf1af32bba00fbce5260e857bb5e7cf289b4f8d",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0008_invitation_mail",
+      "path": "migrations/gateway/0008_invitation_mail.sql",
+      "sha256": "13201a83670eb8e368f664a59ca91be2979bf1886b7ffe99f4673a975947df9c",
+      "backwardCompatible": true
     }
   ]
 }

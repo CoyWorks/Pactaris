@@ -571,5 +571,12 @@
   "partner.reversePointsConfirm": "Reverse the points awarded for this task? This correction is permanent.",
   "account.revokeOtherSessions": "Sign out other Pactaris sessions",
   "account.revokeOtherConfirm": "Sign out your other Pactaris sessions and keep this session active?",
-  "account.sessionsRevoked": "Other Pactaris sessions have been signed out."
+  "account.sessionsRevoked": "Other Pactaris sessions have been signed out.",
+  "mail.invitation.subject": "An invitation to Pactaris",
+  "mail.invitation.body": "You have received a private Pactaris invitation. Open the link to review it. If you were not expecting this invitation, you can ignore this email.\n\n{link}",
+  "invitations.emailEnabled": "Pactaris will queue an email to this address. You can also share the link yourself.",
+  "invitations.delivery.queued": "Email queued",
+  "invitations.delivery.sent": "Email accepted by the mail server",
+  "invitations.delivery.failed": "Email delivery failed. Share the link directly if it is still valid.",
+  "invitations.delivery.inactive": "Email delivery stopped"
 }
