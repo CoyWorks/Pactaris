@@ -607,5 +607,13 @@
   "cli.brandFailed": "The Identity Brand request could not be completed.",
   "cli.brandBackupRequired": "Provide a new backup path with --backup before applying.",
   "cli.brandTerminalRequired": "Run from an interactive terminal to enter the API token privately.",
-  "cli.brandTokenPrompt": "Authentik API token:"
+  "cli.brandTokenPrompt": "Authentik API token:",
+  "account.presentationTitle": "Date and time settings",
+  "account.presentationDescription": "Choose a formatting locale such as en-GB and a personal time zone such as Europe/Amsterdam. Household schedules use the household time zone.",
+  "account.presentationFormat": "Formatting locale",
+  "account.presentationZone": "Personal time zone",
+  "account.presentationSave": "Save date and time settings",
+  "account.presentationReset": "Use app defaults",
+  "account.presentationSaved": "Date and time settings saved.",
+  "account.presentationInvalid": "Enter a supported locale and an IANA time zone."
 }

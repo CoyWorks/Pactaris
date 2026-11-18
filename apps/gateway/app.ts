@@ -1,3 +1,4 @@
+import {accountPresentation} from './account-presentation.js';
 import {publicPwa} from '../../packages/http/pwa.js';
 import {isPartnerAction,partnerInput,PartnerError} from '../../packages/auth/partner.js';
 import type {GatewayPartner} from './partner.js';
@@ -94,6 +95,21 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     }else res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});
   }
   app.get('/api/session',async(req,res)=>{const session=await authenticate(req,res);if(session)res.json(session);});
+  app.put('/api/account/presentation',express.json({limit:1024,strict:true,inflate:false}),async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){
+      res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;
+    }
+    const value=accountPresentation(req.body);
+    if(value===undefined){
+      res.status(400).json({code:'invalid_presentation',messageKey:'account.presentationInvalid'});return;
+    }
+    if(!await store.throttle('account.presentation:'+session.account.id)){
+      res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;
+    }
+    await store.updateAccountPresentation(session.account.id,value);
+    res.json({presentation:value});
+  });
   app.get('/api/account/sessions',async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;
     res.json(await store.sessionsForAccount(session.account.id,cookie(req,SESSION)!));

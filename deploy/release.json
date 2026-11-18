@@ -190,6 +190,13 @@
       "path": "migrations/instance/0018_task_inbox_preferences.sql",
       "sha256": "78d7a339f9254b8c5c00b49f31b2106873566c389e73af232ba716f305391c1d",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0010_account_presentation",
+      "path": "migrations/gateway/0010_account_presentation.sql",
+      "sha256": "3a5513dbfe113a857de6ec2fa7fff67da20698489f7efa33f93924b8a2c0bf1f",
+      "backwardCompatible": true
     }
   ]
 }

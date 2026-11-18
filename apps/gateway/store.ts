@@ -4,12 +4,14 @@ import { normalizeEmail } from '../../packages/auth/email.js';
 export const hash = (token: string) => createHash('sha256').update(token).digest('hex');
 export type LoginAttempt = {state:string;nonce:string;verifier:string};
 export type Account = {id:string;displayName:string};
-export type Session = {account:Account;csrfToken:string;expiresAt:string};
+export type AccountPresentation = {format:string;timeZone:string};
+export type Session = {account:Account;csrfToken:string;expiresAt:string;presentation?:AccountPresentation};
 export type SessionView = {id:string;current:boolean;createdAt:string;expiresAt:string};
 export type Placement = {householdId:string;instanceId:string;endpoint:string;tlsServerName:string;caFile:string;version:string};
 export interface GatewayStore {
   probe():Promise<void>;
   throttle(bucket:string):Promise<boolean>;
+  updateAccountPresentation(accountId:string,value:AccountPresentation|null):Promise<void>;
   beginLogin(cookie:string, attempt:LoginAttempt):Promise<void>;
   consumeLogin(cookie:string,state:string):Promise<LoginAttempt|undefined>;
   account(issuer:string,subject:string,name:string,verifiedEmail?:string):Promise<Account>;
@@ -60,8 +62,17 @@ export class PgGatewayStore implements GatewayStore {
   async session(token:string,idle:number) {
     const r=await this.pool.query(`UPDATE pactaris.sessions s SET idle_expires_at=LEAST(s.expires_at,now()+$2*interval '1 second')
       FROM pactaris.accounts a WHERE s.token_hash=$1 AND a.id=s.account_id AND a.status='active' AND s.expires_at>now() AND s.idle_expires_at>now()
-      RETURNING a.id,a.display_name,s.csrf_token,s.expires_at`,[hash(token),idle]);
-    const row=r.rows[0];return row?{account:{id:row.id,displayName:row.display_name},csrfToken:row.csrf_token,expiresAt:row.expires_at.toISOString()}:undefined;
+      RETURNING a.id,a.display_name,s.csrf_token,s.expires_at,a.locale_format,a.time_zone`,[hash(token),idle]);
+    const row=r.rows[0];return row?{account:{id:row.id,displayName:row.display_name},csrfToken:row.csrf_token,expiresAt:row.expires_at.toISOString(),
+      ...(row.locale_format&&row.time_zone?{presentation:{format:row.locale_format,timeZone:row.time_zone}}:{})}:undefined;
+  }
+  async updateAccountPresentation(accountId:string,value:AccountPresentation|null){
+    await this.pool.query(`WITH changed AS (
+      UPDATE pactaris.accounts SET locale_format=$2,time_zone=$3
+      WHERE id=$1 AND status='active' AND (locale_format,time_zone) IS DISTINCT FROM ($2::text,$3::text)
+      RETURNING id
+    ) INSERT INTO pactaris.account_presentation_events(account_id) SELECT id FROM changed`,
+    [accountId,value?.format??null,value?.timeZone??null]);
   }
   async logout(token:string){await this.pool.query('DELETE FROM pactaris.sessions WHERE token_hash=$1',[hash(token)]);}
   async sessionsForAccount(accountId:string,token:string) {

@@ -6,13 +6,17 @@ import { inject } from 'light-my-request';
 import { readFileSync } from 'node:fs';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { parseGatewayConfig } from '../packages/config/index.js';
-import { hash,type Account,type GatewayStore,type LoginAttempt,type Placement,type Session } from '../apps/gateway/store.js';
+import { hash,type Account,type AccountPresentation,type GatewayStore,type LoginAttempt,type Placement,type Session } from '../apps/gateway/store.js';
 import type { OidcLogin } from '../packages/auth/oidc.js';
 import type { OnboardingService } from '../apps/gateway/onboarding.js';
 const accountA='10000000-0000-4000-8000-000000000001',accountB='10000000-0000-4000-8000-000000000002';
 const householdA='20000000-0000-4000-8000-000000000001',householdB='20000000-0000-4000-8000-000000000002';
 class FixtureStore implements GatewayStore {
   attempts=new Map<string,LoginAttempt>();sessions=new Map<string,Session & {id:string;createdAt:string}>();calls=0;limited=false;accountInput?:unknown[];
+  presentation=new Map<string,AccountPresentation>();
+  async updateAccountPresentation(accountId:string,value:AccountPresentation|null){
+    if(value)this.presentation.set(accountId,value);else this.presentation.delete(accountId);
+  }
   async probe(){}
   async throttle(){return !this.limited;}
   async beginLogin(cookie:string,a:LoginAttempt){this.attempts.set(hash(cookie),a);}
@@ -21,7 +25,7 @@ class FixtureStore implements GatewayStore {
   async createSession(token:string,account:Account,csrfToken:string){this.sessions.set(hash(token),{account,csrfToken,id:randomUUID(),createdAt:new Date().toISOString(),expiresAt:new Date(Date.now()+100000).toISOString()});}
   async session(token:string){
     const s=this.sessions.get(hash(token));
-    return s&&{account:s.account,expiresAt:s.expiresAt,csrfToken:s.csrfToken};
+    return s&&{account:s.account,expiresAt:s.expiresAt,csrfToken:s.csrfToken,presentation:this.presentation.get(s.account.id)};
   }
   async logout(token:string){this.sessions.delete(hash(token));}
   async sessionsForAccount(accountId:string,token:string){
@@ -214,4 +218,23 @@ test('install manifest and offline worker contain no account data and leave priv
   const fallback=await offline?.text()??'';
   assert.match(fallback,/Pactaris is offline/);
   assert.ok(!fallback.includes(householdA));
+});
+
+
+test('account date and time settings accept supported values and cannot target another account',async()=>{
+  const f=fixture(),path='/api/account/presentation';
+  const {cookie}=await login(f);
+  const csrf=(await inject(f.app,{url:'/api/session',headers:{...headers,cookie}})).json().csrfToken;
+  const trusted={...headers,cookie,origin:'https://pactaris.app','x-csrf-token':csrf,'content-type':'application/json'};
+  const save=(value:unknown,requestHeaders=trusted)=>inject(f.app,{method:'PUT',url:path,headers:requestHeaders,payload:JSON.stringify(value)});
+  const presentation={format:'nl-NL',timeZone:'Europe/Amsterdam'};
+  assert.equal((await save({presentation},{...trusted,origin:'https://evil.invalid'})).statusCode,403);
+  assert.equal((await save({presentation,accountId:accountB})).statusCode,400);
+  assert.equal((await save({presentation:{...presentation,timeZone:'+01:00'}})).statusCode,400);
+  assert.equal((await save({presentation:{...presentation,format:'zz-ZZ'}})).statusCode,400);
+  assert.deepEqual((await save({presentation})).json(),{presentation});
+  assert.deepEqual((await inject(f.app,{url:'/api/session',headers:{...headers,cookie}})).json().presentation,presentation);
+  assert.equal(f.store.presentation.has(accountB),false);
+  assert.deepEqual((await save({presentation:null})).json(),{presentation:null});
+  assert.equal((await inject(f.app,{url:'/api/session',headers:{...headers,cookie}})).json().presentation,undefined);
 });

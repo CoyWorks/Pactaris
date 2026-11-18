@@ -54,6 +54,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0006_invitations'))await connection.query(`GRANT SELECT,INSERT,UPDATE ON pactaris.invitation_routes,pactaris.invitation_acceptances TO ${role}`);
       if(entries.some(m=>m.id==='0007_membership_operations'))await connection.query(`GRANT SELECT,INSERT,UPDATE ON pactaris.membership_operations TO ${role}`);
       if(entries.some(m=>m.id==='0008_invitation_mail'))await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.invitation_mail TO ${role}`);
+      if(entries.some(m=>m.id==='0010_account_presentation'))await connection.query(`GRANT INSERT ON pactaris.account_presentation_events TO ${role}`);
     } else {
       await connection.query(`GRANT SELECT ON pactaris.households,pactaris.memberships,pactaris.household_entitlements TO ${role}`);
       await connection.query(`GRANT SELECT,INSERT,DELETE ON pactaris.delegation_uses TO ${role}`);

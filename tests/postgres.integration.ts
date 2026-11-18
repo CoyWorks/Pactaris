@@ -111,6 +111,20 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await store.account('https://idp.fixture.invalid/','subject-b','Other fixture',email)).id,other.id);
   assert.equal((await store.account('https://other-idp.fixture.invalid/','subject-a','Fixture user',email)).id,sameSubjectOtherIssuer.id);
   assert.equal((await gatewayDb.pool.query('SELECT count(*)::int AS n FROM pactaris.accounts WHERE verified_email=$1',[email])).rows[0].n,3);
+  await (async()=>{
+    const token='presentation-fixture',preferences={format:'nl-NL',timeZone:'Europe/Amsterdam'};
+    await store.createSession(token,account,'csrf',60,120);
+    try{
+      assert.equal((await store.session(token,60))?.presentation,undefined);
+      await store.updateAccountPresentation(account.id,preferences);
+      await store.updateAccountPresentation(account.id,preferences);
+      assert.deepEqual((await store.session(token,60))?.presentation,preferences);
+      await store.updateAccountPresentation(account.id,null);
+      assert.equal((await store.session(token,60))?.presentation,undefined);
+      const events=await gatewayDb.owner.query('SELECT count(*)::int n FROM pactaris.account_presentation_events WHERE account_id=$1',[account.id]);
+      assert.equal(events.rows[0].n,2);
+    }finally{await store.logout(token);}
+  })();
   await (async function verifyOtherSessionRevocation(){
     await store.createSession('active-fixture',account,'csrf',60,120);
     await store.createSession('other-fixture',account,'csrf',60,120);
