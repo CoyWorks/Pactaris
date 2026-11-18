@@ -1,3 +1,4 @@
+import {publicPwa} from '../../packages/http/pwa.js';
 import {isPartnerAction,partnerInput,PartnerError} from '../../packages/auth/partner.js';
 import type {GatewayPartner} from './partner.js';
 import {isCatalogAction,catalogInput,CatalogError} from '../../packages/auth/catalog.js';
@@ -361,5 +362,6 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     }catch(error){const kind=error instanceof PartnerError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,unavailable:503}[kind]).json({code:'partner_'+kind,messageKey:('partner.'+kind) as MessageKey});}
   });
   app.use('/api',(_req,res)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});});
-  frontend(app,webRoot,['/','/households/:householdId','/join']);errors(app);return app;
+  const pwaHead=publicPwa(app,webRoot,config.locale.language);
+  frontend(app,webRoot,['/','/households/:householdId','/join'],pwaHead);errors(app);return app;
 }

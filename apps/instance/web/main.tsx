@@ -21,6 +21,28 @@ function App() {
   }, []);
   const translate = createTranslator(status?.locale.language);
   useEffect(() => { document.title = createTranslator(status?.locale.language)('app.title'); }, [status?.locale.language]);
+  const [offline,setOffline]=useState(!navigator.onLine);
+  useEffect(()=>{
+    const update=()=>setOffline(!navigator.onLine);
+    const conceal=(event:PageTransitionEvent)=>{if(event.persisted)document.getElementById('root')?.setAttribute('hidden','');};
+    const restore=(event:PageTransitionEvent)=>{if(event.persisted)window.location.reload();};
+    window.addEventListener('offline',update);
+    window.addEventListener('online',update);
+    window.addEventListener('pagehide',conceal);
+    window.addEventListener('pageshow',restore);
+    return()=>{
+      window.removeEventListener('offline',update);
+      window.removeEventListener('online',update);
+      window.removeEventListener('pagehide',conceal);
+      window.removeEventListener('pageshow',restore);
+    };
+  },[]);
+  useEffect(()=>{
+    if(status?.component==='gateway'&&'serviceWorker' in navigator&&window.isSecureContext){
+      void navigator.serviceWorker.register('/service-worker.js',{updateViaCache:'none'}).catch(()=>{});
+    }
+  },[status?.component]);
+  if(offline)return <main><h1>{translate('pwa.offlineTitle')}</h1><p role="status">{translate('pwa.offlineDescription')}</p></main>;
   if(status?.component==='gateway')return <Portal {...status.locale}/>;
   return <main><span className="eyebrow">{translate('app.title')}</span><h1>{translate('foundation.title')}</h1><p>{translate('app.description')}</p><section aria-live="polite"><h2>{translate('foundation.status')}</h2><p>{failed ? translate('foundation.offline') : !status ? translate('foundation.pending') : status.readiness === 'ready' ? translate('foundation.ready') : translate('foundation.unavailable')}</p>{status && <dl><dt>{translate('foundation.version')}</dt><dd>{status.version}</dd><dt>{translate('foundation.time')}</dt><dd>{checked && formatTime(checked, status.locale.format, status.locale.timeZone)}</dd></dl>}</section><p>{translate('foundation.description')}</p><p className="notice">{translate('foundation.notEnabled')}</p></main>;
 }

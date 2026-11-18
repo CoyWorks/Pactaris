@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {runInNewContext} from 'node:vm';
 import {randomUUID} from 'node:crypto';
 import { inject } from 'light-my-request';
 import { readFileSync } from 'node:fs';
@@ -174,4 +175,43 @@ test('browser login failures render catalog text instead of raw protocol details
   assert.ok(response.payload.includes('Sign-in could not be completed'));
   assert.ok(!response.payload.includes('fixture-private-detail'));
   assert.ok(!response.payload.includes('messageKey'));
+});
+
+
+test('install manifest and offline worker contain no account data and leave private requests on the network',async()=>{
+  const {app}=fixture();
+  const manifest=await inject(app,{url:'/manifest.webmanifest',headers});
+  assert.match(String(manifest.headers['content-type']),/^application\/manifest\+json/);
+  assert.equal(manifest.headers['cache-control'],'no-store');
+  assert.deepEqual(manifest.json().icons.map((entry:{sizes:string})=>entry.sizes),['192x192','512x512']);
+  assert.equal(manifest.json().start_url,'/');
+  const worker=await inject(app,{url:'/service-worker.js',headers});
+  assert.equal(worker.statusCode,200);
+  assert.equal(worker.headers['cache-control'],'no-store');
+  type FetchEvent={request:{url:string;method:string;mode:string};respondWith:(response:Promise<Response>)=>void};
+  let handle:((event:FetchEvent)=>void)|undefined;
+  let networkFails=false;
+  runInNewContext(worker.payload,{URL,Response,self:{location:{origin:'https://pactaris.app'},
+    addEventListener:(name:string,fn:(event:FetchEvent)=>void)=>{if(name==='fetch')handle=fn;}},
+    fetch:async()=>{if(networkFails)throw Error('offline');return new Response('online');}});
+  assert.ok(handle);
+  const navigate=(url:string,method='GET',mode='navigate')=>{
+    let response:Promise<Response>|undefined;
+    handle!({request:{url,method,mode},respondWith:value=>{response=value;}});
+    return response;
+  };
+  for(const url of ['/api/session','/auth/login','/auth/oidc/callback','/assets/app.js']){
+    assert.equal(navigate('https://pactaris.app'+url),undefined);
+  }
+  assert.equal(navigate('https://pactaris.app/','POST'),undefined);
+  assert.equal(navigate('https://pactaris.app/','GET','same-origin'),undefined);
+  assert.equal(navigate('https://different.example.invalid/'),undefined);
+  assert.equal(await (await navigate('https://pactaris.app/'))?.text(),'online');
+  networkFails=true;
+  const offline=await navigate('https://pactaris.app/households/'+householdA);
+  assert.equal(offline?.status,503);
+  assert.equal(offline?.headers.get('cache-control'),'no-store');
+  const fallback=await offline?.text()??'';
+  assert.match(fallback,/Pactaris is offline/);
+  assert.ok(!fallback.includes(householdA));
 });

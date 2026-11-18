@@ -1,6 +1,6 @@
 import {AccountSessions} from './account-sessions.js';
 import {HouseholdWorkspace} from './workspace.js';
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import {InvitationJoin} from './invitations.js';
 type Session={account:{id:string;displayName:string};csrfToken:string};
@@ -11,6 +11,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   const t=createTranslator(language);
   const [session,setSession]=useState<Session>(),[loading,setLoading]=useState(true),[error,setError]=useState<MessageKey>(),[listing,setListing]=useState<Listing>(),[selected,setSelected]=useState<Summary>(),[busy,setBusy]=useState(false);
   const [name,setName]=useState(''),[createId,setCreateId]=useState<string>(),[createPending,setCreatePending]=useState(false),[leaveId,setLeaveId]=useState<string>(),[confirmLeave,setConfirmLeave]=useState(false),[leavePending,setLeavePending]=useState(false),[refresh,setRefresh]=useState(0);
+  const accountId=useRef<string|undefined>(undefined);
   const selectedId=/^\/households\/([a-f0-9-]{36})$/i.exec(window.location.pathname)?.[1];
   useEffect(()=>{
     let gone=false,timer:ReturnType<typeof setTimeout>|undefined,active:AbortController|undefined;
@@ -22,7 +23,13 @@ export function Portal({language,format,timeZone}:{language:string;format:string
         if(response.status===401){if(!gone){setSession(undefined);setListing(undefined);setSelected(undefined);setError(undefined);}return;}
         if(!response.ok)throw Error('session');
         const current=await response.json() as Session;
-        if(!gone)setSession(current);
+        if(gone)return;
+        if(accountId.current&&accountId.current!==current.account.id){
+          setSession(undefined);setListing(undefined);setSelected(undefined);
+          window.location.reload();return;
+        }
+        accountId.current=current.account.id;
+        setSession(current);
         const data=await fetch(selectedId?`/api/households/${selectedId}`:'/api/households',{cache:'no-store',signal:active.signal});
         if(data.status===404){if(!gone){setSelected(undefined);setError('portal.notFound');}return;}
         if(!data.ok)throw Error('households');

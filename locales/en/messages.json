@@ -589,5 +589,8 @@
   "account.sessionExpires": "Current expiry",
   "account.revokeOne": "Sign out this session",
   "account.revokeOneConfirm": "Sign out this other Pactaris session?",
-  "account.sessionRevoked": "The selected session was signed out."
+  "account.sessionRevoked": "The selected session was signed out.",
+  "pwa.offlineTitle": "Pactaris is offline",
+  "pwa.offlineDescription": "Reconnect to view your households or send changes. Safety actions require a connection and server confirmation.",
+  "pwa.tryAgain": "Return to Pactaris"
 }
