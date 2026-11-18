@@ -13,6 +13,41 @@ INSERT INTO pactaris.agreement_decisions(household_id,agreement_id,version,membe
 INSERT INTO pactaris.assignment_policies(household_id,id,creator_id,assignee_id,agreement_id,agreement_version,version,mode,state) SELECT household_id,'60000000-0000-4000-8000-000000000001',id,'20000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001',1,2,'direct','active' FROM pactaris.memberships WHERE account_id='10000000-0000-4000-8000-000000000003';
 CREATE FUNCTION scheduler_test.payload() RETURNS jsonb LANGUAGE sql AS $$ SELECT jsonb_build_object('membershipId',(SELECT id FROM pactaris.memberships WHERE account_id='10000000-0000-4000-8000-000000000003'),'policyId','60000000-0000-4000-8000-000000000001','policyVersion','2','epoch','1','safetyVersion',pactaris.partner_snapshot('10000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001',1),'fields',jsonb_build_object('title','Scheduled fixture','description','','priority','normal','dueAt',NULL),'schedule',jsonb_build_object('period','daily','startDate',(now() AT TIME ZONE 'UTC')::date+1,'endDate',NULL,'timeZone','UTC','availableTime','09:00','dueMinutes',60,'weekdays','[]'::jsonb)) $$;
 CREATE FUNCTION scheduler_test.command(action text,payload jsonb,op uuid DEFAULT gen_random_uuid(),actor uuid DEFAULT '10000000-0000-4000-8000-000000000003') RETURNS jsonb LANGUAGE sql AS $$ SELECT pactaris.partner_command('10000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002',actor,op,action,payload,encode(sha256(convert_to(payload::text,'UTF8')),'hex')) $$;
+-- Exercise earned points and inbox without changing the scheduler fixture state.
+DO $$
+DECLARE
+ creator_account uuid:='10000000-0000-4000-8000-000000000003';
+ assignee_account uuid:='30000000-0000-4000-8000-000000000001';
+ assignee uuid:='20000000-0000-4000-8000-000000000001';
+ task uuid:=gen_random_uuid();
+ creator_input jsonb:=scheduler_test.payload()-'schedule';
+ assignee_input jsonb;
+BEGIN
+ BEGIN
+  UPDATE pactaris.agreement_versions SET terms=jsonb_set(terms,'{activities}','["task","reward"]');
+  creator_input=jsonb_set(creator_input,'{fields,rewardPoints}','5');
+  creator_input=creator_input||jsonb_build_object('assigneeId',assignee,'agreementId','50000000-0000-4000-8000-000000000001','agreementVersion','1');
+  PERFORM scheduler_test.command('partnerAssign',creator_input,task,creator_account);
+  PERFORM scheduler_test.check(jsonb_array_length(scheduler_test.command('partnerInbox',jsonb_build_object('membershipId',assignee),gen_random_uuid(),assignee_account)->'inbox')=1,'assignee sees one notification');
+  PERFORM scheduler_test.check(scheduler_test.command('partnerInbox',creator_input,gen_random_uuid(),creator_account)->'inbox'='[]','creator does not see assignee inbox');
+  creator_input=creator_input||jsonb_build_object('taskId',task);
+  assignee_input=creator_input||jsonb_build_object('membershipId',assignee);
+  FOR n IN 0..1 LOOP
+   PERFORM scheduler_test.command('partnerStart',assignee_input||jsonb_build_object('version',(1+4*n)::text),gen_random_uuid(),assignee_account);
+   PERFORM scheduler_test.command('partnerSubmit',assignee_input||jsonb_build_object('version',(2+4*n)::text,'note','Fixture submission'),gen_random_uuid(),assignee_account);
+   PERFORM scheduler_test.command('partnerApprove',creator_input||jsonb_build_object('version',(3+4*n)::text),gen_random_uuid(),creator_account);
+   IF n=0 THEN
+    PERFORM scheduler_test.command('partnerReopen',creator_input||jsonb_build_object('version','4'),gen_random_uuid(),creator_account);
+   END IF;
+  END LOOP;
+  PERFORM scheduler_test.check(scheduler_test.command('partnerPoints',assignee_input,gen_random_uuid(),assignee_account)->>'balance'='5','reapproval cannot duplicate points');
+  PERFORM scheduler_test.command('partnerPointsReverse',creator_input,gen_random_uuid(),creator_account);
+  PERFORM scheduler_test.command('partnerPointsReverse',creator_input,gen_random_uuid(),creator_account);
+  PERFORM scheduler_test.check(scheduler_test.command('partnerPoints',assignee_input,gen_random_uuid(),assignee_account)->>'balance'='0','reversal recorded once');
+  RAISE SQLSTATE 'P9001' USING MESSAGE='rollback isolated reward fixture';
+ EXCEPTION WHEN SQLSTATE 'P9001' THEN NULL;
+ END;
+END $$;
 -- Calendar boundaries: gaps, folds, selected weekdays, leap/month end, non-hour DST.
 SELECT scheduler_test.check(pactaris.task_occurrence_at('{"period":"daily","startDate":"2026-01-01","endDate":null,"timeZone":"Europe/Amsterdam","availableTime":"02:30"}', '2026-03-29') IS NULL,'DST gap skipped');
 SELECT scheduler_test.check(pactaris.task_occurrence_at('{"period":"daily","startDate":"2026-01-01","endDate":null,"timeZone":"Europe/Amsterdam","availableTime":"02:30"}', '2026-10-25')='2026-10-25 01:30Z'::timestamptz,'DST fold once at standard time');
