@@ -55,3 +55,5 @@ Current source adds explicitly adopted, versioned directional task authority, di
 Open the private task inbox and choose **Task inbox preferences**. Active participants can enable or disable new task assignments and offers, submissions, and reviews for their own membership. All three are enabled by default, including for memberships created before this migration. Changes affect new inbox entries and preserve existing entries. A task still appears in the assignee's task lists when its notice is disabled.
 
 The Instance applies the recipient's selection during inbox insertion. Gateway/Instance calls require the usual current session, exact membership and origin/CSRF checks. There are no email or push subscriptions in these settings. Quiet hours and preferences for external channels remain follow-up in #22 and #23.
+
+The participant-tasks tab signals unread notices across the selected household workspace. It reuses the existing visible, online 60-second workspace refresh. The Instance checks only whether an unread record exists for the current membership; the response contains one Boolean. A failed refresh removes the indicator until a current response succeeds.

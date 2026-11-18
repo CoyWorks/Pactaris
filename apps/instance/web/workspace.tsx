@@ -46,7 +46,7 @@ export function HouseholdWorkspace({householdId,session,language,format,onLeave,
  const h=data?.household,blocked=busy||!!draft,safety=h?{epoch:h.epoch,memberEpoch:h.memberEpoch}:{};
  function tab(value:View){setView(value);setEditor(undefined);setSettings(undefined);setCursor(undefined);}
  return <div className="workspace"><div className="workspace-heading"><div><span className="eyebrow">{t('workspace.heading')}</span><h2>{h?.name??t('workspace.loading')}</h2>{h&&<p>{h.timeZone}</p>}</div><a href="/">{t('portal.back')}</a></div>
-  <nav className="workspace-nav" aria-label={t('workspace.navigation')}>{(Object.keys(labels) as View[]).map(v=><button type="button" key={v} aria-current={view===v?'page':undefined} onClick={()=>tab(v)}>{t(labels[v])}</button>)}</nav>
+  <nav className="workspace-nav" aria-label={t('workspace.navigation')}>{(Object.keys(labels) as View[]).map(v=><button type="button" key={v} aria-current={view===v?'page':undefined} onClick={()=>tab(v)}>{t(labels[v])}{v==='participantTasks'&&data?.hasUnreadTaskInbox&&<strong className="workspace-unread">{t('inbox.unreadBadge')}</strong>}</button>)}</nav>
   <SafetyProvider householdId={householdId} session={session} language={language} compact={view!=='safety'}>
    {error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}
    {draft&&<div className="notice"><p>{t('workspace.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void change(draft.action,draft.body,draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}

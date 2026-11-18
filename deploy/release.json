@@ -197,6 +197,13 @@
       "path": "migrations/gateway/0010_account_presentation.sql",
       "sha256": "3a5513dbfe113a857de6ec2fa7fff67da20698489f7efa33f93924b8a2c0bf1f",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0019_workspace_unread_inbox",
+      "path": "migrations/instance/0019_workspace_unread_inbox.sql",
+      "sha256": "2077969433dfa46759a50a74ade652a644d97df615ff4e046b19230ff8a04b11",
+      "backwardCompatible": true
     }
   ]
 }

@@ -212,6 +212,10 @@ export class PrivateWorkspaceClient{
    if(r.taskId!==undefined){if(!uuid(r.taskId))throw Error('routing.response');out.taskId=r.taskId;}
    if(action==='taskRead'){if(!r.task||typeof r.task.description!=='string'||[...r.task.description].length>1000)throw Error('routing.response');out.task={...task(r.task),description:r.task.description};}
    if(action==='workspaceRead'){
+    if(r.hasUnreadTaskInbox!==undefined){
+      if(typeof r.hasUnreadTaskInbox!=='boolean')throw Error('routing.response');
+      out.hasUnreadTaskInbox=r.hasUnreadTaskInbox;
+    }
     const h=r.household,c=r.counts;if(!h||typeof h.name!=='string'||!h.name||[...h.name].length>120||typeof h.timeZone!=='string'||!ver(h.version)||!ver(h.epoch)||!ver(h.memberEpoch)||typeof h.canEdit!=='boolean'||typeof h.selfPaused!=='boolean'||!['active','paused'].includes(h.status)||!Number.isSafeInteger(h.memberCount)||h.memberCount<1||!c||[c.open,c.done,c.overdue,c.unassigned].some(v=>!Number.isSafeInteger(v)||v<0)||!Array.isArray(r.tasks)||r.tasks.length>10||(r.nextCursor!==null&&!uuid(r.nextCursor)))throw Error('routing.response');
     new Intl.DateTimeFormat('en',{timeZone:h.timeZone});
     out.household={name:h.name,timeZone:h.timeZone,version:h.version,canEdit:h.canEdit,status:h.status,epoch:h.epoch,memberEpoch:h.memberEpoch,selfPaused:h.selfPaused,memberCount:h.memberCount};
