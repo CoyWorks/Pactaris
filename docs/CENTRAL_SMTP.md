@@ -47,3 +47,9 @@ With a fresh test account, check registration, receipt and consumption of the ve
 The Pactaris household invitation flow currently creates links for manual delivery. Sending those automatically and tracking delivery requires the application mail job work in #24.
 
 Provider documents: [Email configuration](https://docs.goauthentik.io/install-config/email/), [Email stage](https://docs.goauthentik.io/add-secure-apps/flows-stages/stages/email/), [Verified OIDC email](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/verify-email-address/).
+
+## Pactaris session recovery
+
+The household selector includes **Sign out other Pactaris sessions**. After confirmation, the gateway removes the account's other application sessions and keeps the current browser signed in. The command requires the current session, the application origin and CSRF proof. It also clears matching local restrictive safety routes from the handling gateway process. Authentik independently controls provider sessions, MFA and recovery codes.
+
+Verify with a test account in two browsers. Sign out the other sessions from the first browser and confirm the second browser loses API access on refresh.

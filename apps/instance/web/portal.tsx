@@ -72,6 +72,17 @@ export function Portal({language,format,timeZone}:{language:string;format:string
     try{const r=await fetch('/auth/logout',{method:'POST',headers:{'X-CSRF-Token':session.csrfToken}});if(!r.ok)throw Error('logout');window.location.assign('/');}
     catch{setError('errors.unavailable');setBusy(false);}
   }
+  const [sessionsRevoked,setSessionsRevoked]=useState(false);
+  async function revokeOtherSessions(){
+    if(!session||busy||!window.confirm(t('account.revokeOtherConfirm')))return;
+    setBusy(true);setError(undefined);setSessionsRevoked(false);
+    try{
+      const response=await fetch('/api/account/revoke-other-sessions',{method:'POST',
+        headers:{'X-CSRF-Token':session.csrfToken},signal:AbortSignal.timeout(12000)});
+      if(!response.ok)throw Error('account.sessions');
+      setSessionsRevoked(true);
+    }catch{setError('errors.unavailable');}finally{setBusy(false);}
+  }
   async function more(){
     if(!listing?.nextCursor||busy)return;setBusy(true);
     try{const r=await fetch(`/api/households?after=${encodeURIComponent(listing.nextCursor)}`,{cache:'no-store'});if(!r.ok)throw Error('households');const next=await r.json() as Listing;
@@ -84,6 +95,10 @@ export function Portal({language,format,timeZone}:{language:string;format:string
     <p>{t('app.description')}</p>
     {loading?<p role="status">{t('portal.loading')}</p>:!session?<section><h2>{t('portal.signInTitle')}</h2><p>{t('portal.signInDescription')}</p><a className="button" href="/auth/login">{t('portal.signIn')}</a></section>:<>
       <p>{session.account.displayName||t('portal.account')}</p>
+      {!selectedId&&<section>
+        <button type="button" disabled={busy} onClick={()=>void revokeOtherSessions()}>{t('account.revokeOtherSessions')}</button>
+        {sessionsRevoked&&<p role="status">{t('account.sessionsRevoked')}</p>}
+      </section>}
       {error&&<p role="alert">{t(error)}</p>}
       {selectedId?<section>{selected&&<HouseholdWorkspace key={session.account.id+':'+selectedId} householdId={selectedId} session={session} language={language} format={format} onLeave={()=>setConfirmLeave(true)}>
         {confirmLeave&&<div className="notice"><p>{t('onboarding.leaveConfirm')}</p><button type="button" onClick={()=>{void leave();}} disabled={busy}>{t('onboarding.leaveConfirmButton')}</button><button type="button" onClick={()=>setConfirmLeave(false)} disabled={busy}>{t('onboarding.cancel')}</button></div>}

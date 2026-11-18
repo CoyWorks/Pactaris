@@ -19,6 +19,11 @@ class FixtureStore implements GatewayStore {
   async createSession(token:string,account:Account,csrfToken:string){this.sessions.set(hash(token),{account,csrfToken,expiresAt:new Date(Date.now()+100000).toISOString()});}
   async session(token:string){return this.sessions.get(hash(token));}
   async logout(token:string){this.sessions.delete(hash(token));}
+  async revokeOtherSessions(accountId:string,token:string){
+    const removed:string[]=[];
+    for(const [key,session] of this.sessions)if(key!==hash(token)&&session.account.id===accountId){removed.push(key);this.sessions.delete(key);}
+    return removed;
+  }
   async placements(id:string){return [this.row(id===accountA?householdA:householdB)];}
   async placement(id:string,householdId:string){return (id===accountA&&householdId===householdA)||(id===accountB&&householdId===householdB)?this.row(householdId):undefined;}
   row(householdId:string):Placement{return {householdId,instanceId:'30000000-0000-4000-8000-000000000001',endpoint:'https://private-node.invalid:9444',tlsServerName:'private-node.invalid',caFile:'/private/ca.pem',version:'1'};}
@@ -54,6 +59,23 @@ test('browser-bound one-time login rotates sessions and ignores forged identity 
   const wrongBrowser=await inject(f.app,{url:'/auth/oidc/callback?code=x&state='+state,headers});assert.equal(wrongBrowser.statusCode,400);
   assert.match(String(first.headers['set-cookie']),/Secure; HttpOnly; SameSite=Lax/);
   assert.ok(![...f.store.sessions.keys()].includes(cookie.split('=')[1]!));
+});
+test('revoking other sessions requires the current session, same origin and CSRF token',async()=>{
+  const f=fixture();
+  const url='/api/account/revoke-other-sessions';
+  const {cookie:otherCookie}=await login(f);
+  const {cookie}=await login(f);
+  const readSession=(cookie:string)=>inject(f.app,{url:'/api/session',headers:{...headers,cookie}});
+  const session=(await readSession(cookie)).json();
+  const trusted={...headers,cookie,origin:'https://pactaris.app','x-csrf-token':session.csrfToken};
+  const revoke=(requestHeaders:Record<string,string>)=>inject(f.app,{method:'POST',url,headers:requestHeaders});
+  assert.equal((await revoke(headers)).statusCode,401);
+  assert.equal((await revoke({...trusted,origin:'https://untrusted.invalid'})).statusCode,403);
+  assert.equal((await revoke({...trusted,'x-csrf-token':''})).statusCode,403);
+  assert.equal((await readSession(otherCookie)).statusCode,200);
+  assert.equal((await revoke(trusted)).statusCode,204);
+  assert.equal((await readSession(otherCookie)).statusCode,401);
+  assert.equal((await readSession(cookie)).statusCode,200);
 });
 test('public create/leave bind the account to its session, require CSRF and reject routing/role injection',async()=>{
   const operation='40000000-0000-4000-8000-000000000001';let creates=0,leaves=0;

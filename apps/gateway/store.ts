@@ -15,6 +15,7 @@ export interface GatewayStore {
   createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number,verifiedEmail?:string):Promise<void>;
   session(token:string,idle:number):Promise<Session|undefined>;
   logout(token:string):Promise<void>;
+  revokeOtherSessions(accountId:string,token:string):Promise<string[]>;
   placements(accountId:string,after?:string):Promise<Placement[]>;
   placement(accountId:string,householdId:string):Promise<Placement|undefined>;
 }
@@ -60,6 +61,12 @@ export class PgGatewayStore implements GatewayStore {
     const row=r.rows[0];return row?{account:{id:row.id,displayName:row.display_name},csrfToken:row.csrf_token,expiresAt:row.expires_at.toISOString()}:undefined;
   }
   async logout(token:string){await this.pool.query('DELETE FROM pactaris.sessions WHERE token_hash=$1',[hash(token)]);}
+  async revokeOtherSessions(accountId:string,token:string):Promise<string[]> {
+    const result=await this.pool.query(
+      'DELETE FROM pactaris.sessions WHERE account_id=$1 AND token_hash<>$2 RETURNING token_hash',
+      [accountId,hash(token)]);
+    return result.rows.map(row=>row.token_hash);
+  }
   private select=`SELECT p.household_id AS "householdId",i.id AS "instanceId",i.endpoint,i.tls_server_name AS "tlsServerName",i.ca_file AS "caFile",p.version::text
     FROM pactaris.account_households h JOIN pactaris.placements p ON p.household_id=h.household_id JOIN pactaris.instances i ON i.id=p.instance_id
     WHERE h.account_id=$1 AND p.status='active' AND i.status='active'`;

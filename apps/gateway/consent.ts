@@ -35,5 +35,6 @@ export class GatewayConsent{
   if(route.busy)throw new ConsentError('unavailable');route.busy=true;
   try{return await this.client.execute(route.accountId,route.placement,'localRestrict',{...input,membershipId:route.membershipId});}finally{route.busy=false;}
  }
- revokeSession(sessionToken:string){for(const [id,route] of this.routes)if(route.sessionHash===hash(sessionToken))this.routes.delete(id);}
+ revokeSession(sessionToken:string){this.revokeSessionHash(hash(sessionToken));}
+ revokeSessionHash(sessionHash:string){for(const [id,route] of this.routes)if(route.sessionHash===sessionHash)this.routes.delete(id);}
 }

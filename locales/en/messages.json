@@ -568,5 +568,8 @@
   "inbox.balance": "My task points",
   "inbox.error": "Could not load or update your task inbox.",
   "partner.reversePoints": "Reverse awarded points",
-  "partner.reversePointsConfirm": "Reverse the points awarded for this task? This correction is permanent."
+  "partner.reversePointsConfirm": "Reverse the points awarded for this task? This correction is permanent.",
+  "account.revokeOtherSessions": "Sign out other Pactaris sessions",
+  "account.revokeOtherConfirm": "Sign out your other Pactaris sessions and keep this session active?",
+  "account.sessionsRevoked": "Other Pactaris sessions have been signed out."
 }

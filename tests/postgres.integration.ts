@@ -110,6 +110,19 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await store.account('https://idp.fixture.invalid/','subject-b','Other fixture',email)).id,other.id);
   assert.equal((await store.account('https://other-idp.fixture.invalid/','subject-a','Fixture user',email)).id,sameSubjectOtherIssuer.id);
   assert.equal((await gatewayDb.pool.query('SELECT count(*)::int AS n FROM pactaris.accounts WHERE verified_email=$1',[email])).rows[0].n,3);
+  await (async function verifyOtherSessionRevocation(){
+    await store.createSession('active-fixture',account,'csrf',60,120);
+    await store.createSession('other-fixture',account,'csrf',60,120);
+    await store.createSession('foreign-fixture',other,'csrf',60,120);
+    try {
+      assert.deepEqual(await store.revokeOtherSessions(account.id,'active-fixture'),[hash('other-fixture')]);
+      assert.equal(await store.session('other-fixture',60),undefined);
+      assert.ok(await store.session('active-fixture',60));
+      assert.ok(await store.session('foreign-fixture',60));
+    }finally{
+      for(const token of ['active-fixture','other-fixture','foreign-fixture'])await store.logout(token);
+    }
+  })();
   await store.createSession('email-session',account,'csrf',60,120);
   assert.deepEqual((await store.session('email-session',60))?.account,account);
   await store.account('https://idp.fixture.invalid/','subject-a','Fixture user','Changed@EXAMPLE.INVALID');
