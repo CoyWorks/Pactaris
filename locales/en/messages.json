@@ -618,5 +618,7 @@
   "account.presentationInvalid": "Enter a supported locale and an IANA time zone.",
   "cli.backupPlan": "Database backup preview for {component}. Use --apply to create a checkpoint.",
   "cli.backupComplete": "Database checkpoint completed for {component} at {path}.",
-  "cli.backupEmpty": "The database dump was empty. The checkpoint is incomplete."
+  "cli.backupEmpty": "The database dump was empty. The checkpoint is incomplete.",
+  "cli.monitor": "Local health report for {component}.",
+  "cli.monitorFailed": "The local health report could not be collected."
 }
