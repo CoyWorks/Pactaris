@@ -1,0 +1,35 @@
+/* Pactaris x authentik — brand CSS (2025.4+)
+   Paste into System > Brands > Pactaris > Custom CSS.
+   Deliberately does not hide authentication controls, MFA, errors, or recovery links.
+   Authentik updates may change internal component selectors. */
+:root, ak-flow-executor {
+  --ak-color-primary: #b78edb;
+  --pf-global--primary-color--100: #b78edb;
+  --pf-global--primary-color--200: #9d70c9;
+  --pf-global--link--Color: #e5b6d1;
+  --pf-global--link--Color--hover: #f5cee0;
+  --pf-global--BorderRadius--sm: 10px;
+  --pf-global--BorderRadius--lg: 18px;
+  accent-color: #b78edb;
+}
+body, ak-flow-executor { color-scheme: dark; }
+ak-flow-executor::part(locale-select) { /* keep language selector available */ }
+/* Fallback styling for older PatternFly-based releases */
+.pf-c-button.pf-m-primary, .pf-v5-c-button.pf-m-primary {
+  background: #9568bd;
+  border-color: #9568bd;
+  border-radius: 10px;
+}
+.pf-c-button.pf-m-primary:hover, .pf-v5-c-button.pf-m-primary:hover {
+  background: #ac7bd0;
+  border-color: #ac7bd0;
+}
+.pf-c-form-control:focus, .pf-v5-c-form-control:focus {
+  outline-color: #bd9ae2;
+  border-color: #bd9ae2;
+}
+:focus-visible { outline: 2px solid #e1b0cd; outline-offset: 3px; }
+/* No global animation-duration overrides: these could speed up Authentik loaders. */
+@media (forced-colors: active) {
+  .pf-c-button.pf-m-primary, .pf-v5-c-button.pf-m-primary { forced-color-adjust: auto; }
+}

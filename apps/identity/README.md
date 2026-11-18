@@ -17,3 +17,7 @@ An operator-imported blueprint for the first Instance is provided in `blueprints
 ## Central SMTP
 
 For the shared account SMTP settings and verification/recovery acceptance, see [Central account email](../../docs/CENTRAL_SMTP.md).
+
+## Sign-in branding
+
+The Pactaris assets and explicit preview/apply/restore workflow are documented in [IDENTITY_BRANDING.md](../../docs/IDENTITY_BRANDING.md).

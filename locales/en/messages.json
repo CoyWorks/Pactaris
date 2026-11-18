@@ -599,5 +599,13 @@
   "inbox.prefSubmitted": "Task submissions",
   "inbox.prefReviewed": "Task reviews",
   "inbox.preferencesSave": "Save inbox preferences",
-  "inbox.preferencesSaved": "Inbox preferences saved."
+  "inbox.preferencesSaved": "Inbox preferences saved.",
+  "cli.brandMismatch": "The Brand does not match the selected UUID and domain.",
+  "cli.brandVerify": "Identity did not return the expected Brand settings. Review the protected backup.",
+  "cli.brandPlan": "Brand preview for {domain}. Fields to change: {fields}.",
+  "cli.brandApplied": "Cosmetic Brand changes applied to {domain}.",
+  "cli.brandFailed": "The Identity Brand request could not be completed.",
+  "cli.brandBackupRequired": "Provide a new backup path with --backup before applying.",
+  "cli.brandTerminalRequired": "Run from an interactive terminal to enter the API token privately.",
+  "cli.brandTokenPrompt": "Authentik API token:"
 }
