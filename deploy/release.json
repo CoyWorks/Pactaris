@@ -162,6 +162,13 @@
       "path": "migrations/instance/0016_task_scheduling.sql",
       "sha256": "cf532d5ba221a4b996f5c9b3ba97192d885dff87da620214f1efd8aa563910a7",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0017_task_rewards_inbox",
+      "path": "migrations/instance/0017_task_rewards_inbox.sql",
+      "sha256": "6be349112fb8011291a882062cf1af32bba00fbce5260e857bb5e7cf289b4f8d",
+      "backwardCompatible": true
     }
   ]
 }

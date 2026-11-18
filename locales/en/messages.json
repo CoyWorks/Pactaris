@@ -557,5 +557,16 @@
   "partner.seriesCancel": "Stop future occurrences",
   "partner.seriesEdit": "Revise future schedule",
   "partner.editScheduleHelp": "Either participant can stop future generation. Revisions replace only future untouched assignments or offers; started work and history remain unchanged. Blocked series never resume automatically.",
-  "partner.planned": "Planned"
+  "partner.planned": "Planned",
+  "partner.rewardPoints": "Optional points after approval",
+  "inbox.title": "Task inbox",
+  "inbox.assigned": "A task was assigned or offered",
+  "inbox.submitted": "A task was submitted",
+  "inbox.reviewed": "A task was reviewed",
+  "inbox.read": "Mark as read",
+  "inbox.empty": "No task notifications",
+  "inbox.balance": "My task points",
+  "inbox.error": "Could not load or update your task inbox.",
+  "partner.reversePoints": "Reverse awarded points",
+  "partner.reversePointsConfirm": "Reverse the points awarded for this task? This correction is permanent."
 }

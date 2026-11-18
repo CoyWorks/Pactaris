@@ -57,3 +57,11 @@ Standing assignment policies from #73 now provide the agreed direct/per-task mod
 ## Scheduler source checkpoint (#18)
 
 Versioned standing-authority series, availability-filtered occurrences and a durable Instance worker are now implemented in source. Calendar/catch-up, revision/cancellation, shared capacity, retry/dead-letter and current-scope enforcement are documented in [TASK_SCHEDULER.md](TASK_SCHEDULER.md). Release-manifest registration was outside the authorized edit scope, so the current release does not activate this migration. Reward/notification delivery and owner-only series drafts remain open; see the exact verification and rollout limits in that contract.
+
+## Task points and inbox checkpoint (#20, #22)
+
+Creators can configure optional whole-number points on one-off tasks and series. Approval awards points only while the pinned agreement authorizes reward activity. Each occurrence can award once across retries and reopening. The creator can record a linked reversal from the task detail. The recipient sees their current balance in Participant tasks.
+
+The Instance records generic assignment, submission and review notices in the same transaction as the task action. Participant tasks displays the current membership's inbox with paging and read status. The open panel refreshes every 60 seconds while visible and online. Inbox polling stops when the panel closes.
+
+Remaining scope includes catalog redemption, configurable currency and household enablement, notification preferences, scheduled reminders and a single app-wide change feed.
