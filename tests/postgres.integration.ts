@@ -1750,6 +1750,50 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
     assert.equal((await db.owner.query("SELECT count(*)::int AS count FROM pactaris.reward_point_entries WHERE redemption_id=$1 AND kind='credit'",[offerId])).rows[0].count,1);
     assert.equal((await catalog(A,'redemptionReverse',{redemptionId:offerId,version:'2'})).status,200);
    })();
+   await (async function verifyPointReservationAndTaskReopening(){
+    const scope=await agreement([A,B],['task','reward']);
+    const catalog=(person:Person,action:string,input:Record<string,unknown>)=>api(base+'/catalog/'+action,'POST',{operationId:randomUUID(),...input},person.session);
+    const queryEntries=async(redemptionId:string)=>(await db.owner.query('SELECT kind FROM pactaris.reward_point_entries WHERE household_id=$1 AND redemption_id=$2 ORDER BY kind',[home.householdId,redemptionId])).rows.map(row=>row.kind);
+    const complete=async(taskId:string)=>{
+     assert.equal((await move(B,'partnerAccept',taskId)).status,200);
+     assert.equal((await move(B,'partnerStart',taskId)).status,200);
+     assert.equal((await move(B,'partnerSubmit',taskId,{note:'Completed'})).status,200);
+     const completion=transitionBody(await read(A,taskId),'partnerApprove');
+     assert.equal((await post(A,'partnerApprove',completion)).status,200);
+     assert.equal((await post(A,'partnerApprove',completion)).status,200);
+    };
+    const input=await offerBody(A,B,scope.agreementId);
+    for(const rewardPoints of [0,1.5,10001,'5']){
+     assert.equal((await post(A,'partnerOffer',{...input,fields:{...fields,rewardPoints}})).status,400);
+    }
+    const task=await post(A,'partnerOffer',{...input,fields:{...fields,rewardPoints:5}});
+    assert.equal(task.status,200,JSON.stringify(task.data));
+    const taskId=task.data.taskId as string;
+    await complete(taskId);
+    assert.equal((await move(A,'partnerReopen',taskId)).status,200);
+    await complete(taskId);
+    assert.deepEqual((await db.owner.query('SELECT points FROM pactaris.task_points WHERE household_id=$1 AND task_id=$2',[home.householdId,taskId])).rows,[{points:5}]);
+
+    const item=await catalog(A,'catalogCreate',{fields:{title:'Points reward',description:'',category:'',points:4,position:0,kind:'reward'}});
+    assert.equal(item.status,200,JSON.stringify(item.data));
+    const offers=[randomUUID(),randomUUID()];
+    for(const operationId of offers){
+     const offer=await catalog(A,'redemptionOffer',{operationId,itemId:item.data.itemId,itemVersion:'1',agreementId:scope.agreementId,
+      agreementVersion:'1',recipientId:B.member});
+     assert.equal(offer.status,200,JSON.stringify(offer.data));
+    }
+    const requests=await Promise.all(offers.map(redemptionId=>catalog(B,'redemptionRequest',{redemptionId,version:'1'})));
+    assert.deepEqual(requests.map(r=>r.status).sort(),[200,409]);
+    const winner=offers[requests.findIndex(r=>r.status===200)]!;
+    assert.deepEqual(await queryEntries(winner),[]);
+    const fulfillment={operationId:randomUUID(),redemptionId:winner,version:'2'};
+    assert.equal((await catalog(A,'redemptionFulfill',fulfillment)).status,200);
+    assert.equal((await catalog(A,'redemptionFulfill',fulfillment)).status,200);
+    assert.deepEqual(await queryEntries(winner),['debit']);
+    assert.equal((await catalog(A,'redemptionReverse',{redemptionId:winner,version:'3'})).status,200);
+    assert.deepEqual(await queryEntries(winner),['debit','reversal']);
+    assert.equal((await post(A,'partnerPointsReverse',{taskId})).status,200);
+   })();
    const rejectedScope={...await offerBody(A,B),assigneeId:C.member,agreementId:rewardScope.agreementId,safetyVersion:(await db.owner.query('SELECT pactaris.partner_snapshot($1,$2,1) AS v',[home.householdId,rewardScope.agreementId])).rows[0].v};assert.equal((await post(A,'partnerOffer',rejectedScope)).data.code,'partner_paused');
    // Both actor and counterpart pause/re-consent cycles fence old progress packets.
    const protectedTask=await offer();assert.equal((await move(B,'partnerAccept',protectedTask)).status,200);assert.equal((await move(B,'partnerStart',protectedTask)).status,200);
