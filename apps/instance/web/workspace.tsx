@@ -12,6 +12,8 @@ import {Relationships} from './relationships.js';
 import {InvitationManager} from './invitations.js';
 import {MemberAdministration} from './members.js';
 import {Hint,Icon,Link,Sheet,navigate,useLocation,type IconName} from './navigation.js';
+import {QuickAdd,type QuickKind} from './quick-add.js';
+import {Skeleton,TodayHabits} from './today-habits.js';
 type View='home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety';
 type Tab='home'|'tasks'|'routines'|'library'|'dynamic';
 type Draft={action:string;body:Record<string,unknown>};
@@ -27,14 +29,14 @@ const tabs:{tab:Tab;view:View;label:MessageKey;icon:IconName}[]=[
 const tabOf=(view:View):Tab=>view==='tasks'||view==='participantTasks'?'tasks':view==='habits'||view==='checkins'?'routines':view==='rules'||view==='notes'?'library':view==='home'?'home':'dynamic';
 const segments:Partial<Record<Tab,View[]>>={tasks:['tasks','participantTasks'],routines:['habits','checkins'],library:['rules','notes']};
 const menu:View[]=['members','relationships','rewards','safety','settings'];
-const additions:{view:View;label:MessageKey}[]=[{view:'tasks',label:'workspace.addPrivateTask'},{view:'participantTasks',label:'workspace.addSharedTask'},{view:'habits',label:'routines.habits'},{view:'checkins',label:'routines.checkinsTitle'},{view:'notes',label:'library.notes'},{view:'rules',label:'library.guidance'},{view:'rewards',label:'catalog.title'}];
+const additions:{view:View;label:MessageKey;quick?:QuickKind}[]=[{view:'tasks',label:'workspace.addPrivateTask',quick:'task'},{view:'participantTasks',label:'workspace.addSharedTask'},{view:'habits',label:'routines.habits',quick:'habit'},{view:'checkins',label:'routines.checkinsTitle'},{view:'notes',label:'library.notes',quick:'note'},{view:'rules',label:'library.guidance'},{view:'rewards',label:'catalog.title'}];
 const priorities:Record<TaskFields['priority'],MessageKey>={low:'workspace.priorityLow',normal:'workspace.priorityNormal',high:'workspace.priorityHigh'};
 const filters:Record<string,MessageKey>={open:'workspace.open',done:'workspace.done',archived:'workspace.archived'};
 const errorKey=(key:unknown):MessageKey=>(['workspace.invalid','workspace.denied','workspace.conflict','workspace.capacity','workspace.paused','workspace.unavailable','errors.rateLimited','errors.request'] as unknown[]).includes(key)?key as MessageKey:'workspace.unavailable';
 const blank=():TaskFields=>({title:'',description:'',priority:'normal',dueAt:null,assignment:'unassigned'});
 export function HouseholdWorkspace({householdId,session,language,format,avatar,onLeave,children}:{householdId:string;session:{account:{id:string;displayName:string};csrfToken:string};language:string;format:string;avatar:React.ReactNode;onLeave:()=>void;children:React.ReactNode}){
  const {search}=useLocation(),requested=new URLSearchParams(search).get('view') as View|null,view:View=requested&&views.includes(requested)?requested:'home';
- const [adding,setAdding]=useState(false),pendingEditor=useRef<{fields:TaskFields}|undefined>(undefined);
+ const [adding,setAdding]=useState<QuickKind|'menu'>(),[habitsReload,setHabitsReload]=useState(0),pendingEditor=useRef<{fields:TaskFields}|undefined>(undefined);
  const t=createTranslator(language),[data,setData]=useState<WorkspaceResult>(),[filter,setFilter]=useState('open'),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[draft,setDraft]=useState<Draft>(),[editor,setEditor]=useState<{fields:TaskFields;taskId?:string;version?:string}>(),[settings,setSettings]=useState<{name:string;timeZone:string;version:string}>();
  const [pointsDraft,setPointsDraft]=useState<PointsSettings & {version:string}>();
  const activeWrite=useRef(false),base='/api/households/'+householdId+'/workspace';
@@ -153,7 +155,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
   <SafetyProvider householdId={householdId} session={session} language={language} compact={view!=='safety'}>
    {error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}
    {draft&&<div className="notice"><p>{t('workspace.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void change(draft.action,draft.body,draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}
-   {loading&&<p role="status">{t('workspace.loading')}</p>}
+   {loading&&<Skeleton count={4} label={t('workspace.loading')}/>}
    {!loading&&!data&&<button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>}
    {h&&view==='home'&&<section className="plain today">
     <p className="muted">{new Intl.DateTimeFormat(format,{weekday:'long',day:'numeric',month:'long',timeZone:h.timeZone}).format(new Date())}</p>
@@ -161,9 +163,10 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
     {data?.hasUnreadTaskInbox&&<button type="button" className="row-button" onClick={()=>go('participantTasks')}><span className="dot" aria-hidden="true"/><span className="grow">{t('workspace.unreadShared')}</span><Icon name="chevron"/></button>}
     <div className="section-head"><h2>{t('workspace.todo')}</h2><button type="button" className="link-button" onClick={()=>go('tasks')}>{t('workspace.allTasks')}</button></div>
     {today.length?<ul className="card-list">{today.map(task=><li key={task.taskId}><span className="grow"><span>{task.title}</span>{task.dueAt&&<time className="muted" dateTime={task.dueAt}>{formatTime(new Date(task.dueAt),format,h.timeZone)}</time>}</span>
-     {task.assignment==='self'&&<button type="button" disabled={blocked} onClick={()=>{void change('taskComplete',{taskId:task.taskId,version:task.version,...safety});}}>{t('workspace.complete')}</button>}</li>)}</ul>:<p className="muted">{t('workspace.nothingDue')}</p>}
+     {task.assignment==='self'&&<button type="button" disabled={blocked} onClick={()=>{void change('taskComplete',{taskId:task.taskId,version:task.version,...safety});}}>{t('workspace.complete')}</button>}</li>)}</ul>:<div className="empty-card"><p>{t('workspace.nothingDue')}</p><button type="button" onClick={()=>setAdding('task')}><Icon name="plus"/>{t('today.addTask')}</button></div>}
+    <TodayHabits householdId={householdId} csrfToken={session.csrfToken} language={language} reload={habitsReload} onAdd={()=>setAdding('habit')} onOpen={()=>go('habits')}/>
     <div className="workspace-stats">{(['open','overdue','done'] as const).map(k=><div key={k}><strong>{data?.counts?.[k]??0}</strong><span>{t(({open:'workspace.open',done:'workspace.done',overdue:'workspace.overdue'} as const)[k])}</span></div>)}</div>
-    <div className="tiles"><button type="button" onClick={()=>go('habits')}><Icon name="routines"/>{t('routines.habits')}</button><button type="button" onClick={()=>go('checkins')}><Icon name="routines"/>{t('routines.checkinsTitle')}</button><button type="button" onClick={()=>go('rules')}><Icon name="library"/>{t('library.guidance')}</button><button type="button" onClick={()=>go('members')}><Icon name="dynamic"/>{t('workspace.invite')}</button></div>
+    <div className="tiles"><button type="button" onClick={()=>go('checkins')}><Icon name="routines"/>{t('routines.checkinsTitle')}</button><button type="button" onClick={()=>go('rules')}><Icon name="library"/>{t('library.guidance')}</button><button type="button" onClick={()=>go('notes')}><Icon name="library"/>{t('library.notes')}</button><button type="button" onClick={()=>go('members')}><Icon name="dynamic"/>{t('workspace.invite')}</button></div>
    </section>}
    {view==='dynamic'&&h&&<section className="plain">
     <div className="dynamic-card"><span className="badge-letter" aria-hidden="true">{h.name.trim().slice(0,1).toUpperCase()}</span><span className="grow"><strong>{h.name}</strong><span className="muted">{t('workspace.memberCount')} {h.memberCount}</span></span></div>
@@ -171,7 +174,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
    </section>}
    {view==='tasks'&&data&&<section className="plain"><Hint label={t('hint.more')}>{t('workspace.privateTasks')}</Hint><div className="chips">{Object.keys(filters).map(f=><button type="button" key={f} aria-pressed={filter===f} onClick={()=>{setFilter(f);setCursor(undefined);}}>{t(filters[f]??'workspace.open')}</button>)}</div>
     {editor&&<TaskEditor key={editor.taskId??'new'} fields={editor.fields} language={language} disabled={blocked} onCancel={()=>setEditor(undefined)} onSave={fields=>{void change(editor.taskId?'taskUpdate':'taskCreate',{...safety,fields,...(editor.taskId?{taskId:editor.taskId,version:editor.version}:{})});}}/>}
-    {!data.tasks?.length&&<div className="empty-state"><h3>{t('workspace.emptyTitle')}</h3><p>{t('workspace.emptyDescription')}</p></div>}
+    {!data.tasks?.length&&!editor&&<div className="empty-card"><p>{t('workspace.emptyTitle')}</p><button type="button" disabled={blocked} onClick={()=>setAdding('task')}><Icon name="plus"/>{t('today.addTask')}</button></div>}
     <ul className="task-list">{data.tasks?.map(task=><li key={task.taskId}><h3>{task.title}</h3><div className="task-meta"><span>{t(priorities[task.priority])}</span><span>{t(task.assignment==='self'?'workspace.self':'workspace.unassigned')}</span>{task.dueAt&&<time dateTime={task.dueAt}>{formatTime(new Date(task.dueAt),format,h?.timeZone??'UTC')}</time>}</div>
      <div className="workspace-actions">{task.state==='open'&&<><button type="button" disabled={blocked} onClick={()=>{void readTask(task.taskId);}}>{t('workspace.edit')}</button>{task.assignment==='self'&&<button type="button" disabled={blocked} onClick={()=>{void change('taskComplete',{taskId:task.taskId,version:task.version,...safety});}}>{t('workspace.complete')}</button>}</>}
       {task.state!=='archived'&&<button type="button" disabled={blocked} onClick={()=>{void change('taskArchive',{taskId:task.taskId,version:task.version});}}>{t('workspace.archive')}</button>}
@@ -210,10 +213,13 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
    </form>}
    <button type="button" className="danger" onClick={onLeave}>{t('onboarding.leave')}</button>{children}</section>}
   </SafetyProvider>
-  {tab!=='dynamic'&&<button type="button" className="fab" aria-label={t('workspace.add')} onClick={()=>setAdding(true)}><Icon name="plus"/></button>}
+  {tab!=='dynamic'&&<button type="button" className="fab" aria-label={t('workspace.add')} onClick={()=>setAdding('menu')}><Icon name="plus"/></button>}
   <nav className="bottom-nav" aria-label={t('workspace.navigation')}>{tabs.map(item=><button type="button" key={item.tab} aria-current={tab===item.tab?'page':undefined} onClick={()=>go(item.view)}><Icon name={item.icon}/><span>{t(item.label)}</span>{item.tab==='tasks'&&data?.hasUnreadTaskInbox&&<span className="dot" aria-label={t('inbox.unreadBadge')}/>}</button>)}</nav>
-  {adding&&<Sheet title={t('workspace.add')} closeLabel={t('onboarding.cancel')} onClose={()=>setAdding(false)}>
-   <ul className="menu">{additions.map(item=><li key={item.label}><button type="button" onClick={()=>{setAdding(false);if(item.view==='tasks')pendingEditor.current={fields:blank()};if(view===item.view){setEditor(pendingEditor.current);pendingEditor.current=undefined;}else go(item.view);}}><span className="grow">{t(item.label)}</span><Icon name="chevron"/></button></li>)}</ul>
+  {adding&&<Sheet title={t(adding==='menu'?'workspace.add':adding==='task'?'workspace.addPrivateTask':adding==='habit'?'quick.newHabit':'quick.newNote')} closeLabel={t('onboarding.cancel')} onClose={()=>setAdding(undefined)}>
+   {adding==='menu'?<ul className="menu">{additions.map(item=><li key={item.label}><button type="button" onClick={()=>{if(item.quick){setAdding(item.quick);return;}setAdding(undefined);go(item.view);}}><span className="grow">{t(item.label)}</span><Icon name="chevron"/></button></li>)}</ul>
+   :h&&<QuickAdd key={adding} kind={adding} householdId={householdId} csrfToken={session.csrfToken} language={language} timeZone={h.timeZone} safety={safety}
+     onDone={message=>{setAdding(undefined);setError(undefined);setNotice(message);setRefresh(v=>v+1);setHabitsReload(v=>v+1);}}
+     onMore={()=>{const target=adding==='task'?'tasks':adding==='habit'?'habits':'notes';setAdding(undefined);if(target==='tasks')pendingEditor.current={fields:blank()};if(view===target){setEditor(pendingEditor.current);pendingEditor.current=undefined;}else go(target);}}/>}
   </Sheet>}
  </div>;
 }
