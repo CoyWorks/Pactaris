@@ -351,6 +351,13 @@
       "path": "migrations/instance/0032_revocation_journal.sql",
       "sha256": "a1d30c4ed47b24c85f313b6047bea28caaeefbe6ff23cbd6d084b0cdabc34711",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0033_restore_fence",
+      "path": "migrations/instance/0033_restore_fence.sql",
+      "sha256": "ba8edcbbe547495698bcce2b86cf177eca084a41a5bcffe82cf5239f91bef2d2",
+      "backwardCompatible": true
     }
   ]
 }

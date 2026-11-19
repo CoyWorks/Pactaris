@@ -1,6 +1,6 @@
 # Revocation journal
 
-Foundation for #26 and #29. Restoring an older Instance backup must not bring back access or content that was revoked or deleted after that backup. Each Instance therefore records revocations and deletions in a content-free journal, and the gateway keeps a copy outside the Instance database. A later restore step replays the copy before the restored Instance serves traffic. Replay is not implemented by this change.
+Foundation for #26 and #29. Restoring an older Instance backup must not bring back access or content that was revoked or deleted after that backup. Each Instance therefore records revocations and deletions in a content-free journal, and the gateway keeps a copy outside the Instance database. A restored Instance starts fenced and the gateway replays the copy before the Instance serves traffic again.
 
 ## What is recorded
 
@@ -35,11 +35,46 @@ The gateway stores entries in `pactaris.revocation_journal` before it acknowledg
 
 A failed transfer logs `journal.sync_deferred` with a count of affected Instances and retries on the next worker tick. It does not affect other worker tasks.
 
+## Restore fence and replay
+
+Every Instance checkpoint written by the deployer ends with a statement that sets `pactaris.restore_fence` to fenced. Restoring that dump therefore always produces a fenced database, even if the operator forgets a step. A database restored from another source must be fenced explicitly before its services start:
+
+```sql
+UPDATE pactaris.restore_fence SET fenced=true,fenced_at=now(),released_at=NULL;
+```
+
+While fenced:
+
+- Every `/internal/households/...` request returns 503 `restore_fenced`. The gateway shows the affected households as unavailable, never empty.
+- The Instance worker runs no scheduler, reminder or other jobs, and its heartbeat reports `unavailable`.
+- Only the journal routes work.
+
+On its next tick the gateway worker sees `fenced: true` in the pending export. It first copies any entries the snapshot still had pending, then sends its complete central copy for that Instance in batches of 50 through `journalReplay`. The Instance skips each entry it already holds and each entry for a household that does not exist in the snapshot. Every other entry is applied and then stored locally with its original ID, so the same copy never applies twice. The last batch releases the fence and removes short-lived restrictive safety grants from before the backup. The gateway logs `journal.restore_released` with the Instance ID and the number of applied entries.
+
+Replay only moves state towards ended, paused, revoked or deleted:
+
+| Kind | Replay effect |
+| --- | --- |
+| `membership.ended` | Ends the exact membership; existing departure hooks run |
+| `member.paused` | Sets the personal pause and advances the member epoch |
+| `household.stopped` | Closes, or pauses an active household and advances its safety version |
+| `relationship.paused` | Sets that participant's hold and advances its epoch |
+| `relationship.ended` | Ends the relationship |
+| `agreement.revoked`, `consent.withdrawn` | Revokes the version or records the decline/withdrawal |
+| `taskAuthority.revoked` | Revokes the policy with a `restoreReplay` policy event |
+| `document.deleted` | Removes the note's saved text, acknowledgements and assignments |
+| `attachment.deleted` | Removes the draft attachment bytes |
+| `checkin.withdrawn` | Clears the check-in title and response |
+
+Replay is deliberately conservative. A pause or stop that happened after the backup and was cleared again is applied again; members clear it themselves through the normal controls. Replay never resumes, accepts or restores anything.
+
 ## Limits
 
 - Gateway and Instance currently share one host. If the whole host is lost, the copy is only as recent as the latest off-host gateway backup. Off-host backups are step 3 of the #26/#29 plan.
 - Entries exported before a restored snapshot was taken return as pending after the restore and are re-sent. That is safe because the copy is idempotent.
+- Each replay sends the complete central copy for the Instance. That is fine at alpha scale; a per-Instance watermark can bound it later.
+- Checkpoints from before migration 0033 contain no fence statement. Fence those restores manually.
+- Households created after the backup do not exist in the restored database. Their gateway placements remain and report the household as unavailable; reconciling them is operator work.
 - Exported entries are retained on the Instance. Retention and cleanup are part of the deletion policy work in #26.
-- Replay after restore, the fenced restore start and account deletion are follow-up steps.
 
-Migrations `instance/0032_revocation_journal` and `gateway/0018_revocation_journal` are additive and need no new configuration. The normal updater applies them.
+Migrations `instance/0032_revocation_journal`, `instance/0033_restore_fence` and `gateway/0018_revocation_journal` are additive and need no new configuration. The normal updater applies them.

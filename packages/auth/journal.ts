@@ -6,7 +6,7 @@ export const journalKinds=['membership.ended','member.paused','household.stopped
 export type JournalKind=typeof journalKinds[number];
 export const journalBatch=50;
 export type JournalEntry={id:string;householdId:string;kind:JournalKind;subject:Record<string,string>;occurredAt:string};
-export type JournalInput={operationId:string;limit:number}|{operationId:string;entryIds:string[]};
+export type JournalInput={operationId:string;limit:number}|{operationId:string;entryIds:string[]}|{operationId:string;entries:JournalEntry[];final:boolean};
 export class JournalError extends Error {
   constructor(public kind:'denied'|'invalid'|'unavailable'){super('journal.'+kind);}
 }
@@ -18,6 +18,10 @@ export function journalInput(action:JournalAction,value:unknown):JournalInput {
   if(action==='journalPending'){
     if(keys!=='limit,operationId'||!Number.isInteger(input.limit)||(input.limit as number)<1||(input.limit as number)>journalBatch)throw new JournalError('invalid');
     return {operationId:input.operationId,limit:input.limit as number};
+  }
+  if(action==='journalReplay'){
+    if(keys!=='entries,final,operationId'||typeof input.final!=='boolean')throw new JournalError('invalid');
+    return {operationId:input.operationId,entries:journalEntries({entries:input.entries},journalBatch),final:input.final};
   }
   const ids=input.entryIds;
   if(keys!=='entryIds,operationId'||!Array.isArray(ids)||!ids.length||ids.length>journalBatch||!ids.every(uuid)||
@@ -40,4 +44,18 @@ export function journalEntries(value:unknown,limit:number):JournalEntry[] {
       throw new JournalError('invalid');
     return {id:e.id,householdId:e.householdId,kind:e.kind as JournalKind,subject:subject as Record<string,string>,occurredAt:e.occurredAt};
   });
+}
+
+/** The pending export also tells the gateway whether the Instance is fenced after a restore. */
+export function journalPending(value:unknown,limit:number):{fenced:boolean;entries:JournalEntry[]} {
+  const fenced=(value as {fenced?:unknown}|null)?.fenced;
+  if(typeof fenced!=='boolean')throw new JournalError('invalid');
+  return {fenced,entries:journalEntries(value,limit)};
+}
+export type ReplayResult={fenced:boolean;applied:number;skipped:number;released:boolean};
+export function replayResult(value:unknown):ReplayResult {
+  const r=value as Record<string,unknown>|null;
+  if(!r||typeof r!=='object'||Object.keys(r).sort().join(',')!=='applied,fenced,released,skipped'||typeof r.fenced!=='boolean'||typeof r.released!=='boolean'||
+    !Number.isInteger(r.applied)||!Number.isInteger(r.skipped))throw new JournalError('invalid');
+  return {fenced:r.fenced,applied:r.applied as number,skipped:r.skipped as number,released:r.released};
 }

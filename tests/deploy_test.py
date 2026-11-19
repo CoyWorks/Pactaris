@@ -236,6 +236,29 @@ class DeploymentTests(unittest.TestCase):
             self.assertEqual(list(base.glob('backups/*/database.sql')), [])
             self.assertEqual(list(base.glob('backups/*/pactaris-pg-*')), [])
 
+    def test_instance_checkpoint_restores_fenced_and_failed_dump_is_not_fenced(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder) / 'instance'; base.mkdir()
+            (base / 'config.json').write_text('{}')
+            cfg = {'database': {'url': 'postgresql://runtime:secret@127.0.0.1:5432/fixture'}}
+            state = {'release': str(base / 'current'), 'revision': 'a' * 40}
+            def dump(args, **kwargs):
+                kwargs['output'].write(b'-- fixture dump\n')
+                kwargs['output'].flush()
+            with patch.object(deploy, 'run', side_effect=dump):
+                backup = deploy.checkpoint(base, cfg, state)
+            content = (backup / 'database.sql').read_bytes()
+            # The fence follows the data, so restoring this file can never skip it.
+            self.assertTrue(content.startswith(b'-- fixture dump\n'))
+            self.assertTrue(content.endswith(deploy.RESTORE_FENCE_SQL))
+            self.assertIn(b'UPDATE pactaris.restore_fence SET fenced=true', content)
+            self.assertEqual(json.loads((backup / 'backup.completed.json').read_text())['bytes'], len(content))
+            gateway = Path(folder) / 'gateway'; gateway.mkdir()
+            (gateway / 'config.json').write_text('{}')
+            with patch.object(deploy, 'run', side_effect=dump):
+                other = deploy.checkpoint(gateway, cfg, state)
+            self.assertNotIn(b'restore_fence', (other / 'database.sql').read_bytes())
+
     def test_identity_marks_only_completed_database_checkpoints(self):
         with tempfile.TemporaryDirectory() as folder:
             base = Path(folder) / 'identity'

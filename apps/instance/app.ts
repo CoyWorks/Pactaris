@@ -11,14 +11,14 @@ import express from 'express';
 import { join } from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 import type { InstanceConfig } from '../../packages/config/index.js';
-import { uuid, DelegationError,commandPath,isHouseholdAction,type InvitationAction,isMembershipAction,isJournalAction,journalPath } from '../../packages/auth/delegation.js';
+import { uuid, DelegationError,commandPath,isHouseholdAction,type InvitationAction,isMembershipAction,isJournalAction,journalPath,journalBodyLimit } from '../../packages/auth/delegation.js';
 import type { InstanceHouseholds } from './households.js';
 import {MemberError} from './members.js';
 import { InvitationError } from './invitations.js';
 import { CommandError } from './commands.js';
 import manifest from '../../package.json' with { type: 'json' };
 
-export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web'), households?: Pick<InstanceHouseholds,'summary'> & Partial<Pick<InstanceHouseholds,'command'|'invitation'|'membership'|'relationship'|'consent'|'workspace'|'library'|'routine'|'catalog'|'partner'|'personalExport'|'journal'>>) {
+export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web'), households?: Pick<InstanceHouseholds,'summary'> & Partial<Pick<InstanceHouseholds,'command'|'invitation'|'membership'|'relationship'|'consent'|'workspace'|'library'|'routine'|'catalog'|'partner'|'personalExport'|'journal'|'fenced'>>) {
   const app = express();
   app.disable('x-powered-by');
   // Identity always comes from the future verified OIDC session, never proxy identity headers.
@@ -36,6 +36,11 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
   app.get('/api/status', async (_req, res) => {
     let ready = false; try { await probe(); ready = true; } catch { /* no driver details in response */ }
     res.json({ component: 'instance', version: manifest.version, readiness: ready ? 'ready' : 'unavailable', authentication: 'not_enabled', locale: config.locale, deployment: await readDeploymentInfo() });
+  });
+  // A restored database serves no household data until the gateway has replayed revocations.
+  app.use('/internal/households',async(_req,res,next)=>{
+    if(households?.fenced&&await households.fenced()){res.status(503).json({code:'restore_fenced',messageKey:'errors.unavailable'});return;}
+    next();
   });
   app.post('/internal/households/:householdId/commands/:action',express.raw({type:'application/json',limit:4096,inflate:false}),async(req,res)=>{
     const id=req.params.householdId,action=req.params.action,authorization=req.get('authorization');
@@ -71,7 +76,7 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
     }
   });
   // Instance-scoped transfer of content-free revocation entries to the gateway copy.
-  app.post('/internal/journal/:action',express.raw({type:'application/json',limit:4096,inflate:false}),async(req,res)=>{
+  app.post('/internal/journal/:action',express.raw({type:'application/json',limit:journalBodyLimit,inflate:false}),async(req,res)=>{
     const action=req.params.action,authorization=req.get('authorization');
     if(!config.delegation||!households?.journal||!isJournalAction(action)||req.originalUrl!==journalPath(action)||!authorization?.startsWith('Bearer ')||!Buffer.isBuffer(req.body)){
       res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;

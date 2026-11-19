@@ -91,6 +91,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0007_relationships'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.relationship_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0006_member_administration'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.member_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0032_revocation_journal'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.revocation_journal_pending(uuid,integer),pactaris.revocation_journal_ack(uuid,uuid[]) TO ${role}`);
+      if(entries.some(m=>m.id==='0033_restore_fence'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.restore_fenced(),pactaris.revocation_journal_replay(uuid,jsonb,boolean) TO ${role}`);
       if(entries.some(m=>m.id==='0003_receipt'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.household_receipt_command(uuid,uuid,uuid,uuid) TO ${role}`);
     }
     await connection.query(`GRANT USAGE ON SCHEMA pactaris,pactaris_meta TO "${backupRole}"`);

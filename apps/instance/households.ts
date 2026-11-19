@@ -50,6 +50,7 @@ export class InstanceHouseholds {
   catalog(token:string,householdId:string,action:CatalogAction,body:Buffer){return this.catalogService.execute(token,householdId,action,body);}
   routine(token:string,householdId:string,action:RoutineAction,body:Buffer){return this.routineService.execute(token,householdId,action,body);}
   journal(token:string,action:JournalAction,body:Buffer){return this.journalService.execute(token,action,body);}
+  fenced(){return this.journalService.fenced();}
   async personalExport(token:string,householdId:string,body:Buffer){
     const proof=await this.exportVerifier.verify(token,householdId,'personalExport',body);
     const input=JSON.parse(body.toString()) as Record<string,unknown>;
