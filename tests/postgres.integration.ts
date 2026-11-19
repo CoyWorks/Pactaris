@@ -1,3 +1,4 @@
+import {pushEndpoint,pushSubscription,WebPushDevices} from '../apps/gateway/web-push.js';
 import {personalExport} from '../apps/gateway/personal-export.js';
 import {SmtpSettings} from '../apps/gateway/smtp-settings.js';
 import {listRegistryInstances,listRegistryPlacements} from '../packages/routing/inventory.js';
@@ -10,7 +11,7 @@ import {GatewayConsent} from '../apps/gateway/consent.js';
 import {GatewayRelationships} from '../apps/gateway/relationships.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomUUID,randomBytes } from 'node:crypto';
+import { createECDH,randomUUID,randomBytes } from 'node:crypto';
 import { mkdtemp,readFile,writeFile,rm,mkdir,cp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -157,6 +158,41 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       await store.logout(token);
       assert.equal(await store.operatorAuthorized(token,issuer,['subject-a']),false);
     }finally{await store.logout(token);await store.logout(stale);}
+  })();
+  await (async function verifyPushDeviceRevocation(){
+    const firstToken='first-push-fixture',nextToken='next-push-fixture';
+    const curve=createECDH('prime256v1'),publicKey=curve.generateKeys().toString('base64url');
+    const file=join(folder,'push-settings.json');
+    await writeFile(file,JSON.stringify({subject:'mailto:push@example.invalid',publicKey,
+      privateKey:Buffer.from(curve.getPrivateKey().toString('hex').padStart(64,'0'),'hex').toString('base64url'),encryptionKey:randomBytes(32).toString('hex')}),{mode:0o600});
+    const received:string[]=[];
+    const sender=WebPushDevices.load(gatewayDb.pool,file,async subscription=>{received.push(subscription.endpoint);});
+    const endpoint='https://fcm.googleapis.com/fcm/send/synthetic-fixture';
+    assert.equal(pushEndpoint('https://fcm.googleapis.com@unrelated.invalid/push'),undefined);
+    assert.equal(pushEndpoint('https://fcm.googleapis.com:9443/push'),undefined);
+    const subscription=pushSubscription({endpoint,keys:{p256dh:publicKey,auth:randomBytes(16).toString('base64url')}});
+    assert.ok(subscription);
+    await store.createSession(firstToken,account,'csrf',60,120);
+    await store.createSession(nextToken,other,'csrf',60,120);
+    try{
+      assert.equal(await sender.subscribe(firstToken,subscription),true);
+      assert.equal(await sender.status(nextToken,endpoint),false);
+      assert.equal(await sender.queueTest(nextToken,endpoint),false);
+      assert.equal(await sender.queueTest(firstToken,endpoint),true);
+      assert.equal(await sender.queueTest(firstToken,endpoint),false);
+      await sender.work();
+      assert.deepEqual(received,[endpoint]);
+      await store.logout(firstToken);
+      assert.equal(await sender.status(firstToken,endpoint),false);
+      await sender.work();
+      assert.deepEqual(received,[endpoint]);
+      assert.equal(await sender.subscribe(nextToken,subscription),true);
+      assert.equal(await sender.queueTest(nextToken,endpoint),true);
+      await store.logout(nextToken);
+      await sender.work();
+      assert.deepEqual(received,[endpoint]);
+      assert.equal((await gatewayDb.pool.query('SELECT count(*)::int AS n FROM pactaris.push_devices')).rows[0].n,0);
+    }finally{await store.logout(firstToken);await store.logout(nextToken);}
   })();
   await (async function verifyOtherSessionRevocation(){
     await store.createSession('active-fixture',account,'csrf',60,120);

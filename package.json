@@ -36,7 +36,8 @@
     "openid-client": "6.9.0",
     "pg": "8.16.3",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "web-push": "3.6.7"
   },
   "devDependencies": {
     "@types/express": "5.0.5",
@@ -45,6 +46,7 @@
     "@types/pg": "8.15.6",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
+    "@types/web-push": "3.6.4",
     "light-my-request": "6.8.1",
     "tsx": "4.23.15",
     "typescript": "5.9.3",

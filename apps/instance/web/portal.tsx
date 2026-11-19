@@ -1,3 +1,4 @@
+import {PushDevices} from './push-devices.js';
 import {ExportPanel} from './personal-export.js';
 import {AccountPresentation} from './account-presentation.js';
 import type {AccountPresentation as Presentation} from '../../gateway/store.js';
@@ -99,6 +100,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
         <AccountPresentation key={'presentation:'+session.account.id} csrfToken={session.csrfToken} language={language}
           saved={session.presentation} defaults={{format,timeZone}} onSave={value=>setSession(current=>
             current?.account.id===session.account.id?{...current,presentation:value??undefined}:current)}/>
+        <PushDevices key={'push:'+session.account.id} csrfToken={session.csrfToken} language={language}/>
         <ExportPanel csrfToken={session.csrfToken} language={language}/>
         <AccountSessions key={'sessions:'+session.account.id} csrfToken={session.csrfToken} language={language}
           format={session.presentation?.format??format} timeZone={session.presentation?.timeZone??timeZone}/>

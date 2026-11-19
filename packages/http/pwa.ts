@@ -8,7 +8,7 @@ const escapeHtml=(value:string)=>value.replace(/[&<>"']/g,character=>({
   '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
 }[character]!));
 
-export function publicPwa(app:express.Express,webRoot:string,language:string){
+export function publicPwa(app:express.Express,webRoot:string,language:string,webPush=false){
   const t=createTranslator(language);
   const files=iconSizes.map(size=>({src:`/pwa/icon-${size}.png`,sizes:`${size}x${size}`,type:'image/png'}));
   const manifest={
@@ -34,7 +34,18 @@ self.addEventListener('fetch', event => {
       'Referrer-Policy':'no-referrer'
     }})
   ));
-});`;
+});
+${webPush?`
+self.addEventListener('push', event => {
+  event.waitUntil(self.registration.showNotification(${JSON.stringify(t('app.title'))}, {
+    body:${JSON.stringify(t('push.notice'))}, tag:'pactaris-update'
+  }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(self.clients.openWindow('/'));
+});
+`:''}`;
   app.get('/manifest.webmanifest',(_req,res)=>{
     res.type('application/manifest+json').send(JSON.stringify(manifest));
   });

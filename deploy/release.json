@@ -253,6 +253,13 @@
       "path": "migrations/instance/0022_task_catalog_rewards.sql",
       "sha256": "db63981ce7f5c9ae09b4f1776baad8c4a7a1b25fe6b00782b930f71287f6c6ba",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0015_web_push",
+      "path": "migrations/gateway/0015_web_push.sql",
+      "sha256": "096d8500b69ea08b7ffaeb808553cd564292c2d4577f19a17ac5752309116023",
+      "backwardCompatible": true
     }
   ]
 }

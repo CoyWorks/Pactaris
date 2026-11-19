@@ -676,5 +676,14 @@
   "partner.catalogRewardHelp": "Attach the selected reward terms to this task. This does not award a reward or charge points.",
   "partner.loadCatalogRewards": "Load my catalog rewards",
   "partner.catalogRewardEmpty": "Your catalog has no active drafts.",
-  "partner.removeCatalogReward": "Remove selected reward"
+  "partner.removeCatalogReward": "Remove selected reward",
+  "push.title": "Device notifications",
+  "push.description": "Enable an optional test notification on this browser. Notifications may be delayed or unavailable. Signing out disconnects this browser from your account.",
+  "push.enable": "Enable device notifications",
+  "push.disable": "Disable on this device",
+  "push.test": "Send a test notification",
+  "push.notice": "Open the app to check for updates.",
+  "push.testQueued": "Test notification queued.",
+  "push.testUnavailable": "The test could not be queued. Wait a minute or reconnect this browser.",
+  "push.failed": "Device notifications could not be updated. Check browser permissions and try again."
 }

@@ -1,3 +1,4 @@
+import {pushEndpoint,pushSubscription,type WebPushDevices} from './web-push.js';
 import type {personalExport} from './personal-export.js';
 import type {listRegistryInstances,listRegistryPlacements} from '../../packages/routing/inventory.js';
 import {smtpChanges,type SmtpSettings} from './smtp-settings.js';
@@ -49,7 +50,7 @@ type OperatorInventory={
   instances:(after:string|null)=>ReturnType<typeof listRegistryInstances>;
   placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
 };
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -160,6 +161,41 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     }else res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});
   }
   app.get('/api/session',async(req,res)=>{const session=await authenticate(req,res);if(session)res.json(session);});
+  app.get('/api/account/push',async(req,res)=>{
+    if(!await authenticate(req,res))return;
+    res.json({publicKey:webPush?.publicKey??null});
+  });
+  app.post('/api/account/push/:action',express.json({limit:2500,strict:true,inflate:false}),async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){
+      res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;
+    }
+    if(!webPush||!['subscribe','status','unsubscribe','test'].includes(req.params.action)){
+      res.status(404).json({code:'not_found',messageKey:'errors.notFound'});return;
+    }
+    const sessionToken=cookie(req,SESSION)!;
+    if(req.params.action==='subscribe'){
+      const subscription=pushSubscription(req.body);
+      if(subscription){
+        if(!await store.throttle('push.subscribe:'+session.account.id,10)){
+          res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;
+        }
+        if(await webPush.subscribe(sessionToken,subscription)){res.status(204).end();return;}
+        res.status(401).json({code:'authentication_required',messageKey:'errors.authenticationRequired'});return;
+      }
+    }else{
+      const endpoint=req.body&&Object.keys(req.body).join(',')==='endpoint'&&pushEndpoint(req.body.endpoint);
+      if(endpoint){
+        if(req.params.action==='status'){res.json({active:await webPush.status(sessionToken,endpoint)});return;}
+        if(req.params.action==='unsubscribe'){await webPush.unsubscribe(sessionToken,endpoint);res.status(204).end();return;}
+        if(await store.throttle('push.test:'+session.account.id,3)&&await webPush.queueTest(sessionToken,endpoint)){
+          res.status(202).end();return;
+        }
+        res.status(409).json({code:'push_not_queued',messageKey:'push.testUnavailable'});return;
+      }
+    }
+    res.status(400).json({code:'invalid_push_subscription',messageKey:'push.failed'});
+  });
   app.put('/api/account/presentation',express.json({limit:1024,strict:true,inflate:false}),async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;
     if(!csrfAllowed(req,session)){
@@ -462,6 +498,6 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     }catch(error){const kind=error instanceof PartnerError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,unavailable:503}[kind]).json({code:'partner_'+kind,messageKey:('partner.'+kind) as MessageKey});}
   });
   app.use('/api',(_req,res)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});});
-  const pwaHead=publicPwa(app,webRoot,config.locale.language);
+  const pwaHead=publicPwa(app,webRoot,config.locale.language,!!webPush);
   frontend(app,webRoot,['/','/households/:householdId','/join','/operator'],pwaHead);errors(app);return app;
 }
