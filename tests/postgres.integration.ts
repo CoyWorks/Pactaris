@@ -300,13 +300,31 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await new Promise<void>((resolve,reject)=>{gatewayServer.once('error',reject);gatewayServer.listen(0,'127.0.0.1',resolve);});
   const gatewayAddress=gatewayServer.address();assert.ok(gatewayAddress&&typeof gatewayAddress!=='string');
   const readFileSyncFixture=await readFile(certificate);
-  const response=await new Promise<{status:number;body:string}>((resolve,reject)=>{
-    const request=https.get({hostname:'127.0.0.1',port:gatewayAddress.port,path:'/api/households',servername:'backend.fixture.invalid',ca:readFileSyncFixture,
+  const gatewayGet=(path:string)=>new Promise<{status:number;body:string}>((resolve,reject)=>{
+    const request=https.get({hostname:'127.0.0.1',port:gatewayAddress.port,path,servername:'backend.fixture.invalid',ca:readFileSyncFixture,
       headers:{host:'pactaris.app',cookie:'__Host-pactaris-session='+'a'.repeat(43)}},r=>{
       let body='';r.setEncoding('utf8');r.on('data',chunk=>{body+=chunk;});r.on('error',reject);r.on('end',()=>resolve({status:r.statusCode!,body}));
     });request.on('error',reject);
   });
+  const response=await gatewayGet('/api/households');
   assert.equal(response.status,200);assert.equal(JSON.parse(response.body).households.length,2);assert.ok(!response.body.includes('127.0.0.1'));assert.ok(!response.body.includes('instance'));
+  // Break TLS only for the second registered Instance and exercise the real public Gateway.
+  await gatewayDb.owner.query("UPDATE pactaris.instances SET tls_server_name='offline.fixture.invalid' WHERE id=$1",[ids[1]]);
+  try{
+    const result=await gatewayGet('/api/households');
+    assert.equal(result.status,200);
+    assert.deepEqual(JSON.parse(result.body),{households:[{id:households[0],name:'Fixture A'}],partial:true,nextCursor:null});
+    assert.equal((await gatewayGet('/api/households/'+households[0])).status,200);
+    const offline=await gatewayGet('/api/households/'+households[2]);
+    assert.equal(offline.status,503);
+    assert.deepEqual(JSON.parse(offline.body),{code:'unavailable',messageKey:'errors.unavailable'});
+    assert.equal((await gatewayGet('/api/households/'+households[1])).status,404);
+  }finally{
+    await gatewayDb.owner.query("UPDATE pactaris.instances SET tls_server_name='backend.fixture.invalid' WHERE id=$1",[ids[1]]);
+  }
+  assert.equal((await gatewayGet('/api/households/'+households[2])).status,200);
+  assert.equal(JSON.parse((await gatewayGet('/api/households')).body).partial,false);
+
   await a.owner.query("UPDATE pactaris.memberships SET status='revoked' WHERE household_id=$1 AND account_id=$2",[households[0],account.id]);
   assert.equal(await client.summary(account.id,placement),undefined);
   // Backups have dedicated read access, including FORCE RLS tables; runtime does not gain BYPASSRLS.

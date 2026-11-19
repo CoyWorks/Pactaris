@@ -1,6 +1,6 @@
 # Platform operator portal and distributed Instances
 
-Confirmed owner requirements, 17 November 2026. Planned scope: #55/#57/#58/#59/#60/#62. Everyday owner-only dashboard/settings/tasks remain the immediate feature priority in EARLY_VERSION_BASICS.md. This document does not claim that the portal, tunnels or relocation exist.
+Confirmed owner requirements, 17 November 2026. Planned scope: #55/#57/#58/#59/#60/#62. Everyday owner-only dashboard/settings/tasks remain the immediate feature priority in EARLY_VERSION_BASICS.md. The Gateway has a read-only placement registry view. The remaining sections describe the planned enrollment, network and relocation scope.
 
 ## Networks and trust
 
@@ -43,3 +43,9 @@ Apply that boundary to links, callback/redirect locations, error messages, respo
 Issue #71 tracks a personal-first standalone relationship experience. It shows only the current person's authorized relationships, partners and the agreements between those participants, without making household management the main UI. The existing graph must never imply that every household member is connected to every other member.
 
 This is later product scope. Decide whether a relationship uses an existing tenant or an internal dedicated container before implementing creation/invitations, placement or independent relocation. Keep one identity, explicit participation, contextual multi-role support and participant-level privacy; do not duplicate a relationship across households or silently expose one partner's other relationships. Reuse the same invisible Instance routing. This is not a new self-hosted edition.
+
+## Two-Instance rehearsal
+
+The integration suite runs two HTTPS Instance listeners and independent PostgreSQL databases with distinct component roles. It checks one account across both placements, an unrelated household, and a TLS-name failure on one Instance. During that failure the Gateway still serves the healthy household, reports a partial list and returns a generic unavailable response for the affected household. It verifies recovery at the same browser origin after restoring trust. The fixture runs on a single CI runner.
+
+For hosted acceptance, place synthetic households on two isolated routes behind CloudPanel and follow PUBLIC_SMOKE.md. Record revisions and observed results for authenticated switching, a backend TLS or route failure, recovery, and the safety path with the control plane unavailable. Exercise Identity outage separately from shared ingress loss. Enrollment, revoked credentials, restore and migration fencing need their own hosted rehearsals once their lifecycle tooling is available.
