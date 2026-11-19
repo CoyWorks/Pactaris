@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply an explicitly released, CI-verified Pactaris revision from GitHub."""
+"""Apply the current CI-verified Pactaris main revision from GitHub."""
 
 import argparse
 import json
@@ -39,19 +39,13 @@ class GitHub:
                 raise ValueError('response_too_large')
             return json.loads(content)
 
-    def head(self, branch):
-        value = self.request('/git/ref/heads/' + branch)['object']
+    def main_head(self):
+        value = self.request('/git/ref/heads/main')['object']
         if value['type'] != 'commit' or not SHA.fullmatch(value['sha']):
             raise ValueError('invalid_ref')
         return value['sha']
 
     def approved(self, revision):
-        main = self.head('main')
-        if revision != main:
-            comparison = self.request(f'/compare/{revision}...{main}?per_page=1')
-            if (comparison['status'] != 'ahead'
-                    or comparison['merge_base_commit']['sha'] != revision):
-                return False
         query = urlencode({'head_sha': revision, 'branch': 'main', 'event': 'push', 'per_page': 1})
         runs = self.request('/actions/workflows/ci.yml/runs?' + query)['workflow_runs']
         return bool(runs and runs[0]['head_sha'] == revision
@@ -110,19 +104,13 @@ def reconcile(github, mode, root, updater, state_path, repository=None):
         event('deployment_paused', revision=previous['revision'])
         return 1
 
-    try:
-        revision = github.head('deploy/live')
-    except HTTPError as error:
-        if error.code != 404:
-            raise
-        event('deployment_branch_unavailable')
-        return 0
+    revision = github.main_head()
     if previous.get('mode') == mode and previous.get('revision') == revision:
         return 0
     if not github.approved(revision):
         event('deployment_waiting_for_main_ci', revision=revision)
         return 0
-    if github.head('deploy/live') != revision:
+    if github.main_head() != revision:
         event('deployment_ref_changed')
         return 0
 

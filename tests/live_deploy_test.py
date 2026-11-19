@@ -17,7 +17,7 @@ REVISION = 'a' * 40
 class DeploymentTests(unittest.TestCase):
     def setUp(self):
         self.github = Mock()
-        self.github.head.return_value = REVISION
+        self.github.main_head.return_value = REVISION
         self.github.approved.return_value = True
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
@@ -31,12 +31,12 @@ class DeploymentTests(unittest.TestCase):
     def reconcile(self, mode='apply'):
         return deploy.reconcile(self.github, mode, self.root, self.updater, self.state)
 
-    def test_wrong_branch_or_failed_ci_does_not_run_updater(self):
+    def test_changed_main_head_or_failed_ci_does_not_run_updater(self):
         with patch.object(deploy.subprocess, 'run') as run:
             self.github.approved.return_value = False
             self.assertEqual(self.reconcile(), 0)
             self.github.approved.return_value = True
-            self.github.head.side_effect = [REVISION, 'b' * 40]
+            self.github.main_head.side_effect = [REVISION, 'b' * 40]
             self.assertEqual(self.reconcile(), 0)
             run.assert_not_called()
             self.github.status.assert_not_called()
@@ -56,7 +56,7 @@ class DeploymentTests(unittest.TestCase):
     def test_interrupted_or_failed_activation_is_not_retried(self):
         with patch.object(deploy.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1)) as run:
             self.assertEqual(self.reconcile(), 1)
-            self.github.head.return_value = 'b' * 40
+            self.github.main_head.return_value = 'b' * 40
             self.assertEqual(self.reconcile(), 1)
             self.assertEqual(run.call_count, 1)
             self.state.write_text(json.dumps({'mode': 'apply', 'revision': REVISION, 'phase': 'running'}))
@@ -75,15 +75,15 @@ class DeploymentTests(unittest.TestCase):
 
     def test_requires_exact_successful_main_push_from_ci_workflow(self):
         github = deploy.GitHub('fixture_token')
-        main = 'b' * 40
-        compare = {'status': 'ahead', 'merge_base_commit': {'sha': REVISION}}
         run = {'head_sha': REVISION, 'head_branch': 'main', 'event': 'push',
                'status': 'completed', 'conclusion': 'success'}
-        with patch.object(github, 'head', return_value=main), patch.object(github, 'request') as request:
-            request.side_effect = [compare, {'workflow_runs': [run]}]
+        with patch.object(github, 'request') as request:
+            request.return_value = {'workflow_runs': [run]}
             self.assertTrue(github.approved(REVISION))
             self.assertTrue(request.call_args.args[0].startswith('/actions/workflows/ci.yml/runs?head_sha='))
-            request.side_effect = [compare, {'workflow_runs': [{**run, 'event': 'pull_request'}]}]
-            self.assertFalse(github.approved(REVISION))
-            request.side_effect = [{**compare, 'status': 'diverged'}]
-            self.assertFalse(github.approved(REVISION))
+            for fields in ({'event': 'pull_request'}, {'conclusion': 'failure'},
+                           {'head_sha': 'b' * 40}, {'head_branch': 'feature/example'},
+                           {'status': 'in_progress'}):
+                with self.subTest(fields=fields):
+                    request.return_value = {'workflow_runs': [{**run, **fields}]}
+                    self.assertFalse(github.approved(REVISION))

@@ -1,5 +1,5 @@
 [Unit]
-Description=Check GitHub for a Pactaris live deployment request
+Description=Check GitHub main for a CI-verified Pactaris revision
 
 [Timer]
 OnBootSec=45s

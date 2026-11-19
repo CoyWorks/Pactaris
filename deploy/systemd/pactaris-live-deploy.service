@@ -1,5 +1,5 @@
 [Unit]
-Description=Apply the released Pactaris revision on the live host
+Description=Apply the CI-verified Pactaris main revision on the live host
 Wants=network-online.target
 After=network-online.target
 
