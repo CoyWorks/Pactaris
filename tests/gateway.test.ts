@@ -260,3 +260,11 @@ test('verified-email policy rejects unsigned or missing provider assertions befo
   await login(compat);
   assert.equal(compat.store.sessions.size,1);
 });
+
+
+test('operator access denies unauthenticated and ordinary household sessions',async()=>{
+  const f=fixture(),path='/api/operator/session';
+  assert.equal((await inject(f.app,{url:path,headers})).statusCode,401);
+  const {cookie}=await login(f);
+  assert.equal((await inject(f.app,{url:path,headers:{...headers,cookie,'x-pactaris-operator':'true'}})).statusCode,403);
+});

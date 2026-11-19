@@ -4,8 +4,8 @@ import type { GatewayConfig } from '../config/index.js';
 import type { LoginAttempt } from '../../apps/gateway/store.js';
 import { verifiedEmailClaim } from './email.js';
 export interface OidcLogin {
-  start(attempt:LoginAttempt):Promise<string>;
-  finish(url:URL,attempt:LoginAttempt):Promise<{issuer:string;subject:string;name:string;verifiedEmail?:string}>;
+  start(attempt:LoginAttempt,reauthenticate?:boolean):Promise<string>;
+  finish(url:URL,attempt:LoginAttempt):Promise<{issuer:string;subject:string;name:string;verifiedEmail?:string;mfaAt?:number}>;
 }
 export class OpenIdLogin implements OidcLogin {
   private cached?:Promise<oidc.Configuration>;
@@ -34,10 +34,10 @@ export class OpenIdLogin implements OidcLogin {
     })().catch(e=>{this.cached=undefined;throw e;});
     return this.cached;
   }
-  async start(attempt:LoginAttempt) {
+  async start(attempt:LoginAttempt,reauthenticate?:boolean) {
     const c=await this.connection();
     return oidc.buildAuthorizationUrl(c,{redirect_uri:new URL('/auth/oidc/callback',this.config.publicOrigin).href,
-      scope:'openid profile email',response_type:'code',state:attempt.state,nonce:attempt.nonce,
+      ...(reauthenticate?{prompt:'login',max_age:'0'}:{}),scope:'openid profile email',response_type:'code',state:attempt.state,nonce:attempt.nonce,
       code_challenge:await oidc.calculatePKCECodeChallenge(attempt.verifier),code_challenge_method:'S256'}).href;
   }
   async finish(url:URL,attempt:LoginAttempt) {
@@ -48,7 +48,15 @@ export class OpenIdLogin implements OidcLogin {
     // No tokens persist. Email is a provider assertion, never an account key or
     // membership grant. Omit malformed/unverified claims without blocking login.
     const verifiedEmail=verifiedEmailClaim(claims);
+    const mfaAt=verifiedMfaClaim(claims);
     return {issuer:claims.iss,subject:claims.sub,name:typeof claims.name==='string'?claims.name.slice(0,120):'',
-      ...(verifiedEmail?{verifiedEmail}:{})};
+      ...(verifiedEmail?{verifiedEmail}:{}),...(mfaAt===undefined?{}:{mfaAt})};
+  }
+}
+
+export function verifiedMfaClaim(claims:Record<string,unknown>):number|undefined {
+  const {amr,auth_time:time}=claims;
+  if(Array.isArray(amr)&&amr.includes('mfa')&&typeof time==='number'&&Number.isSafeInteger(time)&&time>0&&time<=Math.floor(Date.now()/1000)){
+    return time;
   }
 }

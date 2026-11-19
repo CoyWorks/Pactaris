@@ -218,6 +218,13 @@
       "path": "migrations/instance/0020_private_habit_trend.sql",
       "sha256": "dd5631de3aa495454642128428a7954155302c5057051bbfbd37cd5872fe1e55",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0012_operator_mfa",
+      "path": "migrations/gateway/0012_operator_mfa.sql",
+      "sha256": "8cc108c8706b280670af526362db73901d69a19eeb88d566c5180c8ff5366133",
+      "backwardCompatible": true
     }
   ]
 }

@@ -58,11 +58,14 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     let readiness='unavailable';try{await store.probe();readiness='ready';}catch{}
     res.json({component:'gateway',version:manifest.version,readiness,authentication:'oidc',locale:config.locale});
   });
-  app.get('/auth/login',async(req,res)=>{
+  app.get(['/auth/login','/auth/operator'],async(req,res)=>{
+    if(req.path==='/auth/operator'&&!config.operatorSubjects.length){
+      loginFailure(req,res,404,'not_found','errors.notFound');return;
+    }
     if(!await store.throttle(req.ip??'unknown')){loginFailure(req,res,429,'rate_limited','errors.rateLimited');return;}
     const binding=token(),attempt={state:token(),nonce:token(),verifier:token()};
     try {
-      const url=await oidc.start(attempt);
+      const url=await oidc.start(attempt,req.path==='/auth/operator');
       await store.beginLogin(binding,attempt);
       setCookie(res,LOGIN,binding,300);res.redirect(302,url);
     }catch{loginFailure(req,res,503,'login_unavailable','errors.loginUnavailable');}
@@ -81,7 +84,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       }
       const account=await store.account(identity.issuer,identity.subject,identity.name,email);
       const previous=cookie(req,SESSION);if(previous)await store.logout(previous);
-      const sessionToken=token();await store.createSession(sessionToken,account,token(),config.session.idleSeconds,config.session.absoluteSeconds,email);
+      const sessionToken=token();await store.createSession(sessionToken,account,token(),config.session.idleSeconds,config.session.absoluteSeconds,email,identity.mfaAt);
       setCookie(res,SESSION,sessionToken,config.session.absoluteSeconds);res.redirect(303,'/');
     }catch{loginFailure(req,res,400,'login_failed','errors.loginFailed');}
   });
@@ -91,6 +94,16 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     return session;
   }
   function csrfAllowed(req:express.Request,session:Session){const csrf=req.get('x-csrf-token');return req.get('origin')===config.publicOrigin&&!!csrf&&Buffer.byteLength(csrf)===Buffer.byteLength(session.csrfToken)&&timingSafeEqual(Buffer.from(csrf),Buffer.from(session.csrfToken));}
+  async function authorizeOperator(req:express.Request,res:express.Response){
+    const session=await authenticate(req,res);if(!session)return;
+    if(!await store.operatorAuthorized?.(cookie(req,SESSION)!,config.oidc.issuer,config.operatorSubjects)){
+      res.status(403).json({code:'operator_authentication_required',messageKey:'operator.authenticationRequired'});return;
+    }
+    return session;
+  }
+  app.get('/api/operator/session',async(req,res)=>{
+    if(await authorizeOperator(req,res))res.json({authorized:true});
+  });
   function onboardingFailure(res:express.Response,error:unknown){
     if(error instanceof OnboardingError){
       const status={conflict:409,limit:409,unavailable:503,denied:404}[error.kind];

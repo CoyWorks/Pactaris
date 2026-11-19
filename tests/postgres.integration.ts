@@ -142,6 +142,20 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       assert.equal(events.rows[0].n,2);
     }finally{await store.logout(token);}
   })();
+  await (async()=>{
+    const fresh=Math.floor(Date.now()/1000)-1,issuer='https://idp.fixture.invalid/';
+    const token='mfa-session-fixture',stale='stale-mfa-fixture';
+    await store.createSession(token,account,'csrf',60,120,undefined,fresh);
+    await store.createSession(stale,account,'csrf',60,120,undefined,fresh-301);
+    try{
+      assert.ok(await store.operatorAuthorized(token,issuer,['subject-a']));
+      assert.equal(await store.operatorAuthorized(token,issuer,['subject-b']),false);
+      assert.equal(await store.operatorAuthorized(token,'https://other-idp.fixture.invalid/',['subject-a']),false);
+      assert.equal(await store.operatorAuthorized(stale,issuer,['subject-a']),false);
+      await store.logout(token);
+      assert.equal(await store.operatorAuthorized(token,issuer,['subject-a']),false);
+    }finally{await store.logout(token);await store.logout(stale);}
+  })();
   await (async function verifyOtherSessionRevocation(){
     await store.createSession('active-fixture',account,'csrf',60,120);
     await store.createSession('other-fixture',account,'csrf',60,120);

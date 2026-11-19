@@ -77,6 +77,7 @@ export function loadConfig(path: string, development = false): InstanceConfig {
 export type GatewayConfig = Omit<InstanceConfig, 'instanceId' | 'oidc' | 'delegation'> & {
   gatewayId: string;
   invitationMailFile?: string;
+  operatorSubjects: string[];
   oidc: { issuer: string; clientId: string; clientSecretFile: string };
   delegation: { issuer: string; keyId: string; privateKeyFile: string };
   trustedProxyAddresses: string[];
@@ -96,8 +97,12 @@ export function parseGatewayConfig(value: unknown, development = false): Gateway
   const absoluteSeconds = integer(session.absoluteSeconds,'session.absoluteSeconds',idleSeconds,604800);
   const requireVerifiedEmail=session.requireVerifiedEmail===undefined?false:session.requireVerifiedEmail;
   if(typeof requireVerifiedEmail!=='boolean')invalid('session.requireVerifiedEmail');
+  const operatorSubjects=c.operatorSubjects??[];
+  if(!Array.isArray(operatorSubjects)||operatorSubjects.length>50||
+    operatorSubjects.some(subject=>typeof subject!=='string'||!subject.trim()||subject.length>255))
+    invalid('operatorSubjects');
   const onboarding=object(c.onboarding??{maxOwnedHouseholds:1},'onboarding');
-  return { ...shared, gatewayId: instanceId,
+  return { ...shared, gatewayId: instanceId,operatorSubjects,
     invitationMailFile: c.invitationMailFile===undefined ? undefined : file(c.invitationMailFile,'invitationMailFile'), oidc: { ...oidc, clientSecretFile: file(o.clientSecretFile,'oidc.clientSecretFile') },
     delegation: { issuer: base.publicOrigin, keyId, privateKeyFile: file(d.privateKeyFile,'delegation.privateKeyFile') },
     trustedProxyAddresses: proxies, session: {idleSeconds,absoluteSeconds,requireVerifiedEmail},onboarding:{maxOwnedHouseholds:integer(onboarding.maxOwnedHouseholds,'onboarding.maxOwnedHouseholds',1,20)} };
