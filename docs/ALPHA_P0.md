@@ -34,3 +34,17 @@ The account block retains the maintained IdP as credential/MFA/recovery handler.
 Across all blocks: #5/#12/#13/#31/#62 authorization/isolation/concurrency and outage tests; #44 translations; #28/#29/#30/#56 preserving deployment, encrypted off-host backups, isolated restore and alerts; #32/#33/#50 minimum privacy/incident/rights review. The complete minimal-input installer and remote fleet enrollment remain independent tracked work, not silently claimed by a passing update.
 
 Invite-only pilot acceptance is #34. Real operator/mobile/provider evidence must be distinguished from repository CI. A source update does not deploy the server, send mail, enroll a remote host or accept consent.
+
+## Invite-only pilot acceptance
+
+The release operator owns the go/no-go decision and is the point of contact for participants. Before issuing any pilot invitations, nominate that operator and publish a private support channel. Report failures there using the scenario and time of occurrence. Keep household names, invite URLs, consent details and private responses out of shared evidence.
+
+| Scenario | Evidence required |
+| --- | --- |
+| Deploy and update | Provision a fresh pilot environment from a reviewed revision. Apply a second reviewed revision, record component versions and prove the accounts and fixtures remain usable. Run [public ingress smoke](PUBLIC_SMOKE.md). |
+| Join and isolate | Create two unrelated synthetic households. Invite one synthetic account to both. Use ordinary browser sessions to check explicit preview/acceptance, household switching and that a member of one household sees only their assigned household. |
+| Complete and withdraw | Agree to the task scope, assign and complete a test task, then pause and resume. Leave and confirm previously accessible content becomes unavailable. Verify the expected notification, personal export and account deletion cases with synthetic data. |
+| Mobile and PWA | Run [mobile checks](PWA.md) on Android and iOS. Record sign-out in another open tab, offline recovery, permission refusal and the supported [push test](WEB_PUSH.md). |
+| Recover | Rehearse [restore](RECOVERY.md) using protected synthetic backups. Confirm revocations and deletion handling before allowing any recovered environment to serve traffic. |
+
+For each row record the tested commit, component revisions, browser and device where applicable, pass/fail/blocked and a link to sanitized evidence. Leave public registration closed while a mandatory scenario is blocked or fails. Keep the reference Site available until the owner approves a separate cutover. Automated fixtures can accompany the evidence; the installed host and mobile browser checks must be recorded independently.
