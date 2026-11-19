@@ -16,6 +16,8 @@ import {isRoutineAction,routineInput,RoutineError} from '../../packages/auth/rou
 import type {GatewayRoutines} from './routines.js';
 import {isLibraryAction,libraryInput,LibraryError} from '../../packages/auth/library.js';
 import type {GatewayLibrary} from './library.js';
+import type {GatewayExchange} from './exchange.js';
+import {isExchangeAction,exchangeInput,ExchangeError} from '../../packages/auth/exchange.js';
 import {isWorkspaceAction,workspaceInput,WorkspaceError} from '../../packages/auth/workspace.js';
 import type {GatewayWorkspace} from './workspace.js';
 import {isConsentAction,consentInput,ConsentError} from '../../packages/auth/consent.js';
@@ -54,7 +56,7 @@ type OperatorInventory={
   instances:(after:string|null)=>ReturnType<typeof listRegistryInstances>;
   placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
 };
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -598,6 +600,30 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       }
       res.json(result);
     }catch(error){libraryFailure(res,error);}
+  });
+  function exchangeFailure(res:express.Response,error:unknown){
+    const kind=error instanceof ExchangeError?error.kind:'unavailable';
+    res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,unavailable:503}[kind]).json({code:'exchange_'+kind,messageKey:('exchange.'+kind) as MessageKey});
+  }
+  app.get(['/api/households/:householdId/exchange','/api/households/:householdId/exchange/reviews','/api/households/:householdId/exchange/terms'],async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      const kind=req.path.endsWith('/reviews')?'reviewList':req.path.endsWith('/terms')?'termsGet':'exchangeList';
+      const allowed=kind==='exchangeList'?['box','before']:[];
+      if(!uuid(req.params.householdId)||Object.keys(req.query).some(k=>!allowed.includes(k)))throw new ExchangeError('invalid');
+      const input=kind==='exchangeList'?{box:req.query.box??'open',...(req.query.before!==undefined?{before:req.query.before}:{})}:{};
+      exchangeInput(kind,{operationId:randomUUID(),...input});if(!exchange)throw new ExchangeError('unavailable');
+      res.json(await exchange.read(session.account.id,req.params.householdId,kind,input));
+    }catch(error){exchangeFailure(res,error);}
+  });
+  app.post('/api/households/:householdId/exchange/:action',async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+      const action=req.params.action;
+      if(!uuid(req.params.householdId)||!isExchangeAction(action)||['exchangeList','reviewList','termsGet'].includes(action))throw new ExchangeError('invalid');
+      const input=exchangeInput(action,req.body);if(!exchange)throw new ExchangeError('unavailable');
+      if(!await store.throttle('exchange:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+      res.json(await exchange.execute(session.account.id,req.params.householdId,action,input));
+    }catch(error){exchangeFailure(res,error);}
   });
   function routineFailure(res:express.Response,error:unknown){
     const kind=error instanceof RoutineError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,paused:409,unavailable:503}[kind]).json({code:'routines_'+kind,messageKey:('routines.'+kind) as MessageKey});

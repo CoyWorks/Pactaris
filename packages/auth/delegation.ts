@@ -5,6 +5,7 @@ import {libraryActions} from './library-actions.js';
 import {workspaceActions} from './workspace-actions.js';
 import {consentActions} from './consent-actions.js';
 import {relationshipActions} from './relationship-actions.js';
+import {exchangeActions} from './exchange-actions.js';
 import { readFile } from 'node:fs/promises';
 import { randomUUID,createHash } from 'node:crypto';
 import { importPKCS8, importSPKI, jwtVerify, SignJWT, type CryptoKey } from 'jose';
@@ -14,7 +15,7 @@ export const audience=(instanceId:string)=>`urn:pactaris:instance:${instanceId}`
 export const membershipActions=['memberList','memberAlias','memberRemove','ownerOffer','ownerAccept','ownerDecline','ownerCancel','memberReceipt'] as const;
 export type MembershipAction=typeof membershipActions[number];
 export const isMembershipAction=(value:unknown):value is MembershipAction=>typeof value==='string'&&(membershipActions as readonly string[]).includes(value);
-export const householdActions=['personalExport','create','leave','receipt','inviteCreate','invitePreview','inviteAccept','inviteDecline','inviteRevoke','inviteList','inviteReceipt',...membershipActions,...relationshipActions,...consentActions,...workspaceActions,...libraryActions,...routineActions,...catalogActions,...partnerActions] as const;
+export const householdActions=['personalExport','create','leave','receipt','inviteCreate','invitePreview','inviteAccept','inviteDecline','inviteRevoke','inviteList','inviteReceipt',...membershipActions,...relationshipActions,...consentActions,...workspaceActions,...libraryActions,...routineActions,...catalogActions,...partnerActions,...exchangeActions] as const;
 export type HouseholdAction=typeof householdActions[number];
 export type InvitationAction=Extract<HouseholdAction,`invite${string}`>;
 export const isHouseholdAction=(value:unknown):value is HouseholdAction=>typeof value==='string'&&(householdActions as readonly string[]).includes(value);
