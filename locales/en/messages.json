@@ -560,6 +560,8 @@
   "partner.sunday": "Sunday",
   "partner.series": "Planned task series",
   "partner.seriesActive": "Scheduled",
+  "partner.seriesEndDate": "End date",
+  "partner.seriesDueAfter": "Due after availability",
   "partner.seriesBlocked": "Generation blocked — review current scope and capacity before revising",
   "partner.seriesFinished": "Generation finished",
   "partner.seriesCancel": "Stop future occurrences",

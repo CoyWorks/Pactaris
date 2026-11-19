@@ -56,7 +56,7 @@ Standing assignment policies from #73 now provide the agreed direct/per-task mod
 
 ## Scheduler source checkpoint (#18)
 
-Versioned standing-authority series, availability-filtered occurrences and a durable Instance worker are now implemented in source. Calendar/catch-up, revision/cancellation, shared capacity, retry/dead-letter and current-scope enforcement are documented in [TASK_SCHEDULER.md](TASK_SCHEDULER.md). Release-manifest registration was outside the authorized edit scope, so the current release does not activate this migration. Reward/notification delivery and owner-only series drafts remain open; see the exact verification and rollout limits in that contract.
+Versioned standing-authority series, availability-filtered occurrences and a durable Instance worker are now implemented in source. Calendar/catch-up, revision/cancellation, shared capacity, retry/dead-letter and current-scope enforcement are documented in [TASK_SCHEDULER.md](TASK_SCHEDULER.md). The release manifest registers Instance migration 0016. The participant series list displays the recurrence, selected weekdays, start and end dates, local availability time, timezone and due duration. Owner-only series drafts and scheduled reminder delivery remain open.
 
 ## Task points and inbox checkpoint (#20, #22)
 

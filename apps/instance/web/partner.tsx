@@ -51,7 +51,7 @@ export function PartnerPanel({householdId,session,language,format,timeZone,onInb
    <fieldset disabled={blocked}><legend>{t('partner.policySetup')}</legend><p>{t('partner.policyHelp')}</p><label>{t('partner.assignmentMode')}<select value={policyMode} onChange={e=>setPolicyMode(e.target.value as 'direct'|'explicit')}><option value="direct">{t('partner.directPolicy')}</option><option value="explicit">{t('partner.explicitPolicy')}</option></select></label><button type="button" disabled={!selected||!assignee||!confirmed} onClick={()=>{if(selected)void change('partnerPolicyPropose',{agreementId:selected.agreementId,agreementVersion:selected.agreementVersion,assigneeId:assignee,mode:policyMode,epoch:selected.epoch,safetyVersion:selected.safetyVersion});}}>{t('partner.proposePolicy')}</button></fieldset>
    {choiceCursor&&<button type="button" disabled={blocked} onClick={()=>{void prepare(choiceCursor);}}>{t('partner.moreAgreements')}</button>}
   </form>}
-  {listing?.scheduling&&<SeriesList request={request} refresh={listing} blocked={blocked} language={language} actorId={listing.actorMembershipId} onCancel={series=>{void change('partnerSeriesCancel',{seriesId:series.seriesId,version:series.version});}} onEdit={series=>{void prepare(undefined,series);}}/>}
+  {listing?.scheduling&&<SeriesList request={request} refresh={listing} blocked={blocked} language={language} format={format} actorId={listing.actorMembershipId} onCancel={series=>{void change('partnerSeriesCancel',{seriesId:series.seriesId,version:series.version});}} onEdit={series=>{void prepare(undefined,series);}}/>}
   {listing?.policies&&<AssignmentPolicies policies={listing.policies} actorId={listing.actorMembershipId} blocked={blocked} language={language} onAction={(action,p)=>{void change(action,{policyId:p.policyId,version:p.version,...(action==='partnerPolicyAccept'?{epoch:p.epoch,safetyVersion:p.safetyVersion}:{})});}}/>}
   {!listing&&<p role="status">{t('partner.loading')}</p>}{listing&&!listing.tasks?.length&&<p>{t('partner.empty')}</p>}<ul className="task-list">{listing?.tasks?.map(task=><li key={task.taskId}><h3>{task.title}</h3><p>{task.counterpart||t('partner.unnamed')}</p><p>{t(task.availableAt&&Date.parse(task.availableAt)>Date.now()&&!['done','declined','cancelled'].includes(task.state)?'partner.planned':states[task.state])}</p>{task.availableAt&&<p>{t('partner.availableAt')} <time dateTime={task.availableAt}>{formatTime(new Date(task.availableAt),format,timeZone)}</time></p>}<p>{t(task.role==='creator'?'partner.creatorRole':'partner.assigneeRole')}</p>{task.dueAt&&<time dateTime={task.dueAt}>{formatTime(new Date(task.dueAt),format,timeZone)}</time>}<button type="button" disabled={blocked} onClick={()=>{void inspect(task.taskId);}}>{t('partner.open')}</button></li>)}</ul>
   {detail&&<article className="document-detail"><h3>{detail.title}</h3>{detail.sharedReward&&<section><h4>{t('partner.catalogReward')}</h4><p>{detail.sharedReward.title}</p><p>{detail.sharedReward.description}</p></section>}{detail.rewardPoints&&<p>{pointsSettings?.label??t('partner.rewardPoints')} {detail.rewardPoints}</p>}{detail.rewardPoints&&detail.role==='creator'&&detail.state==='done'&&<button type="button" disabled={blocked} onClick={()=>{if(window.confirm(t('partner.reversePointsConfirm')))void change('partnerPointsReverse',{taskId:detail.taskId});}}>{t('partner.reversePoints')}</button>}<p className="document-body">{detail.description}</p><p>{detail.counterpart||t('partner.unnamed')}</p><p>{t(states[detail.state])}</p><p>{t('partner.agreement')} <span>{detail.agreementLabel}</span> <span>{t('relationships.version')} <span>{detail.agreementVersion}</span></span></p><p>{t(detail.assignmentMode==='direct'?'partner.directPolicy':detail.assignmentMode==='explicit'?'partner.explicitPolicy':'partner.individualOffer')} {detail.policyVersion&&<span>{t('relationships.version')} {detail.policyVersion}</span>}</p><p>{t('partner.fixedScope')}</p>{!detail.eligible&&<p>{t('partner.blocked')}</p>}
@@ -79,9 +79,42 @@ export function ScheduleEditor({schedule,onChange,timeZone,disabled,language}:{s
  </>}</fieldset>;
 }
 
-function SeriesList({request,refresh,blocked,language,actorId,onCancel,onEdit}:{request:(action:PartnerAction,input:Record<string,unknown>,signal:AbortSignal)=>Promise<PartnerResult>;refresh:PartnerResult;blocked:boolean;language:string;actorId:string;onCancel:(series:TaskSeries)=>void;onEdit:(series:TaskSeries)=>void}){
+function SeriesList({request,refresh,blocked,language,format,actorId,onCancel,onEdit}:{request:(action:PartnerAction,input:Record<string,unknown>,signal:AbortSignal)=>Promise<PartnerResult>;refresh:PartnerResult;blocked:boolean;language:string;format:string;actorId:string;onCancel:(series:TaskSeries)=>void;onEdit:(series:TaskSeries)=>void}){
  const t=createTranslator(language),[result,setResult]=useState<PartnerResult>(),[cursor,setCursor]=useState<string>(),[error,setError]=useState<MessageKey>();
- useEffect(()=>{const c=new AbortController(),deadline=setTimeout(()=>c.abort(),12000);void request('partnerSeriesList',{operationId:crypto.randomUUID(),...(cursor?{after:cursor}:{})},c.signal).then(r=>{if(!c.signal.aborted){setResult(r);setError(undefined);}}).catch(e=>{if(!c.signal.aborted)setError(failure(e));}).finally(()=>clearTimeout(deadline));return()=>{c.abort();clearTimeout(deadline);};},[refresh,cursor]);
+ useEffect(()=>{
+  let stale=false;
+  const controller=new AbortController();
+  const deadline=setTimeout(()=>controller.abort(),12000);
+  void request('partnerSeriesList',{operationId:crypto.randomUUID(),...(cursor?{after:cursor}:{})},controller.signal)
+   .then(current=>{if(!stale){setResult(current);setError(undefined);}})
+   .catch(reason=>{if(!stale){setResult(undefined);setError(failure(reason));}})
+   .finally(()=>clearTimeout(deadline));
+  return()=>{stale=true;controller.abort();clearTimeout(deadline);};
+ },[refresh,cursor]);
  const stateKeys={active:'partner.seriesActive',blocked:'partner.seriesBlocked',finished:'partner.seriesFinished',cancelled:'partner.cancelled'} as const;
- return <section><h3>{t('partner.series')}</h3><p>{t('partner.editScheduleHelp')}</p>{error&&<p role="alert">{t(error)}</p>}<ul>{result?.series?.map(s=><li key={s.seriesId}><h4>{s.fields.title}</h4><p>{t(stateKeys[s.state])}</p><p>{s.schedule.startDate} {s.schedule.availableTime} {s.schedule.timeZone}</p>{s.state!=='cancelled'&&<><button type="button" disabled={blocked} onClick={()=>onCancel(s)}>{t('partner.seriesCancel')}</button>{s.creatorId===actorId&&<button type="button" disabled={blocked} onClick={()=>onEdit(s)}>{t('partner.seriesEdit')}</button>}</>}</li>)}</ul>{result?.nextCursor&&<button type="button" disabled={blocked} onClick={()=>setCursor(result.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" disabled={blocked} onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}</section>;
+ return <section><h3>{t('partner.series')}</h3><p>{t('partner.editScheduleHelp')}</p>{error&&<p role="alert">{t(error)}</p>}<ul>{result?.series?.map(s=><li key={s.seriesId}><h4>{s.fields.title}</h4><p>{t(stateKeys[s.state])}</p><SeriesScheduleSummary schedule={s.schedule} language={language} format={format}/>{s.state!=='cancelled'&&<><button type="button" disabled={blocked} onClick={()=>onCancel(s)}>{t('partner.seriesCancel')}</button>{s.creatorId===actorId&&<button type="button" disabled={blocked} onClick={()=>onEdit(s)}>{t('partner.seriesEdit')}</button>}</>}</li>)}</ul>{result?.nextCursor&&<button type="button" disabled={blocked} onClick={()=>setCursor(result.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" disabled={blocked} onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}</section>;
+}
+
+export function SeriesScheduleSummary({schedule,language,format}:{schedule:TaskSchedule;language:string;format:string}){
+ const t=createTranslator(language);
+ const dateFormat=new Intl.DateTimeFormat(format,{dateStyle:'medium',timeZone:'UTC'});
+ const timeFormat=new Intl.DateTimeFormat(format,{timeStyle:'short',timeZone:'UTC'});
+ const weekdayFormat=new Intl.DateTimeFormat(format,{weekday:'long',timeZone:'UTC'});
+ const listFormat=new Intl.ListFormat(format);
+ const durationFormat=new Intl.NumberFormat(format,{style:'unit',unit:'minute',unitDisplay:'long'});
+ const periodKeys={once:'partner.once',daily:'partner.daily',weekly:'partner.weekly'} as const;
+ const start=new Date(schedule.startDate+'T00:00:00Z');
+ return <dl>
+  <dt>{t('partner.period')}</dt><dd>{t(periodKeys[schedule.period])}</dd>
+  {schedule.period==='weekly'&&<>
+   <dt>{t('partner.weekdays')}</dt>
+   <dd>{listFormat.format(schedule.weekdays.map(day=>weekdayFormat.format(new Date(Date.UTC(2024,0,day)))))}</dd>
+  </>}
+  <dt>{t('partner.startDate')}</dt><dd><time dateTime={schedule.startDate}>{dateFormat.format(start)}</time></dd>
+  {schedule.endDate&&<>
+   <dt>{t('partner.seriesEndDate')}</dt><dd><time dateTime={schedule.endDate}>{dateFormat.format(new Date(schedule.endDate+'T00:00:00Z'))}</time></dd>
+  </>}
+  <dt>{t('partner.availableAt')}</dt><dd><time dateTime={schedule.availableTime}>{timeFormat.format(new Date('2024-01-01T'+schedule.availableTime+':00Z'))}</time> {schedule.timeZone}</dd>
+  <dt>{t('partner.seriesDueAfter')}</dt><dd>{durationFormat.format(schedule.dueMinutes)}</dd>
+ </dl>;
 }

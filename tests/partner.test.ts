@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {PartnerPanel,AssignmentPolicies} from '../apps/instance/web/partner.js';
+import {PartnerPanel,SeriesScheduleSummary,AssignmentPolicies} from '../apps/instance/web/partner.js';
 import {partnerInput} from '../packages/auth/partner.js';
 const fields={title:'A voluntary task',description:'Shared scope\nSecond line',priority:'normal',dueAt:null};
 const offer={operationId:randomUUID(),agreementId:randomUUID(),agreementVersion:'1',assigneeId:randomUUID(),epoch:'1',safetyVersion:'a'.repeat(32),fields};
@@ -47,4 +47,12 @@ test('only the recipient sees adoption; standing direction and direct mode are e
 test('personal to-do query is supported without client-selected membership authority',()=>{
  const op=randomUUID();assert.equal(partnerInput('partnerList',{operationId:op,filter:'todo'}).filter,'todo');
  assert.throws(()=>partnerInput('partnerList',{operationId:op,filter:'todo',assigneeId:randomUUID()}),{kind:'invalid'});
+});
+
+test('series summary preserves the scheduled wall time and identifies the weekdays and due duration',()=>{
+ const html=renderToStaticMarkup(React.createElement(SeriesScheduleSummary,{
+  schedule:{period:'weekly',startDate:'2026-10-25',endDate:'2026-11-22',availableTime:'02:30',
+   weekdays:[1,7],timeZone:'Europe/Amsterdam',dueMinutes:90},language:'en',format:'en-GB'
+ }));
+ for(const value of [/Monday and Sunday/,/dateTime="2026-10-25"/,/dateTime="2026-11-22"/,/02:30/,/Europe\/Amsterdam/,/90 minutes/])assert.match(html,value);
 });
