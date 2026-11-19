@@ -16,6 +16,11 @@ import {Hint,Icon,Link,navigate,useLocation} from './navigation.js';
 import {Skeleton} from './today-habits.js';
 type Session={account:{id:string;displayName:string};csrfToken:string;presentation?:Presentation;preferredName?:string};
 type Summary={id:string;name:string};
+// Per-browser convenience only: which dynamic this account opened last. Cleared on sign-out.
+const lastKey='pactaris.lastDynamic';
+function readLast(accountId:string){try{const v=JSON.parse(window.localStorage.getItem(lastKey)??'null') as {account?:string;household?:string}|null;return v?.account===accountId?v.household:undefined;}catch{return undefined;}}
+function writeLast(accountId:string,household:string){try{window.localStorage.setItem(lastKey,JSON.stringify({account:accountId,household}));}catch{/* storage unavailable */}}
+function clearLast(){try{window.localStorage.removeItem(lastKey);}catch{/* storage unavailable */}}
 type Listing={households:Summary[];partial:boolean;nextCursor:string|null};
 type Operation={operationId:string;householdId:string;action:'create'|'leave';status:'pending'|'complete'|'released'};
 export function Portal({language,format,timeZone}:{language:string;format:string;timeZone:string}) {
@@ -93,7 +98,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   }
   async function logout(){
     if(!session||busy)return;setBusy(true);
-    try{const r=await fetch('/auth/logout',{method:'POST',headers:{'X-CSRF-Token':session.csrfToken}});if(!r.ok)throw Error('logout');announceSignOut();window.location.assign('/');}
+    try{const r=await fetch('/auth/logout',{method:'POST',headers:{'X-CSRF-Token':session.csrfToken}});if(!r.ok)throw Error('logout');clearLast();announceSignOut();window.location.assign('/');}
     catch{setError('errors.unavailable');setBusy(false);}
   }
   async function more(){
@@ -102,9 +107,11 @@ export function Portal({language,format,timeZone}:{language:string;format:string
       setListing({...next,partial:listing.partial||next.partial,households:[...listing.households,...next.households]});
     }catch{setError('errors.unavailable');}finally{setBusy(false);}
   }
-  const only=listing&&!listing.partial&&!listing.nextCursor&&listing.households.length===1?listing.households[0]:undefined;
+  const last=session?readLast(session.account.id):undefined;
+  const only=listing&&!listing.partial&&!listing.nextCursor&&listing.households.length===1?listing.households[0]:listing?.households.find(h=>h.id===last);
   const autoOpen=!!only&&!selectedId&&!profile&&!showAll&&!createPending;
   useEffect(()=>{if(autoOpen&&only)navigate('/households/'+only.id,true);},[autoOpen,only]);
+  useEffect(()=>{if(session&&selectedId&&selected)writeLast(session.account.id,selectedId);},[session,selectedId,selected]);
   if(path==='/join')return <InvitationJoin session={session} loading={loading} language={language} format={session?.presentation?.format??format} timeZone={session?.presentation?.timeZone??timeZone}/>;
   const displayFormat=session?.presentation?.format??format,displayZone=session?.presentation?.timeZone??timeZone;
   const initial=(session?.account.displayName.trim()||t('portal.account')).slice(0,1).toUpperCase();
