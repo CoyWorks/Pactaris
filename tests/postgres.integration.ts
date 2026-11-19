@@ -6,6 +6,7 @@ import {GatewayPartner} from '../apps/gateway/partner.js';
 import {GatewayCatalog} from '../apps/gateway/catalog.js';
 import {GatewayRoutines} from '../apps/gateway/routines.js';
 import {GatewayLibrary} from '../apps/gateway/library.js';
+import {GatewayExchange} from '../apps/gateway/exchange.js';
 import {GatewayWorkspace} from '../apps/gateway/workspace.js';
 import {GatewayConsent} from '../apps/gateway/consent.js';
 import {GatewayRelationships} from '../apps/gateway/relationships.js';
@@ -25,7 +26,7 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient,PrivateCatalogClient,PrivatePartnerClient } from '../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient,PrivateCatalogClient,PrivatePartnerClient,PrivateExchangeClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import { RevocationJournalSync } from '../apps/gateway/revocation-journal.js';
@@ -370,10 +371,11 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const consentService=new GatewayConsent(store,client,new PrivateConsentClient(signer));
   const workspaceService=new GatewayWorkspace(store,client,new PrivateWorkspaceClient(signer));
   const libraryService=new GatewayLibrary(store,client,new PrivateLibraryClient(signer));
+  const exchangeService=new GatewayExchange(store,client,new PrivateExchangeClient(signer));
   const routineService=new GatewayRoutines(store,client,new PrivateRoutineClient(signer));
   const catalogService=new GatewayCatalog(store,client,new PrivateCatalogClient(signer));
   const partnerService=new GatewayPartner(store,client,new PrivatePartnerClient(signer));
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService,partnerService);
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService,partnerService,undefined,undefined,undefined,undefined,undefined,undefined,undefined,exchangeService);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
