@@ -68,3 +68,36 @@ class IdentityBrandTests(unittest.TestCase):
                     brand.change_brand(origin, brand_id, current['domain'], 'en', 'fixture-token', True, backup)
             self.assertEqual(failure.exception.key, 'cli.brandVerify')
             self.assertEqual(json.loads(backup.read_text())['target']['brand'], brand_id)
+
+    def test_flow_title_preview_apply_restore_and_exact_identity(self):
+        origin = 'https://identity.example.invalid'
+        slug = 'public-login'
+        flow_id = '6aef4af8-9d3d-4efa-be12-4d719e6e411c'
+        current = {'pk': flow_id, 'slug': slug, 'designation': 'authentication',
+                   'title': 'Previous', 'name': 'Internal', 'authentication': 'none'}
+        with tempfile.TemporaryDirectory() as temp:
+            backup = Path(temp) / 'before.json'
+            rollback_backup = Path(temp) / 'before-restore.json'
+
+            def request(endpoint, token, patch_data=None):
+                self.assertEqual(endpoint, f'{origin}/api/v3/flows/instances/{slug}/')
+                if patch_data is not None:
+                    self.assertEqual(list(patch_data), ['title'])
+                    self.assertTrue(backup.is_file())
+                    current.update(patch_data)
+                return dict(current)
+
+            with patch.object(brand, 'request', side_effect=request) as api, patch.object(brand, 'emit'):
+                args = (origin, slug, flow_id, 'en', 'fixture-token')
+                brand.change_flow(*args, False)
+                api.assert_called_once()
+                brand.change_flow(*args, True, backup)
+                self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
+                self.assertEqual(current['title'], brand.messages('en')['portal.signInTitle'])
+                brand.change_flow(*args, True, backup)
+                brand.change_flow(*args, True, rollback_backup, backup)
+                self.assertEqual(current['title'], 'Previous')
+                self.assertEqual(current['name'], 'Internal')
+                with self.assertRaises(brand.DeployError):
+                    brand.change_flow(origin, slug, 'different', 'en', 'fixture-token', True)
+                self.assertEqual(current['title'], 'Previous')
