@@ -116,6 +116,54 @@ python3 scripts/encrypt_checkpoint.py \
 
 Transfer the encrypted file to the approved off-host store, or use a protected mounted destination there. The script writes an encrypted temporary file and publishes it after successful encryption. The existing SQL snapshot stays protected on the source host. Back up referenced secret files, media and Instance file data through separate protected copies. Track verification, retention and key recovery as part of the operational backup schedule.
 
+### Scheduled off-host backups
+
+`scripts/offsite_backup.py` automates the steps above for every installed component. A systemd timer runs it daily around 02:47 with a random delay of up to 20 minutes. Each run creates a fresh checkpoint with the installed `backup.sh`, encrypts it with `encrypt_checkpoint.py` and copies the archive to the configured target. A failed component is reported and does not stop the others.
+
+Install the units from a reviewed checkout. Nothing runs until the timer is enabled, and without a configuration file each run only logs `offsite.not_configured`:
+
+```bash
+apt install -y age
+bash /opt/pactaris-source/scripts/install_offsite_backup.sh
+```
+
+Create `/etc/pactaris/offsite-backup.json` as root with mode 0600. Only the public age recipient belongs on this host.
+
+```json
+{
+  "recipient": "age1...",
+  "keep": 14,
+  "target": {"type": "directory", "path": "/mnt/pactaris-backups"}
+}
+```
+
+A `directory` target must be a mounted off-host filesystem; a local directory on the same disk is not an off-host backup. For an SSH target, use a dedicated account on the backup host that can only write to its backup directory:
+
+```json
+{
+  "recipient": "age1...",
+  "keep": 14,
+  "target": {
+    "type": "ssh", "host": "backup.example.org", "port": 22, "user": "pactaris",
+    "path": "/srv/pactaris-backups",
+    "identityFile": "/root/.ssh/pactaris_backup",
+    "knownHostsFile": "/root/.ssh/known_hosts_pactaris_backup"
+  }
+}
+```
+
+Pin the backup host's key in the known-hosts file beforehand; strict host-key checking is always on. `components` optionally limits the run, for example `["instance", "gateway"]`. Then test once and enable the timer:
+
+```bash
+systemctl start pactaris-offsite-backup.service
+journalctl -u pactaris-offsite-backup.service -n 20 --no-pager
+systemctl enable --now pactaris-offsite-backup.timer
+```
+
+Archives are stored per component as `<component>-<UTC time>-<checkpoint>.tar.age`. They are written under a temporary name and only renamed once complete. After each successful copy, archives beyond `keep` are removed from the target; only names in this format are touched. The encrypted staging copy on this host is removed after every attempt. Local checkpoints under each component's `backups/` directory are not pruned by this tool.
+
+`/var/lib/pactaris-offsite-backup/state.json` records the last success and failure per component, and [local monitoring](OPERATIONS_MONITORING.md) reports `offsiteBackupAgeSeconds`. Alert when it exceeds about 26 hours or is null. The checkpoint shares each component's update lock, so a run that overlaps a deployment fails for that component and is retried the next day.
+
 For a restore drill, retrieve a checkpoint from the off-host store and decrypt it on the isolated recovery host. List the archive before extracting. Use a new root-only directory and verify the expected database checkpoint metadata. Restore only into a disposable empty PostgreSQL target with a compatible version and the needed roles. Keep restored app processes offline, with no SMTP, push, live placement publishing or production traffic.
 
 Record the checkpoint age and observed recovery time. Inspect the restored schemas and compare household membership and placement checks against the recorded pre-loss state. In a synthetic dataset, revoke access and delete a record after the checkpoint, then confirm that opening the backup does not reintroduce either into service. Keep traffic disabled until a trusted current revocation/deletion history has been reconciled. The existing checkpoint alone cannot prove that history is complete. The gateway's copy of the [revocation journal](REVOCATION_JOURNAL.md) records that history for each Instance. Instance checkpoints restore fenced: the restored Instance serves no household data and runs no jobs until the gateway has replayed that copy and released the fence. Confirm the `journal.restore_released` gateway log line before declaring an Instance restore complete.

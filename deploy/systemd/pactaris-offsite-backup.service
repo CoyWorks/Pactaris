@@ -1,0 +1,12 @@
+[Unit]
+Description=Create, encrypt and copy Pactaris database checkpoints off the host
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+StateDirectory=pactaris-offsite-backup
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/bin/python3 /usr/local/lib/pactaris/offsite_backup.py --config /etc/pactaris/offsite-backup.json --root /opt/pactaris --state-dir /var/lib/pactaris-offsite-backup
+TimeoutStartSec=3h
