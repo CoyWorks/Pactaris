@@ -1,3 +1,4 @@
+import type {listRegistryInstances,listRegistryPlacements} from '../../packages/routing/inventory.js';
 import {smtpChanges,type SmtpSettings} from './smtp-settings.js';
 import {accountPresentation} from './account-presentation.js';
 import {publicPwa} from '../../packages/http/pwa.js';
@@ -43,7 +44,11 @@ export function cookie(req:express.Request,name:string):string|undefined {
 function setCookie(res:express.Response,name:string,value:string,seconds:number) {
   res.append('Set-Cookie',`${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${seconds}`);
 }
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>) {
+type OperatorInventory={
+  instances:(after:string|null)=>ReturnType<typeof listRegistryInstances>;
+  placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
+};
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -104,6 +109,17 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
   }
   app.get('/api/operator/session',async(req,res)=>{
     if(await authorizeOperator(req,res))res.json({authorized:true});
+  });
+  app.get(['/api/operator/instances','/api/operator/instances/:id/placements'],async(req,res)=>{
+    if(!await authorizeOperator(req,res))return;
+    const {id}=req.params;
+    const after=req.query.after;
+    if(Object.keys(req.query).some(key=>key!=='after')||(after!==undefined&&!uuid(after))||(id!==undefined&&!uuid(id))){
+      res.status(400).json({code:'invalid_inventory_request',messageKey:'errors.request'});return;
+    }
+    const result=id?await inventory?.placements(id,after??null):await inventory?.instances(after??null);
+    if(!result){res.status(404).json({code:'not_found',messageKey:'errors.notFound'});return;}
+    res.json(result);
   });
   app.get('/api/operator/smtp',async(req,res)=>{
     const session=await authorizeOperator(req,res);if(!session)return;

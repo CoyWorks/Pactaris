@@ -69,3 +69,5 @@ APP_CONFIG=/opt/pactaris/gateway/config.json node dist/server/scripts/instance-i
 Use `--instance INSTANCE_UUID` to list registered household IDs for one Instance. If the result includes a `nextCursor`, pass it to `--after CURSOR` with the same filter. A registry entry remains visible when its Instance cannot be reached. Counts describe stored active and disabled placements. They do not reflect live database contents or worker health.
 
 The output excludes backend addresses, credentials, member lists and household names. This command runs locally with the existing registry read grants. It performs no remote enrollment, relocation or registry write. A separate MFA-protected manager UI and live per-Instance reporting remain in #57 and #59.
+
+The operator console at `/operator` can also display this inventory. It requires the same recent MFA and operator allowlist as the SMTP panel. The UI and API return registered placement counts and household IDs, not private routing endpoints or credentials. The observed timestamp is the registry read time. Health telemetry and remote enrollment remain separate.

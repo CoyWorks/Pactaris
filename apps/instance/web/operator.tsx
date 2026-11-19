@@ -1,3 +1,4 @@
+import {OperatorInventory} from './operator-inventory.js';
 import React,{useEffect,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 
@@ -67,5 +68,6 @@ export function OperatorPage({language}:{language:string}){
         <dl>{Object.entries(queueLabels).map(([status,key])=><React.Fragment key={status}><dt>{t(key)}</dt><dd>{settings.queue.find(row=>row.status===status)?.count??0}</dd></React.Fragment>)}</dl>
       </>}
     </section>
+    {settings&&<OperatorInventory language={language} refresh={refresh}/>}
   </main>;
 }

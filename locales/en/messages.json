@@ -656,5 +656,15 @@
   "mail.test.subject": "Pactaris SMTP test",
   "mail.test.body": "The Pactaris gateway sent this test message through the configured SMTP relay.",
   "cli.offhostBackupReady": "Encrypted database checkpoint saved at {path}.",
-  "cli.offhostBackupFailed": "The encrypted checkpoint could not be saved."
+  "cli.offhostBackupFailed": "The encrypted checkpoint could not be saved.",
+  "operator.inventoryTitle": "Instance inventory",
+  "operator.inventoryRegistryOnly": "Counts and status come from the gateway registry.",
+  "operator.inventoryBack": "Back to instances",
+  "operator.inventoryObserved": "Registry read at",
+  "operator.registryActive": "Active in registry",
+  "operator.registryDisabled": "Disabled in registry",
+  "operator.inventoryActiveCount": "Active placements",
+  "operator.inventoryDisabledCount": "Disabled placements",
+  "operator.inventoryHouseholds": "View household placements",
+  "operator.inventoryEmpty": "There are no rows on this page."
 }
