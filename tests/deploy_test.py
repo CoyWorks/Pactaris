@@ -121,6 +121,18 @@ class DeploymentTests(unittest.TestCase):
             finally:
                 os.umask(previous)
 
+    def test_release_metadata_is_group_readable_under_private_umask(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'deployment-info.json'
+            previous = os.umask(0o077)
+            try:
+                deploy.atomic_json(path, {'revision': 'a' * 40}, 0o640, group=os.getgid())
+            finally:
+                os.umask(previous)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o640)
+            self.assertEqual(path.stat().st_gid, os.getgid())
+            self.assertEqual(json.loads(path.read_text())['revision'], 'a' * 40)
+
     def test_slow_commands_report_waiting_without_exposing_credentials(self):
         with patch.object(deploy.subprocess, 'Popen') as process, patch('sys.stdout', new_callable=io.StringIO) as output:
             child = process.return_value.__enter__.return_value
@@ -162,6 +174,9 @@ class DeploymentTests(unittest.TestCase):
                 self.assertEqual(code, 0 if healthy else 1)
                 self.assertEqual(original, (config.read_bytes(), secret.read_bytes()))
                 self.assertEqual((base / 'state.json').exists(), healthy)
+                if healthy:
+                    state = json.loads((base / 'state.json').read_text())
+                    self.assertRegex(state['appliedAt'], r'^\d{4}-\d{2}-\d{2}T.*Z$')
                 self.assertEqual((base / 'current').resolve(), release)
                 commands = [call.args[0] for call in run.call_args_list]
                 self.assertFalse(any('clone' in command or 'pull' in command for command in commands))

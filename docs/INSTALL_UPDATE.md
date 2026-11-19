@@ -73,6 +73,8 @@ done
 
 The status record includes the component's installed `version`, `revision` and current `ready` result. A legacy state without a recorded version returns `null` for `version`. An unchanged Identity deployment can retain its previous revision after an application update.
 
+The Gateway and Instance pages show the version, shortened commit and last successful activation time at the bottom. The time is recorded after deployment health checks and displayed in the configured application time zone. Rebooting does not change it.
+
 Keep commands small and operationally familiar; detailed implementation may use shared internal helpers. CLI prose uses #44 catalogs, secrets never appear in output.
 
 ## Independent installable components

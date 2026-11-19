@@ -10,3 +10,8 @@ form{display:grid;gap:.8rem}input{width:100%;min-height:3rem;border:1px solid #9
 .workspace-unread{margin-inline-start:.45rem;border:1px solid currentColor;border-radius:.4rem;padding:.15rem .35rem;font-size:.75rem}
 
 .habit-trend{margin:1rem 0}.habit-trend ul{padding:0;list-style:none}.habit-trend li{display:grid;grid-template-columns:minmax(7rem,auto) minmax(3rem,1fr) auto;align-items:center;gap:.5rem}.habit-trend meter{width:100%}
+
+#root:not([hidden]) { min-height: 100vh; display: flex; flex-direction: column; }
+#root > main { margin: 0 auto; width: 100%; }
+.release-footer { display: flex; flex-wrap: wrap; justify-content: center; gap: .25rem .85rem; margin: auto 0 0; padding: .75rem 1rem 1rem; color: #c9bfd9; }
+.release-footer small { overflow-wrap: anywhere; }

@@ -5,7 +5,8 @@ import { createRoot } from 'react-dom/client';
 import { createTranslator, formatTime } from '../../../packages/i18n/index.js';
 import './style.css';
 import {Portal} from './portal.js';
-type Status = { component: 'instance' | 'gateway'; version: string; readiness: 'ready' | 'unavailable'; locale: { language: string; format: string; timeZone: string } };
+import type { DeploymentInfo } from '../../../packages/http/deployment-info.js';
+type Status = { component: 'instance' | 'gateway'; version: string; deployment?: DeploymentInfo | null; readiness: 'ready' | 'unavailable'; locale: { language: string; format: string; timeZone: string } };
 function App() {
   const [status, setStatus] = useState<Status>(), [failed, setFailed] = useState(false), [checked, setChecked] = useState<Date>();
   useEffect(() => {
@@ -52,7 +53,15 @@ function App() {
     });
   },[status?.component]);
   if(offline)return <main><h1>{translate('pwa.offlineTitle')}</h1><p role="status">{translate('pwa.offlineDescription')}</p></main>;
-  if(status?.component==='gateway')return window.location.pathname==='/operator'?<OperatorPage language={status.locale.language}/>:<Portal {...status.locale}/>;
-  return <main><span className="eyebrow">{translate('app.title')}</span><h1>{translate('foundation.title')}</h1><p>{translate('app.description')}</p><section aria-live="polite"><h2>{translate('foundation.status')}</h2><p>{failed ? translate('foundation.offline') : !status ? translate('foundation.pending') : status.readiness === 'ready' ? translate('foundation.ready') : translate('foundation.unavailable')}</p>{status && <dl><dt>{translate('foundation.version')}</dt><dd>{status.version}</dd><dt>{translate('foundation.time')}</dt><dd>{checked && formatTime(checked, status.locale.format, status.locale.timeZone)}</dd></dl>}</section><p>{translate('foundation.description')}</p><p className="notice">{translate('foundation.notEnabled')}</p></main>;
+  const page = status?.component==='gateway' ? (window.location.pathname==='/operator'?<OperatorPage language={status.locale.language}/>:<Portal {...status.locale}/>) : <main><span className="eyebrow">{translate('app.title')}</span><h1>{translate('foundation.title')}</h1><p>{translate('app.description')}</p><section aria-live="polite"><h2>{translate('foundation.status')}</h2><p>{failed ? translate('foundation.offline') : !status ? translate('foundation.pending') : status.readiness === 'ready' ? translate('foundation.ready') : translate('foundation.unavailable')}</p>{status && <dl><dt>{translate('foundation.version')}</dt><dd>{status.version}</dd><dt>{translate('foundation.time')}</dt><dd>{checked && formatTime(checked, status.locale.format, status.locale.timeZone)}</dd></dl>}</section><p>{translate('foundation.description')}</p><p className="notice">{translate('foundation.notEnabled')}</p></main>;
+  return <>{page}{status && <footer className="release-footer">
+    <small>{translate('foundation.version')} <code>{status.version}</code></small>
+    {status.deployment && <>
+      <small>{translate('deployment.commit')} <code title={status.deployment.revision}>{status.deployment.revision.slice(0, 12)}</code></small>
+      <small>{translate('deployment.appliedAt')} <time dateTime={status.deployment.appliedAt}>
+        {new Intl.DateTimeFormat(status.locale.format, { dateStyle: 'medium', timeStyle: 'long', timeZone: status.locale.timeZone }).format(new Date(status.deployment.appliedAt))}
+      </time></small>
+    </>}
+  </footer>}</>;
 }
 createRoot(document.getElementById('root')!).render(<App />);

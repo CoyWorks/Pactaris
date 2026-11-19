@@ -719,5 +719,7 @@
   "checkins.saved": "Check-in updated.",
   "checkins.reviewed": "Reviewed",
   "checkins.withdraw": "Withdraw response",
-  "checkins.review": "Mark as reviewed"
+  "checkins.review": "Mark as reviewed",
+  "deployment.commit": "Commit",
+  "deployment.appliedAt": "Last update applied"
 }

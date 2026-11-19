@@ -1,3 +1,4 @@
+import { readDeploymentInfo } from '../../packages/http/deployment-info.js';
 import {isPartnerAction,PartnerError} from '../../packages/auth/partner.js';
 import {isCatalogAction,CatalogError} from '../../packages/auth/catalog.js';
 import {isRoutineAction,RoutineError} from '../../packages/auth/routines.js';
@@ -33,7 +34,7 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
   });
   app.get('/api/status', async (_req, res) => {
     let ready = false; try { await probe(); ready = true; } catch { /* no driver details in response */ }
-    res.json({ component: 'instance', version: manifest.version, readiness: ready ? 'ready' : 'unavailable', authentication: 'not_enabled', locale: config.locale });
+    res.json({ component: 'instance', version: manifest.version, readiness: ready ? 'ready' : 'unavailable', authentication: 'not_enabled', locale: config.locale, deployment: await readDeploymentInfo() });
   });
   app.post('/internal/households/:householdId/commands/:action',express.raw({type:'application/json',limit:4096,inflate:false}),async(req,res)=>{
     const id=req.params.householdId,action=req.params.action,authorization=req.get('authorization');

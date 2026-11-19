@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { inject } from 'light-my-request';
 import { createApp } from '../apps/instance/app.js';
 import { parseConfig } from '../packages/config/index.js';
+import { readDeploymentInfo } from '../packages/http/deployment-info.js';
 async function withApp(probe: () => Promise<void>, callback: (app: ReturnType<typeof createApp>) => Promise<void>) {
   const config = parseConfig(JSON.parse(readFileSync('config/instance.example.json', 'utf8')));
   await callback(createApp(config, probe));
@@ -23,4 +27,19 @@ test('proxy identity headers cannot authenticate and unknown APIs stay unavailab
     const data = status.json(); assert.equal(data.readiness, 'ready'); assert.equal(data.authentication, 'not_enabled');
     assert.equal(data.database, undefined); assert.equal(data.instanceId, undefined);
   });
+});
+
+test('deployment metadata exposes only a valid revision and applied timestamp', async () => {
+  const release = await mkdtemp(join(tmpdir(), 'pactaris-deployment-info-'));
+  try {
+    assert.equal(await readDeploymentInfo(release), null);
+    const file = join(release, 'deployment-info.json');
+    const deployment = { revision: 'a'.repeat(40), appliedAt: '2026-11-19T08:15:00.000Z' };
+    await writeFile(file, JSON.stringify({ ...deployment, release: '/private/release' }));
+    assert.deepEqual(await readDeploymentInfo(release), deployment);
+    await writeFile(file, JSON.stringify({ ...deployment, appliedAt: 'invalid' }));
+    assert.equal(await readDeploymentInfo(release), null);
+  } finally {
+    await rm(release, { recursive: true, force: true });
+  }
 });

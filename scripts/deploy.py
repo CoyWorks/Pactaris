@@ -135,11 +135,14 @@ def validate_config(component, cfg):
             fail('database.url')
     return cfg
 
-def atomic_json(path, value, mode=0o600):
+def atomic_json(path, value, mode=0o600, *, group=None):
     temp = path.with_suffix('.tmp')
     fd = os.open(temp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, mode)
     try:
         with os.fdopen(fd, 'w') as stream:
+            if group is not None:
+                os.fchown(stream.fileno(), -1, group)
+                os.fchmod(stream.fileno(), mode)
             json.dump(value, stream, indent=2)
             stream.write('\n')
         os.replace(temp, path)
@@ -610,7 +613,14 @@ def deploy(args):
                     if attempt == 19:
                         raise
                     time.sleep(2)
-            atomic_json(base / 'state.json', {'revision': args.revision, 'version': release_meta['version'], 'protocol': release_meta['protocol'], 'release': str(release)})
+            applied_at = datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+            if args.component != 'identity':
+                atomic_json(release / 'deployment-info.json',
+                            {'revision': args.revision, 'appliedAt': applied_at},
+                            0o640, group=info.pw_gid)
+            atomic_json(base / 'state.json', {'revision': args.revision, 'version': release_meta['version'],
+                                             'protocol': release_meta['protocol'], 'release': str(release),
+                                             'appliedAt': applied_at})
             emit('cli.installed', component=args.component, revision=args.revision)
             return 0
         except Exception as error:

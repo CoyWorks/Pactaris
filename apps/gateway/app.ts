@@ -1,3 +1,4 @@
+import { readDeploymentInfo } from '../../packages/http/deployment-info.js';
 import {pushEndpoint,pushSubscription,type WebPushDevices} from './web-push.js';
 import type {personalExport} from './personal-export.js';
 import type {listRegistryInstances,listRegistryPlacements} from '../../packages/routing/inventory.js';
@@ -64,7 +65,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
   app.use((req,res,next)=>{if(req.get('host')!==new URL(config.publicOrigin).host){res.status(400).json({code:'invalid_host',messageKey:'errors.request'});return;}next();});
   app.get('/api/status',async(_req,res)=>{
     let readiness='unavailable';try{await store.probe();readiness='ready';}catch{}
-    res.json({component:'gateway',version:manifest.version,readiness,authentication:'oidc',locale:config.locale});
+    res.json({component:'gateway',version:manifest.version,readiness,authentication:'oidc',locale:config.locale,deployment:await readDeploymentInfo()});
   });
   app.get(['/auth/login','/auth/operator','/auth/reauth'],async(req,res)=>{
     if(req.path==='/auth/operator'&&!config.operatorSubjects.length){
