@@ -1,12 +1,12 @@
 import React,{useEffect,useState} from 'react';
 import {createTranslator} from '../../../packages/i18n/index.js';
-import type {InboxPreferences,PartnerResult} from '../../../packages/auth/partner.js';
+import type {DeliveryPreferences,InboxPreferences,PartnerResult} from '../../../packages/auth/partner.js';
 
 const preferenceLabels={
  assigned:'inbox.prefAssigned',submitted:'inbox.prefSubmitted',reviewed:'inbox.prefReviewed'
 } as const;
 const kinds=['assigned','submitted','reviewed'] as const;
-const labels={assigned:'inbox.assigned',submitted:'inbox.submitted',reviewed:'inbox.reviewed'} as const;
+const labels={assigned:'inbox.assigned',submitted:'inbox.submitted',reviewed:'inbox.reviewed',reminder:'inbox.reminder'} as const;
 
 export function TaskInbox({householdId,csrfToken,language,onRead,pointsLabel}:{householdId:string;csrfToken:string;language:string;onRead:()=>void;pointsLabel?:string|null}){
  const t=createTranslator(language);
@@ -16,6 +16,8 @@ export function TaskInbox({householdId,csrfToken,language,onRead,pointsLabel}:{h
  const [after,setAfter]=useState<string>();
  const [revision,setRevision]=useState(0);
  const [showPreferences,setShowPreferences]=useState(false),[preferences,setPreferences]=useState<InboxPreferences>();
+ const [delivery,setDelivery]=useState<DeliveryPreferences>();
+ const [deliveryError,setDeliveryError]=useState(false),[deliverySaved,setDeliverySaved]=useState(false);
  const [preferenceError,setPreferenceError]=useState(false),[saved,setSaved]=useState(false),[saving,setSaving]=useState(false);
  async function request(action:string,body:Record<string,unknown>,signal?:AbortSignal):Promise<PartnerResult>{
   const response=await fetch('/api/households/'+householdId+'/participant-tasks/'+action,{
@@ -52,7 +54,13 @@ export function TaskInbox({householdId,csrfToken,language,onRead,pointsLabel}:{h
   void request('partnerInboxPreferences',{},controller.signal).then(result=>{
    if(!result.inboxPreferences)throw Error('inbox.preferences');
    if(!stale)setPreferences(result.inboxPreferences);
-  }).catch(()=>{if(!stale)setPreferenceError(true);}).finally(()=>clearTimeout(timeout));
+  }).catch(()=>{if(!stale)setPreferenceError(true);});
+  setDeliveryError(false);
+  void request('partnerDeliveryPreferences',{},controller.signal).then(result=>{
+   if(!result.deliveryPreferences)throw Error('inbox.preferences');
+   if(!stale)setDelivery(result.deliveryPreferences);
+  }).catch(()=>{if(!stale)setDeliveryError(true);});
+
   return()=>{stale=true;controller.abort();clearTimeout(timeout);};
  },[showPreferences,householdId,csrfToken]);
  async function savePreferences(event:React.FormEvent){
@@ -65,9 +73,22 @@ export function TaskInbox({householdId,csrfToken,language,onRead,pointsLabel}:{h
    setPreferences(result.inboxPreferences);setSaved(true);
   }catch{setPreferenceError(true);}finally{setSaving(false);}
  }
+ async function saveDelivery(event:React.FormEvent){
+  event.preventDefault();
+  if(!delivery||saving)return;
+  setSaving(true);setDeliverySaved(false);setDeliveryError(false);
+  try{
+   const result=await request('partnerDeliveryConfigure',{deliveryPreferences:delivery},AbortSignal.timeout(12000));
+   if(!result.deliveryPreferences)throw Error('inbox.preferences');
+   setDelivery(result.deliveryPreferences);setDeliverySaved(true);
+  }catch{setDeliveryError(true);}finally{setSaving(false);}
+ }
+ function editDelivery(changes:Partial<DeliveryPreferences>){
+  setDelivery(current=>current?{...current,...changes}:current);setDeliverySaved(false);
+ }
  return <section><h3>{t('inbox.title')}</h3>
   <button type="button" aria-expanded={showPreferences} disabled={saving} onClick={()=>{
-   setPreferences(undefined);setSaved(false);setShowPreferences(!showPreferences);
+   setPreferences(undefined);setDelivery(undefined);setDeliverySaved(false);setSaved(false);setShowPreferences(!showPreferences);
   }}>{t('inbox.preferences')}</button>
   {showPreferences&&<div>
    {preferenceError&&<p role="alert">{t('inbox.error')}</p>}
@@ -80,6 +101,22 @@ export function TaskInbox({householdId,csrfToken,language,onRead,pointsLabel}:{h
        setPreferences({...preferences,[kind]:event.target.checked});setSaved(false);
       }}/> {t(preferenceLabels[kind])}
      </label>)}
+    </fieldset>
+    <button type="submit" disabled={saving}>{t('inbox.preferencesSave')}</button>
+   </form>}
+   {deliveryError&&<p role="alert">{t('inbox.error')}</p>}
+   {deliverySaved&&<p role="status">{t('inbox.preferencesSaved')}</p>}
+   {delivery&&<form onSubmit={event=>void saveDelivery(event)}>
+    <fieldset disabled={saving}><legend>{t('inbox.delivery')}</legend>
+     <label><input type="checkbox" checked={delivery.push} onChange={event=>editDelivery({push:event.target.checked})}/>{t('inbox.enablePush')}</label>
+     <label><input type="checkbox" checked={delivery.reminders} onChange={event=>editDelivery({reminders:event.target.checked})}/>{t('inbox.enableReminder')}</label>
+     <p>{t('inbox.deliveryHelp')}</p>
+     <label>{t('inbox.quietStart')}<input type="time" required={delivery.quietEnd!==null} value={delivery.quietStart??''}
+      onChange={event=>editDelivery({quietStart:event.target.value||null})}/></label>
+     <label>{t('inbox.quietEnd')}<input type="time" required={delivery.quietStart!==null} value={delivery.quietEnd??''}
+      onChange={event=>editDelivery({quietEnd:event.target.value||null})}/></label>
+     <label>{t('workspace.timeZone')}<input required maxLength={100} value={delivery.timeZone}
+      onChange={event=>editDelivery({timeZone:event.target.value})}/></label>
     </fieldset>
     <button type="submit" disabled={saving}>{t('inbox.preferencesSave')}</button>
    </form>}

@@ -17,3 +17,11 @@ In account settings, enable device notifications and send a test. The worker per
 Verify with a browser on desktop, Android and a Home Screen installation on iOS/iPadOS. Open the site over HTTPS, enable permission from the in-app button, queue a test, close the page and open the notification. Repeat with permission blocked, explicit disable, and account switch on a shared device. On return, the user's data remains behind the normal session. Record browser version and provider separately. CI exercises the database and queue against a stub provider.
 
 Household inbox events have not been connected to Push delivery. That path needs an exact membership check at send time, current preference and placement checks, and durable coalescing across Instances. Push remains best effort and is unsuitable for emergency actions.
+
+## Participant task notices
+
+Account settings enable a device. Task inbox preferences opt that membership into generic push and choose quiet hours in an IANA time zone. Quiet hours also support overnight intervals. The inbox remains authoritative and still works with push disabled.
+
+The Gateway worker scans a bounded number of opted-in devices, one placement per device at a time, and retains one pending notice sequence per device and household. The Instance answers with a sequence only, using current membership, event settings, consent, pause and task access. Before each delivery the worker resolves placement again and checks current session and membership. The pending sequence survives a restart. Each successful delivery advances the watermark and coalesces older notices. Provider retries are bounded; in the event of a crash after provider acceptance, the provider may receive the same generic notification again.
+
+Reminders are off by default. For newly scheduled participant tasks a durable Instance job can add a single inbox reminder during the last hour before a deadline once the task is available, provided the current agreement permits reminders and the assigned member opts in. The worker skips reminders after the deadline or for work that is closed, paused, revoked, or awaiting explicit acceptance. Opening push always takes the user to the app, which verifies the current session.

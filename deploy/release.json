@@ -302,6 +302,20 @@
       "path": "migrations/instance/0027_personal_task_series.sql",
       "sha256": "0efa1266c5f4a2872d2cfb4047e755d7adb679bdce8d419e16900afff435e503",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0028_task_notifications",
+      "path": "migrations/instance/0028_task_notifications.sql",
+      "sha256": "73c76d33362cb3b85e922ab809ae1c9846205db4a82b46b08fec09529e0c1d25",
+      "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0017_task_push_queue",
+      "path": "migrations/gateway/0017_task_push_queue.sql",
+      "sha256": "058374cf4768b306f5f537121a5f4956d9502326ac9742d8fc7c0183d0c2ff3b",
+      "backwardCompatible": true
     }
   ]
 }

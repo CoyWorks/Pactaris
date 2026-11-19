@@ -339,14 +339,14 @@ export class PrivateCatalogClient{
 export class PrivatePartnerClient{
  constructor(private signer:DelegationSigner){}
  async execute(accountId:string,placement:Placement,action:import('../auth/partner.js').PartnerAction,input:Record<string,unknown>):Promise<import('../auth/partner.js').PartnerResult>{
-  const {PartnerError,partnerStates,isPartnerAction,validTaskSchedule,validInboxPreferences,validTaskRewardReference}=await import('../auth/partner.js'),{documentText,documentVersion}=await import('../auth/library.js'),{utcInstant}=await import('../auth/routines.js');
+  const {PartnerError,partnerStates,isPartnerAction,validTaskSchedule,validInboxPreferences,validTaskRewardReference,validDeliveryPreferences,validPushSequence}=await import('../auth/partner.js'),{documentText,documentVersion}=await import('../auth/library.js'),{utcInstant}=await import('../auth/routines.js');
   const snapshot=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{32}$/.test(v);
   try{
    if(!uuid(input.operationId))throw new PartnerError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new PartnerError('invalid');
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
    if(response.status===403||response.status===404)throw new PartnerError('denied');if(response.status===400)throw new PartnerError('invalid');if(response.status===409){const code=(response.data as {code?:string})?.code;throw new PartnerError(code==='partner_paused'?'paused':code==='partner_capacity'?'capacity':'conflict');}
    const r=response.data as import('../auth/partner.js').PartnerResult;
-   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['partnerInbox','partnerInboxPreferences','partnerPoints','partnerSeriesList','partnerPolicyList','partnerOptions','partnerRead','partnerList'].includes(action)?'listed':'applied'))throw Error('routing.response');
+   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['partnerInbox','partnerInboxPreferences','partnerDeliveryPreferences','partnerPushStatus','partnerPoints','partnerSeriesList','partnerPolicyList','partnerOptions','partnerRead','partnerList'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/partner.js').PartnerResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
    const summary=(s:import('../auth/partner.js').PartnerSummary)=>{
     if(!s||!uuid(s.taskId)||!uuid(s.creatorId)||!uuid(s.assigneeId)||s.creatorId===s.assigneeId||!documentVersion(s.version)||!partnerStates.includes(s.state)||!documentText(s.title,120)||!documentText(s.description,500,true,true)||!documentText(s.counterpart,80,true)||!['low','normal','high'].includes(s.priority)||(s.dueAt!==null&&!utcInstant(s.dueAt))||!['creator','assignee'].includes(s.role)||s.role!==(s.creatorId===input.membershipId?'creator':s.assigneeId===input.membershipId?'assignee':undefined))throw Error('routing.response');
@@ -372,6 +372,14 @@ export class PrivatePartnerClient{
     if(!validInboxPreferences(r.inboxPreferences))throw Error('routing.response');
     out.inboxPreferences=r.inboxPreferences;
    }
+   if(action==='partnerDeliveryPreferences'||action==='partnerDeliveryConfigure'){
+    if(!validDeliveryPreferences(r.deliveryPreferences))throw Error('routing.response');
+    out.deliveryPreferences=r.deliveryPreferences;
+   }
+   if(action==='partnerPushStatus'){
+    if(r.pushSequence!==null&&!validPushSequence(r.pushSequence))throw Error('routing.response');
+    out.pushSequence=r.pushSequence;
+   }
    if(action==='partnerPoints'){
     if(typeof r.balance!=='string'||!/^\d{1,19}$/.test(r.balance))throw Error('routing.response');
     out.balance=r.balance;
@@ -379,7 +387,7 @@ export class PrivatePartnerClient{
    if(action==='partnerInbox'){
     if(!Array.isArray(r.inbox)||r.inbox.length>25)throw Error('routing.response');
     out.inbox=r.inbox.map(({id,taskId,kind,read,at})=>{
-     if(!uuid(id)||!uuid(taskId)||!['assigned','submitted','reviewed'].includes(kind)||typeof read!=='boolean'||typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('routing.response');
+     if(!uuid(id)||!uuid(taskId)||!['assigned','submitted','reviewed','reminder'].includes(kind)||typeof read!=='boolean'||typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('routing.response');
      return {id,taskId,kind,read,at};
     });
    }

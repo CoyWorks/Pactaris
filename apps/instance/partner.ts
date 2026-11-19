@@ -29,7 +29,9 @@ export class InstancePartner{
     command={...input,fields:{...fields,...reward.rows[0].fields}};
    }
    const args=[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,command];
-   const result=action==='partnerInboxPreferences'||action==='partnerInboxConfigure'
+   const result=['partnerDeliveryPreferences','partnerDeliveryConfigure','partnerPushStatus'].includes(action)
+    ?await db.query('SELECT pactaris.task_delivery_command($1,$2,$3,$4,$5,$6) AS result',args)
+    :action==='partnerInboxPreferences'||action==='partnerInboxConfigure'
     ?await db.query('SELECT pactaris.task_inbox_preference_command($1,$2,$3,$4,$5,$6) AS result',args)
     :await db.query('SELECT pactaris.partner_command($1,$2,$3,$4,$5,$6,$7) AS result',[...args,fingerprint]);
    await db.query('COMMIT');return result.rows[0].result as PartnerResult;

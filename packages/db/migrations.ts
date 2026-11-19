@@ -54,6 +54,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0006_invitations'))await connection.query(`GRANT SELECT,INSERT,UPDATE ON pactaris.invitation_routes,pactaris.invitation_acceptances TO ${role}`);
       if(entries.some(m=>m.id==='0007_membership_operations'))await connection.query(`GRANT SELECT,INSERT,UPDATE ON pactaris.membership_operations TO ${role}`);
       if(entries.some(m=>m.id==='0008_invitation_mail'))await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.invitation_mail TO ${role}`);
+      if(entries.some(m=>m.id==='0017_task_push_queue'))await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.task_push_scopes TO ${role}`);
       if(entries.some(m=>m.id==='0015_web_push'))await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.push_devices TO ${role}`);
       if(entries.some(m=>m.id==='0013_smtp_settings'))await connection.query(`GRANT SELECT,INSERT,UPDATE ON pactaris.smtp_settings TO ${role}`);
       if(entries.some(m=>m.id==='0010_account_presentation'))await connection.query(`GRANT INSERT ON pactaris.account_presentation_events TO ${role}`);
@@ -73,6 +74,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0016_task_scheduling'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.run_task_scheduler(uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0013_participant_tasks'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.partner_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0012_reward_catalog'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.catalog_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
+      if(entries.some(m=>m.id==='0028_task_notifications'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.task_delivery_command(uuid,uuid,uuid,uuid,text,jsonb),pactaris.run_task_reminders(uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0027_personal_task_series'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.personal_series_command(uuid,uuid,uuid,uuid,text,jsonb,text),pactaris.run_personal_scheduler(uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0026_household_points'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.workspace_points(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0025_shared_checkins'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.shared_checkin_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);

@@ -14,6 +14,8 @@ async function tick() {
     if(schema.rowCount){for(let n=0;n<16&&!stopped;n++){const result=await db.pool.query('SELECT pactaris.run_task_scheduler($1) AS state',[config.instanceId]);if(result.rows[0].state==='idle')break;if(result.rows[0].state==='failed')state='unavailable';}}
     const personal=await db.pool.query("SELECT 1 FROM pactaris_meta.migrations WHERE component='instance' AND id='0027_personal_task_series'");
     if(personal.rowCount){for(let n=0;n<16&&!stopped;n++){const result=await db.pool.query('SELECT pactaris.run_personal_scheduler($1) AS state',[config.instanceId]);if(result.rows[0].state==='idle')break;if(result.rows[0].state==='failed')state='unavailable';}}
+    const reminders=await db.pool.query("SELECT 1 FROM pactaris_meta.migrations WHERE component='instance' AND id='0028_task_notifications'");
+    if(reminders.rowCount){for(let n=0;n<16&&!stopped;n++){const result=await db.pool.query('SELECT pactaris.run_task_reminders($1) AS processed',[config.instanceId]);if(!result.rows[0].processed)break;}}
   } } catch { state = 'unavailable'; }
   await mkdir(dirname(config.worker.heartbeatFile), { recursive: true, mode: 0o700 });
   const temp = config.worker.heartbeatFile + '.tmp';

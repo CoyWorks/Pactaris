@@ -2,7 +2,9 @@ import {createCipheriv,createDecipheriv,createECDH,ECDH,randomBytes} from 'node:
 import {readFileSync} from 'node:fs';
 import type pg from 'pg';
 import webPush from 'web-push';
-import {hash} from './store.js';
+import {hash,type PgGatewayStore} from './store.js';
+import {PartnerError} from '../../packages/auth/partner.js';
+import type {GatewayPartner} from './partner.js';
 
 const providerHosts=new Set(['fcm.googleapis.com','updates.push.services.mozilla.com','web.push.apple.com']);
 const plain=(value:unknown):value is Record<string,unknown>=>!!value&&typeof value==='object'&&!Array.isArray(value);
@@ -29,6 +31,8 @@ export function pushSubscription(value:unknown):webPush.PushSubscription|undefin
   return {endpoint,keys:{auth:value.keys.auth as string,p256dh:value.keys.p256dh as string}};
 }
 
+type TaskNoticeStore=Pick<PgGatewayStore,'placement'|'placements'>;
+type TaskNoticeSource=Pick<GatewayPartner,'pushStatus'>;
 type Options={publicKey:string;privateKey:string;subject:string};
 type Delivery=(subscription:webPush.PushSubscription,options:Options)=>Promise<unknown>;
 const deliver:Delivery=(subscription,vapidDetails)=>webPush.sendNotification(subscription,'{}',{vapidDetails,TTL:60,urgency:'low',timeout:5000});
@@ -74,7 +78,7 @@ export class WebPushDevices{
       await db.query('DELETE FROM pactaris.push_devices WHERE session_hash=$1 AND endpoint_hash<>$2',[sessionHash,endpointHash]);
       await db.query(`INSERT INTO pactaris.push_devices(endpoint_hash,session_hash,ciphertext) VALUES($1,$2,$3)
         ON CONFLICT(endpoint_hash) DO UPDATE SET session_hash=excluded.session_hash,ciphertext=excluded.ciphertext,
-          consented_at=now(),next_attempt_at=NULL,queued_at=NULL,last_requested_at=NULL,attempts=0
+          consented_at=now(),next_attempt_at=NULL,queued_at=NULL,last_requested_at=NULL,attempts=0,scan_cursor=NULL,scan_after=now()
         WHERE pactaris.push_devices.session_hash<>excluded.session_hash`,[endpointHash,sessionHash,this.seal(subscription,sessionHash+endpointHash)]);
       await db.query('COMMIT');return true;
     }catch(error){await db.query('ROLLBACK');throw error;}
@@ -90,6 +94,112 @@ export class WebPushDevices{
         WHERE s.token_hash=$1 AND s.expires_at>now() AND s.idle_expires_at>now() AND a.status='active')`,
       [hash(session),hash(endpoint)]);
     return !!r.rowCount;
+  }
+  private async scanTaskDevice(store:TaskNoticeStore,partner:TaskNoticeSource){
+    const claim=await this.pool.query<{endpoint_hash:string;session_hash:string;scan_cursor:string|null;consented_at:Date;account_id:string}>(`
+      WITH next_device AS (
+        SELECT d.endpoint_hash,s.account_id FROM pactaris.push_devices d
+        JOIN pactaris.sessions s ON s.token_hash=d.session_hash AND s.expires_at>now() AND s.idle_expires_at>now()
+        JOIN pactaris.accounts a ON a.id=s.account_id AND a.status='active'
+        WHERE d.scan_after<=now() ORDER BY d.scan_after,d.endpoint_hash LIMIT 1 FOR UPDATE OF d SKIP LOCKED
+      )
+      UPDATE pactaris.push_devices d SET scan_after=now()+interval '2 minutes'
+      FROM next_device n WHERE d.endpoint_hash=n.endpoint_hash
+      RETURNING d.endpoint_hash,d.session_hash,d.scan_cursor,d.consented_at,n.account_id`);
+    const device=claim.rows[0];
+    if(!device)return;
+    const placement=(await store.placements(device.account_id,device.scan_cursor??undefined))[0];
+    if(!placement){
+      await this.pool.query('UPDATE pactaris.push_devices SET scan_cursor=NULL WHERE endpoint_hash=$1 AND session_hash=$2',
+        [device.endpoint_hash,device.session_hash]);
+      return;
+    }
+    // Advance even on an unavailable Instance, so it cannot starve other placements.
+    await this.pool.query('UPDATE pactaris.push_devices SET scan_cursor=$3 WHERE endpoint_hash=$1 AND session_hash=$2',
+      [device.endpoint_hash,device.session_hash,placement.householdId]);
+    const previous=await this.pool.query<{last_seq:string}>(`SELECT last_seq::text FROM pactaris.task_push_scopes
+      WHERE endpoint_hash=$1 AND session_hash=$2 AND household_id=$3 AND instance_id=$4`,
+      [device.endpoint_hash,device.session_hash,placement.householdId,placement.instanceId]);
+    let candidate;
+    try{
+      candidate=await partner.pushStatus(device.account_id,placement,previous.rows[0]?.last_seq??'0',device.consented_at.toISOString());
+    }catch{return;}
+    if(!candidate.pushSequence)return;
+    await this.pool.query(`INSERT INTO pactaris.task_push_scopes AS q
+      (endpoint_hash,session_hash,household_id,instance_id,membership_id,pending_seq,next_attempt_at,expires_at)
+      SELECT $1,$2,$3,$4,$5,$6,now(),now()+interval '24 hours'
+      FROM pactaris.push_devices d WHERE d.endpoint_hash=$1 AND d.session_hash=$2
+      ON CONFLICT(endpoint_hash,household_id) DO UPDATE SET
+        session_hash=EXCLUDED.session_hash,instance_id=EXCLUDED.instance_id,membership_id=EXCLUDED.membership_id,
+        last_seq=CASE WHEN q.session_hash=EXCLUDED.session_hash AND q.instance_id=EXCLUDED.instance_id
+          AND q.membership_id=EXCLUDED.membership_id THEN q.last_seq ELSE 0 END,
+        pending_seq=EXCLUDED.pending_seq,next_attempt_at=EXCLUDED.next_attempt_at,expires_at=EXCLUDED.expires_at,attempts=0
+      WHERE q.session_hash<>EXCLUDED.session_hash OR q.instance_id<>EXCLUDED.instance_id
+        OR q.membership_id<>EXCLUDED.membership_id OR EXCLUDED.pending_seq>greatest(q.last_seq,coalesce(q.pending_seq,0))`,
+      [device.endpoint_hash,device.session_hash,placement.householdId,placement.instanceId,candidate.actorMembershipId,candidate.pushSequence]);
+  }
+  async workTaskNotices(store:TaskNoticeStore,partner:TaskNoticeSource){
+    for(let n=0;n<4;n++)await this.scanTaskDevice(store,partner);
+    const db=await this.pool.connect();
+    try{
+      await db.query('BEGIN');
+      await db.query(`UPDATE pactaris.task_push_scopes SET last_seq=pending_seq,pending_seq=NULL,next_attempt_at=NULL,expires_at=NULL
+        WHERE pending_seq IS NOT NULL AND expires_at<=now()`);
+      const due=await db.query<{
+        endpoint_hash:string;session_hash:string;household_id:string;instance_id:string;membership_id:string;
+        last_seq:string;pending_seq:string;ciphertext:Buffer;attempts:number;consented_at:Date;account_id:string;
+      }>(`SELECT q.endpoint_hash,q.session_hash,q.household_id,q.instance_id,q.membership_id,
+          q.last_seq::text,q.pending_seq::text,q.attempts,d.ciphertext,d.consented_at,s.account_id
+        FROM pactaris.task_push_scopes q
+        JOIN pactaris.push_devices d ON d.endpoint_hash=q.endpoint_hash AND d.session_hash=q.session_hash
+        JOIN pactaris.sessions s ON s.token_hash=q.session_hash AND s.expires_at>now() AND s.idle_expires_at>now()
+        JOIN pactaris.accounts a ON a.id=s.account_id AND a.status='active'
+        WHERE q.pending_seq IS NOT NULL AND q.next_attempt_at<=now()
+        ORDER BY q.next_attempt_at,q.endpoint_hash,q.household_id LIMIT 1 FOR UPDATE OF q SKIP LOCKED`);
+      const row=due.rows[0];
+      if(row){
+        const keys=[row.endpoint_hash,row.household_id];
+        let outcome:'discard'|'defer'|'retry'|'gone'|'done'='discard';
+        let sequence=row.pending_seq;
+        const placement=await store.placement(row.account_id,row.household_id);
+        if(placement?.instanceId===row.instance_id){
+          let status;
+          try{status=await partner.pushStatus(row.account_id,placement,row.last_seq,row.consented_at.toISOString());}
+          catch(error){if(!(error instanceof PartnerError)||error.kind!=='denied')outcome='defer';}
+          if(status?.actorMembershipId===row.membership_id){
+            if(status.pushSequence){
+              sequence=status.pushSequence;
+              let subscription:webPush.PushSubscription|undefined;
+              try{subscription=this.open(row.ciphertext,row.session_hash+row.endpoint_hash);}catch{}
+              const active=await db.query(`SELECT 1 FROM pactaris.push_devices d
+                 JOIN pactaris.sessions s ON s.token_hash=d.session_hash AND s.expires_at>now() AND s.idle_expires_at>now()
+                 JOIN pactaris.accounts a ON a.id=s.account_id AND a.status='active'
+                 WHERE d.endpoint_hash=$1 AND d.session_hash=$2`,[row.endpoint_hash,row.session_hash]);
+              if(!active.rowCount)outcome='discard';
+              else if(!subscription)outcome='gone';
+              else try{await this.send(subscription,this.options);outcome='done';}
+              catch(error){
+                const code=(error as {statusCode?:number}|null)?.statusCode;
+                if(code===404||code===410)outcome='gone';
+                else outcome=(code===undefined||code===429||code>=500)&&row.attempts<2?'retry':'discard';
+              }
+            }else outcome='defer';
+          }
+        }
+        if(outcome==='gone'){
+          await db.query('DELETE FROM pactaris.push_devices WHERE endpoint_hash=$1 AND session_hash=$2',[row.endpoint_hash,row.session_hash]);
+        }else if(outcome==='defer'||outcome==='retry'){
+          await db.query(`UPDATE pactaris.task_push_scopes SET next_attempt_at=now()+make_interval(secs=>$3),
+            attempts=attempts+$4 WHERE endpoint_hash=$1 AND household_id=$2`,
+            [...keys,outcome==='retry'?30*2**row.attempts:900,outcome==='retry'?1:0]);
+        }else{
+          await db.query(`UPDATE pactaris.task_push_scopes SET last_seq=greatest(last_seq,$3::bigint),
+            pending_seq=NULL,next_attempt_at=NULL,expires_at=NULL,attempts=0 WHERE endpoint_hash=$1 AND household_id=$2`,[...keys,sequence]);
+        }
+      }
+      await db.query('COMMIT');
+    }catch(error){await db.query('ROLLBACK');throw error;}
+    finally{db.release();}
   }
   async work(){
     const db=await this.pool.connect();
