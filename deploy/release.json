@@ -225,6 +225,13 @@
       "path": "migrations/gateway/0012_operator_mfa.sql",
       "sha256": "8cc108c8706b280670af526362db73901d69a19eeb88d566c5180c8ff5366133",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0013_smtp_settings",
+      "path": "migrations/gateway/0013_smtp_settings.sql",
+      "sha256": "9aa862e95f5bc9228b4e738263c8be2497c634da618ff8b375bc878bc98a1cfc",
+      "backwardCompatible": true
     }
   ]
 }

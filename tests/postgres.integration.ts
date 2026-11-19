@@ -1,3 +1,4 @@
+import {SmtpSettings} from '../apps/gateway/smtp-settings.js';
 import {listRegistryInstances,listRegistryPlacements} from '../packages/routing/inventory.js';
 import {GatewayPartner} from '../apps/gateway/partner.js';
 import {GatewayCatalog} from '../apps/gateway/catalog.js';
@@ -225,6 +226,19 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   }finally{connection.release();}
   assert.equal((await a.pool.query('SELECT id FROM pactaris.households')).rowCount,0);
   const config=parseGatewayConfig(JSON.parse(await readFile('config/gateway.example.json','utf8'))),keys=await generateKeyPair('EdDSA',{extractable:true});
+  await (async()=>{
+    const invitationMailFile=join(folder,'smtp-fixture.json');
+    await writeFile(invitationMailFile,JSON.stringify({host:'smtp.example.invalid',port:587,tls:'starttls',from:'mail@example.invalid',encryptionKey:randomBytes(32).toString('hex')}),{mode:0o600});
+    const settings=new SmtpSettings(gatewayDb.pool,{...config,invitationMailFile});
+    assert.equal(await settings.save(account.id,{from:'mail@example.invalid',username:'fixture',password:'fixture-secret'}),true);
+    assert.equal(await settings.save(account.id,{from:'new@example.invalid',username:'fixture'}),true);
+    assert.equal(await settings.save(account.id,{from:'new@example.invalid',username:'changed'}),false);
+    assert.equal((await settings.credentials()).password,'fixture-secret');
+    const saved=await gatewayDb.pool.query('SELECT ciphertext,updated_by FROM pactaris.smtp_settings');
+    assert.ok(!saved.rows[0].ciphertext.includes('fixture-secret'));
+    assert.equal(saved.rows[0].updated_by,account.id);
+    assert.ok(!('password' in await settings.status()));
+  })();
   const privateKey=join(folder,'delegation.key'),publicKey=join(folder,'delegation.pem');await writeFile(privateKey,await exportPKCS8(keys.privateKey),{mode:0o600});await writeFile(publicKey,await exportSPKI(keys.publicKey));config.delegation.privateKeyFile=privateKey;
   const certificate=join(folder,'backend.crt'),keyFile=join(folder,'backend.key');
   execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-days','1','-keyout',keyFile,'-out',certificate,'-subj','/CN=backend.fixture.invalid','-addext','subjectAltName=DNS:backend.fixture.invalid'],{stdio:'ignore'});

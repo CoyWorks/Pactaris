@@ -1,14 +1,12 @@
 import {createCipheriv,createDecipheriv,randomBytes} from 'node:crypto';
-import {readFileSync} from 'node:fs';
-import nodemailer from 'nodemailer';
+import {SmtpSettings} from './smtp-settings.js';
 import type pg from 'pg';
-import {normalizeEmail} from '../../packages/auth/email.js';
 import type {GatewayConfig} from '../../packages/config/index.js';
 import {createTranslator} from '../../packages/i18n/index.js';
 
 type MailStatus='queued'|'sent'|'failed'|'inactive';
 type Payload={email:string;token:string};
-type Deliver=(input:Payload & {id:string;expiresAt:Date})=>Promise<void>;
+type Deliver=(input:Payload & {id:string;expiresAt:Date},db:pg.PoolClient)=>Promise<void>;
 
 export class InvitationMail {
   constructor(private pool:pg.Pool,private key:Buffer,private deliver:Deliver){}
@@ -53,7 +51,7 @@ export class InvitationMail {
         let status:MailStatus='inactive';
         try{
           if(await active(id,db)&&job.expires_at.getTime()>Date.now()){
-            await this.deliver({...this.open(id,job.payload),id,expiresAt:job.expires_at});
+            await this.deliver({...this.open(id,job.payload),id,expiresAt:job.expires_at},db);
             status='sent';
           }
         }catch(error){
@@ -73,32 +71,24 @@ export class InvitationMail {
   }
 }
 
-export function loadInvitationMail(config:GatewayConfig,pool:pg.Pool):InvitationMail|undefined {
+export function loadInvitationMail(config:GatewayConfig,pool:pg.Pool,settings?:SmtpSettings):InvitationMail|undefined {
   if(!config.invitationMailFile)return;
-  const raw=JSON.parse(readFileSync(config.invitationMailFile,'utf8')) as Record<string,unknown>;
-  const {host,port,tls,username,password,encryptionKey}=raw,from=normalizeEmail(raw.from);
-  if(typeof host!=='string'||!host||!/^[a-zA-Z0-9.-]+$/.test(host)||
-    typeof port!=='number'||!Number.isInteger(port)||port<1||port>65535||
-    (tls!=='starttls'&&tls!=='implicit')||!from||typeof encryptionKey!=='string'||!/^([0-9a-f]{2}){32}$/i.test(encryptionKey)||
-    ((username!==undefined||password!==undefined)&&
-      (typeof username!=='string'||!username||typeof password!=='string'||!password)))throw Error('mail.config');
-  const transport=nodemailer.createTransport({
-    host,port,secure:tls==='implicit',requireTLS:tls==='starttls',
-    ...(typeof username==='string'&&typeof password==='string'?{auth:{user:username,pass:password}}:{}),
-    tls:{minVersion:'TLSv1.2'},connectionTimeout:5000,greetingTimeout:5000,socketTimeout:8000,
-    disableFileAccess:true,disableUrlAccess:true
-  });
+  const relay=settings??new SmtpSettings(pool,config);
   const t=createTranslator(config.locale.language);
-  return new InvitationMail(pool,Buffer.from(encryptionKey,'hex'),async ({id,email,token,expiresAt})=>{
+  return new InvitationMail(pool,relay.queueKey,async ({id,email,token,expiresAt},db)=>{
     const url=new URL('/join',config.publicOrigin);
     url.hash=id+'.'+token;
     const remaining=expiresAt.getTime()-Date.now();
     if(remaining<=0)throw Error('mail.expired');
-    await transport.sendMail({
-      from:{name:'',address:from},to:{name:'',address:email},
-      messageId:`<invitation.${id}@${from.split('@')[1]}>`,
-      subject:t('mail.invitation.subject'),text:t('mail.invitation.body',{link:url.href}),
-      signal:AbortSignal.timeout(Math.min(8000,remaining))
-    });
+    const credentials=await relay.credentials(db),from=credentials.from;
+    const transport=relay.transport(credentials);
+    try{
+      await transport.sendMail({
+        from:{name:'',address:from},to:{name:'',address:email},
+        messageId:`<invitation.${id}@${from.split('@')[1]}>`,
+        subject:t('mail.invitation.subject'),text:t('mail.invitation.body',{link:url.href}),
+        signal:AbortSignal.timeout(Math.min(8000,remaining))
+      });
+    }finally{transport.close();}
   });
 }

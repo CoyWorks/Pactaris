@@ -10,7 +10,7 @@ export type SessionView = {id:string;current:boolean;createdAt:string;expiresAt:
 export type Placement = {householdId:string;instanceId:string;endpoint:string;tlsServerName:string;caFile:string;version:string};
 export interface GatewayStore {
   probe():Promise<void>;
-  throttle(bucket:string):Promise<boolean>;
+  throttle(bucket:string,limit?:number):Promise<boolean>;
   updateAccountPresentation(accountId:string,value:AccountPresentation|null):Promise<void>;
   beginLogin(cookie:string, attempt:LoginAttempt):Promise<void>;
   consumeLogin(cookie:string,state:string):Promise<LoginAttempt|undefined>;
@@ -28,11 +28,11 @@ export interface GatewayStore {
 export class PgGatewayStore implements GatewayStore {
   constructor(private pool:pg.Pool, private schemaProbe:()=>Promise<void>) {}
   async probe() { await this.schemaProbe(); }
-  async throttle(bucket:string) {
+  async throttle(bucket:string,limit=100) {
     const r=await this.pool.query(`INSERT INTO pactaris.auth_limits(bucket_hash,attempts,resets_at) VALUES($1,1,now()+interval '5 minutes')
       ON CONFLICT(bucket_hash) DO UPDATE SET attempts=CASE WHEN pactaris.auth_limits.resets_at<=now() THEN 1 ELSE pactaris.auth_limits.attempts+1 END,
       resets_at=CASE WHEN pactaris.auth_limits.resets_at<=now() THEN now()+interval '5 minutes' ELSE pactaris.auth_limits.resets_at END RETURNING attempts`,[hash(bucket)]);
-    return r.rows[0].attempts<=100;
+    return r.rows[0].attempts<=limit;
   }
   async beginLogin(cookie:string,attempt:LoginAttempt) {
     await this.pool.query(`INSERT INTO pactaris.login_attempts(cookie_hash,state,nonce,verifier,expires_at) VALUES($1,$2,$3,$4,now()+interval '5 minutes')`,[hash(cookie),attempt.state,attempt.nonce,attempt.verifier]);
