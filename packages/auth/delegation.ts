@@ -29,7 +29,7 @@ export type JournalAction=typeof journalActions[number];
 export const isJournalAction=(value:unknown):value is JournalAction=>typeof value==='string'&&(journalActions as readonly string[]).includes(value);
 export const journalPath=(action:JournalAction)=>`/internal/journal/${action}`;
 /** Account-wide erasure on one Instance, bound to the deleting account and that Instance only. */
-export const accountActions=['accountCheck','accountErase'] as const;
+export const accountActions=['accountCheck','accountErase','accountExport'] as const;
 export type AccountAction=typeof accountActions[number];
 export const isAccountAction=(value:unknown):value is AccountAction=>typeof value==='string'&&(accountActions as readonly string[]).includes(value);
 export const accountPath=(action:AccountAction)=>`/internal/account/${action}`;
