@@ -41,7 +41,7 @@ export function TodayHabits({householdId,csrfToken,language,reload,onAdd,onOpen}
     const percent=Math.min(100,Math.round(habit.periodTotal/Math.max(1,habit.target)*100));
     return <div className="habit-tile" key={habit.routineId}>
      <span className="habit-name">{habit.title}</span>
-     <span className="habit-count">{t('today.progress',{count:habit.periodTotal,target:habit.target})}</span>
+     <span className="habit-count">{t('today.progress',{count:String(habit.periodTotal),target:String(habit.target)})}</span>
      <span className="bar" aria-hidden="true"><span style={{width:percent+'%'}}/></span>
      <button type="button" className="icon-button add-one" disabled={!!busy} aria-label={t('today.addOne',{title:habit.title})} onClick={()=>{void addOne(habit);}}><Icon name="plus"/></button>
     </div>;
