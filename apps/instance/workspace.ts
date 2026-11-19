@@ -24,6 +24,16 @@ export class InstanceWorkspace{
    const command='SELECT pactaris.workspace_command($1,$2,$3,$4,$5,$6,$7)';
    const unread=action==='workspaceRead'
     ?` || jsonb_build_object('hasUnreadTaskInbox',pactaris.workspace_has_unread($1,$2,$3,($6::jsonb->>'membershipId')::uuid))`:'';
+   if(action==='workspaceUnread'){
+    const result=await db.query<{unread:boolean}>(
+     'SELECT pactaris.workspace_has_unread($1,$2,$3,$4) AS unread',
+     [householdId,this.config.instanceId,verified.accountId,input.membershipId]);
+    const unreadRow=result.rows[0];
+    if(!unreadRow)throw new WorkspaceError('unavailable');
+    await db.query('COMMIT');
+    return {householdId,operationId:verified.operationId,actorMembershipId:input.membershipId,
+     status:'listed',hasUnreadTaskInbox:unreadRow.unread};
+   }
    const result=await db.query(command+unread+' AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint]);
    await db.query('COMMIT');return result.rows[0].result as WorkspaceResult;
   }catch(error){

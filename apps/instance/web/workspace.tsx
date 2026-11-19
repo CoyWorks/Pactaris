@@ -22,6 +22,7 @@ export function HouseholdWorkspace({householdId,session,language,format,onLeave,
  const activeWrite=useRef(false),base='/api/households/'+householdId+'/workspace';
  useEffect(()=>{
   let stopped=false,active:AbortController|undefined,timer:ReturnType<typeof setTimeout>|undefined;
+  let snapshotAt=0, retryAt=0, terminal=false;
 
   function suspend(){
    clearTimeout(timer);
@@ -30,36 +31,57 @@ export function HouseholdWorkspace({householdId,session,language,format,onLeave,
    controller?.abort();
   }
 
-  async function load(){
-   if(stopped||document.hidden||active)return;
+  async function load(unreadOnly=false){
+   if(stopped||terminal||document.hidden||active)return;
    if(!navigator.onLine){
     setLoading(false);
     setData(undefined);
     setError('workspace.offline');
     return;
    }
+   if(retryAt>Date.now()){
+    timer=setTimeout(()=>void load(unreadOnly),retryAt-Date.now());
+    return;
+   }
    const controller=new AbortController();
    active=controller;
    const deadline=setTimeout(()=>controller.abort(),12000);
    try{
-    const response=await fetch(base+'?filter='+filter+(cursor?'&after='+cursor:''),{cache:'no-store',signal:controller.signal});
+    const url=unreadOnly?base+'/unread':base+'?filter='+filter+(cursor?'&after='+cursor:'');
+    const response=await fetch(url,{cache:'no-store',signal:controller.signal});
     const result=await response.json();
+    if(active!==controller)return;
+    if(response.status===429){
+     const header=response.headers.get('Retry-After');
+     const delay=header&&/^\d+$/.test(header)?Number(header)*1000:Date.parse(header??'')-Date.now();
+     retryAt=Date.now()+Math.max(60000,Number.isFinite(delay)?Math.min(delay,3600000):0);
+    }
+    if(response.status===401||response.status===404)terminal=true;
     if(!response.ok)throw result;
-    if(active===controller){
+    if(unreadOnly){
+     if(typeof result.hasUnreadTaskInbox!=='boolean')throw Error('workspace.unread');
+     setData(current=>current?{...current,hasUnreadTaskInbox:result.hasUnreadTaskInbox}:current);
+    }else{
+     snapshotAt=Date.now();
      setData(result);
      setError(undefined);
     }
    }catch(error){
     if(active===controller){
-     setData(undefined);
-     setError(errorKey((error as {messageKey?:string})?.messageKey));
+     if(unreadOnly&&!terminal){
+      setData(current=>current?{...current,hasUnreadTaskInbox:false}:current);
+     }else{
+      snapshotAt=0;
+      setData(undefined);
+      setError(errorKey((error as {messageKey?:string})?.messageKey));
+     }
     }
    }finally{
     clearTimeout(deadline);
     if(active===controller){
      active=undefined;
      setLoading(false);
-     timer=setTimeout(()=>void load(),60000);
+     if(!terminal)timer=setTimeout(()=>void load(Date.now()-snapshotAt<300000),Math.max(60000,retryAt-Date.now()));
     }
    }
   }

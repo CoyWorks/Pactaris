@@ -202,7 +202,7 @@ export class PrivateWorkspaceClient{
    if(response.status===403||response.status===404)throw new WorkspaceError('denied');if(response.status===400)throw new WorkspaceError('invalid');
    if(response.status===409){const code=(response.data as {code?:string})?.code;throw new WorkspaceError(code==='workspace_capacity'?'capacity':code==='workspace_paused'?'paused':'conflict');}
    const r=response.data as import('../auth/workspace.js').WorkspaceResult;
-   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['workspaceRead','taskRead'].includes(action)?'listed':'applied'))throw Error('routing.response');
+   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['workspaceRead','workspaceUnread','taskRead'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/workspace.js').WorkspaceResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
    const ver=(v:unknown)=>typeof v==='string'&&/^[1-9][0-9]{0,14}$/.test(v);
    const task=(v:import('../auth/workspace.js').TaskSummary)=>{
@@ -211,6 +211,10 @@ export class PrivateWorkspaceClient{
    };
    if(r.taskId!==undefined){if(!uuid(r.taskId))throw Error('routing.response');out.taskId=r.taskId;}
    if(action==='taskRead'){if(!r.task||typeof r.task.description!=='string'||[...r.task.description].length>1000)throw Error('routing.response');out.task={...task(r.task),description:r.task.description};}
+   if(action==='workspaceUnread'){
+    if(typeof r.hasUnreadTaskInbox!=='boolean')throw Error('routing.response');
+    return {...out,hasUnreadTaskInbox:r.hasUnreadTaskInbox};
+   }
    if(action==='workspaceRead'){
     if(r.hasUnreadTaskInbox!==undefined){
       if(typeof r.hasUnreadTaskInbox!=='boolean')throw Error('routing.response');

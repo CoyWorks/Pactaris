@@ -455,10 +455,22 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       if(!workspace)throw new WorkspaceError('unavailable');res.json(await workspace.read(session.account.id,req.params.householdId,String(req.query.filter??'open'),req.query.after as string|undefined));
     }catch(error){workspaceFailure(res,error);}
   });
+  app.get('/api/households/:householdId/workspace/unread',async(req,res)=>{
+    try{
+      const session=await authenticate(req,res);if(!session)return;
+      if(!uuid(req.params.householdId)||Object.keys(req.query).length)throw new WorkspaceError('invalid');
+      if(!workspace)throw new WorkspaceError('unavailable');
+      if(!await store.throttle('workspaceUnread:'+session.account.id)){
+        res.set('Retry-After','300').status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;
+      }
+      const result=await workspace.execute(session.account.id,req.params.householdId,'workspaceUnread',{operationId:randomUUID()});
+      res.json({hasUnreadTaskInbox:result.hasUnreadTaskInbox});
+    }catch(error){workspaceFailure(res,error);}
+  });
   app.post('/api/households/:householdId/workspace/:action',async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;
       if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
-      const action=req.params.action;if(!uuid(req.params.householdId)||!isWorkspaceAction(action)||action==='workspaceRead')throw new WorkspaceError('invalid');
+      const action=req.params.action;if(!uuid(req.params.householdId)||!isWorkspaceAction(action)||action==='workspaceRead'||action==='workspaceUnread')throw new WorkspaceError('invalid');
       const input=workspaceInput(action,req.body);if(!workspace)throw new WorkspaceError('unavailable');
       if(action!=='taskRead'&&!await store.throttle('workspace:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
       res.json(await workspace.execute(session.account.id,req.params.householdId,action,input));

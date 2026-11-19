@@ -1604,7 +1604,13 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       assert.deepEqual((await post(A,'partnerInboxPreferences',{})).data.inboxPreferences,defaultPrefs);
       assert.deepEqual((await post(B,'partnerInboxPreferences',{})).data.inboxPreferences,quietPrefs);
       assert.ok((await post(B,'partnerInbox',{})).data.inbox.some((notice:{taskId:string})=>notice.taskId===legacy));
-      const inboxState=async(p:Person)=>(await api(base+'/workspace','GET',undefined,p.session)).data.hasUnreadTaskInbox;
+      const inboxState=async(p:Person)=>{
+        const result=await api(base+'/workspace/unread','GET',undefined,p.session);
+        assert.equal(result.status,200);
+        assert.deepEqual(Object.keys(result.data),['hasUnreadTaskInbox']);
+        return result.data.hasUnreadTaskInbox;
+      };
+      assert.equal((await api(base+'/workspace/unread?membershipId='+randomUUID(),'GET',undefined,B.session)).status,400);
       assert.equal(await inboxState(B),true);
       assert.equal(await inboxState(C),false);
       for(const notice of (await post(B,'partnerInbox',{})).data.inbox){
