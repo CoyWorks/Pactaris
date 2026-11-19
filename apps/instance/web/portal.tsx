@@ -1,3 +1,4 @@
+import {useSelectorInbox} from './selector-inbox.js';
 import {AccountDisplayName} from './account-display-name.js';
 import {announceSignOut} from './session-invalidation.js';
 import {PushDevices} from './push-devices.js';
@@ -20,6 +21,8 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   const [loadError,setLoadError]=useState<MessageKey>();
   const accountId=useRef<string|undefined>(undefined);
   const selectedId=/^\/households\/([a-f0-9-]{36})$/i.exec(window.location.pathname)?.[1];
+  const inbox=useSelectorInbox(selectedId?undefined:session?.account.id,
+    [...new Set(listing?.households.map(h=>h.id))].sort().join(','));
   useEffect(()=>{
     let gone=false,timer:ReturnType<typeof setTimeout>|undefined,active:AbortController|undefined;
     async function load(){
@@ -120,8 +123,9 @@ export function Portal({language,format,timeZone}:{language:string;format:string
         {confirmLeave&&<div className="notice"><p>{t('onboarding.leaveConfirm')}</p><button type="button" onClick={()=>{void leave();}} disabled={busy}>{t('onboarding.leaveConfirmButton')}</button><button type="button" onClick={()=>setConfirmLeave(false)} disabled={busy}>{t('onboarding.cancel')}</button></div>}
       </HouseholdWorkspace>}{leavePending&&<div role="status"><p>{t('onboarding.leavePending')}</p><button type="button" onClick={()=>{void leave();}} disabled={busy}>{t('onboarding.retry')}</button></div>}<p><a href="/">{t('portal.back')}</a></p></section>:<>{listing&&<section aria-live="polite">
         {listing.partial&&<p role="status">{t('portal.partial')}</p>}
+        {inbox?.partial&&<p role="status">{t('inbox.selectorPartial')}</p>}
         {!listing.households.length&&!listing.partial&&<><h2>{t('portal.emptyTitle')}</h2><p>{t('portal.emptyDescription')}</p></>}
-        {!!listing.households.length&&<ul className="households">{listing.households.map(h=><li key={h.id}><a href={`/households/${h.id}`}>{h.name}</a></li>)}</ul>}
+        {!!listing.households.length&&<ul className="households">{listing.households.map(h=><li key={h.id}><a href={`/households/${h.id}`}>{h.name}</a>{inbox?.unread.has(h.id)&&<strong className="workspace-unread">{t('inbox.unreadBadge')}</strong>}</li>)}</ul>}
         {listing.nextCursor&&<button type="button" onClick={()=>{void more();}} disabled={busy}>{t('portal.more')}</button>}
       </section>}
       <section><h2>{t('onboarding.createTitle')}</h2><p>{t('onboarding.createDescription')}</p>

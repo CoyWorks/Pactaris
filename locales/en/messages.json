@@ -667,6 +667,7 @@
   "account.verifyEmail": "Verify your email address with your sign-in provider, then return to Pactaris and sign in again.",
   "cli.publicSmoke": "Public gateway and Identity smoke check results.",
   "cli.publicSmokeInvalid": "Provide the public HTTPS application origin and the exact HTTPS OIDC issuer.",
+  "inbox.selectorPartial": "Some unread statuses are temporarily unavailable.",
   "inbox.unreadBadge": "Unread",
   "routines.showTrend": "Show recent habit counts",
   "routines.hideTrend": "Hide recent habit counts",

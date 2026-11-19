@@ -449,6 +449,27 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
   function workspaceFailure(res:express.Response,error:unknown){
     const kind=error instanceof WorkspaceError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,capacity:409,paused:409,unavailable:503}[kind]).json({code:'workspace_'+kind,messageKey:('workspace.'+kind) as MessageKey});
   }
+  app.get('/api/account/task-inbox',async(req,res)=>{
+    try{
+      const session=await authenticate(req,res);if(!session)return;
+      const input=req.query.households;
+      if(typeof input!=='string'||input.length>295||Object.keys(req.query).length!==1)throw new WorkspaceError('invalid');
+      const ids=input.toLowerCase().split(',');
+      if(ids.length>8||new Set(ids).size!==ids.length||!ids.every(uuid))throw new WorkspaceError('invalid');
+      if(!workspace)throw new WorkspaceError('unavailable');
+      if(!await store.throttle('selectorUnread:'+session.account.id)){
+        res.set('Retry-After','300').status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;
+      }
+      const outcomes=await Promise.allSettled(ids.map(id=>workspace.execute(session.account.id,id,'workspaceUnread',{operationId:randomUUID()})));
+      const unread=ids.filter((_,index)=>{
+        const outcome=outcomes[index];
+        return outcome?.status==='fulfilled'&&outcome.value.hasUnreadTaskInbox===true;
+      });
+      const partial=outcomes.some(outcome=>outcome.status==='rejected'&&
+       (!(outcome.reason instanceof WorkspaceError)||outcome.reason.kind!=='denied'));
+      res.json({unread,partial});
+    }catch(error){workspaceFailure(res,error);}
+  });
   app.get('/api/households/:householdId/workspace',async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;
       if(!uuid(req.params.householdId)||(req.query.after!==undefined&&!uuid(req.query.after))||!['open','done','archived'].includes(String(req.query.filter??'open')))throw new WorkspaceError('invalid');
