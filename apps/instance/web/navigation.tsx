@@ -60,15 +60,17 @@ export type IconName=keyof typeof paths;
 export function Icon({name}:{name:IconName}){
  return <svg className="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
+// Open layers, newest last: Escape closes only the top one.
+const layers:(()=>void)[]=[];
+if(typeof window!=='undefined')window.addEventListener('keydown',e=>{if(e.key==='Escape'&&layers.length)layers[layers.length-1]!();});
 /** Full-screen detail or form page above a section; Back and Escape close it. */
 export function Layer({title,backLabel,onClose,status,children}:{title:string;backLabel:string;onClose:()=>void;status?:React.ReactNode;children:React.ReactNode}){
  const close=useRef(onClose);close.current=onClose;
  const heading=useRef<HTMLHeadingElement>(null);
  useEffect(()=>{
-  const previous=document.activeElement as HTMLElement|null;
-  const key=(e:KeyboardEvent)=>{if(e.key==='Escape')close.current();};
-  document.body.classList.add('layer-open');window.addEventListener('keydown',key);heading.current?.focus();
-  return()=>{document.body.classList.remove('layer-open');window.removeEventListener('keydown',key);previous?.focus?.();};
+  const previous=document.activeElement as HTMLElement|null,entry=()=>close.current();
+  layers.push(entry);document.body.classList.add('layer-open');heading.current?.focus();
+  return()=>{layers.splice(layers.indexOf(entry),1);if(!layers.length)document.body.classList.remove('layer-open');previous?.focus?.();};
  },[]);
  return <div className="layer" role="dialog" aria-modal="true" aria-label={title}>
   <div className="layer-bar"><button type="button" className="icon-button" aria-label={backLabel} onClick={()=>close.current()}><Icon name="back"/></button><h2 ref={heading} tabIndex={-1}>{title}</h2></div>

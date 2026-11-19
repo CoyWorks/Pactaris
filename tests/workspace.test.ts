@@ -42,3 +42,8 @@ test('appearance defaults to the system theme and detail pages are labelled dial
  const layer=renderToStaticMarkup(React.createElement(Layer,{title:'Draft details',backLabel:'Back',onClose:()=>{},children:React.createElement('p',null,'body')}));
  assert.match(layer,/role="dialog" aria-modal="true" aria-label="Draft details"/);assert.match(layer,/aria-label="Back"/);
 });
+test('due check-ins stay hidden until loaded and nothing is answered automatically',async()=>{
+ const {TodayCheckins}=await import('../apps/instance/web/today-habits.js');
+ const html=renderToStaticMarkup(React.createElement(TodayCheckins,{householdId:randomUUID(),csrfToken:'fixture',language:'en',reload:0,onSaved:()=>{}}));
+ assert.equal(html,'');
+});
