@@ -31,6 +31,7 @@ import { registerInstance } from '../packages/routing/registry.js';
 import { RevocationJournalSync } from '../apps/gateway/revocation-journal.js';
 import { AccountDeletion } from '../apps/gateway/account-deletion.js';
 import { streamAccountExport } from '../apps/gateway/account-export.js';
+import { Moderation } from '../apps/gateway/moderation.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
 import {InvitationMail} from '../apps/gateway/invitation-mail.js';
 import { GatewayInvitations } from '../apps/gateway/invitations.js';
@@ -555,6 +556,23 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   // The same provider identity can register again, as a new account without old access.
   assert.notEqual((await store.account('https://idp.fixture.invalid/','doomed-subject','Doomed fixture')).id,doomed.id);
   await assert.rejects(services[0]!.account(await signer.signJournal(ids[0]!,'journalPending',deletionOperation,JSON.stringify({operationId:deletionOperation})),'accountErase',Buffer.from(JSON.stringify({operationId:deletionOperation}))));
+  // Moderation: idempotent reports, operator close and account suspension with session revocation.
+  const moderation=new Moderation(gatewayDb.pool),reporter=await store.account('https://idp.fixture.invalid/','reporter-subject','Reporter fixture');
+  const target=await store.account('https://idp.fixture.invalid/','target-subject','Target fixture'),reportId=randomUUID();
+  const report={operationId:reportId,category:'harassment' as const,householdId:null,details:'Synthetic report'};
+  assert.equal(await moderation.report(reporter.id,report),true);assert.equal(await moderation.report(reporter.id,report),true);
+  assert.equal(await moderation.report(target.id,report),false);
+  assert.equal((await moderation.reports('open',null)).reports.filter(r=>r.id===reportId).length,1);
+  assert.equal(await moderation.close(account.id,reportId,'actioned'),true);assert.equal(await moderation.close(account.id,reportId,'noAction'),false);
+  await store.createSession('target-session',target,'csrf',60,120);
+  assert.equal(await moderation.setSuspended(account.id,account.id,true),false);
+  assert.equal(await moderation.setSuspended(account.id,target.id,true),true);assert.equal(await moderation.setSuspended(account.id,target.id,true),false);
+  assert.equal(await store.session('target-session',60),undefined);
+  await assert.rejects(store.account('https://idp.fixture.invalid/','target-subject','Target fixture'));
+  assert.equal(await moderation.setSuspended(account.id,target.id,false),true);
+  assert.equal((await store.account('https://idp.fixture.invalid/','target-subject','Target fixture')).id,target.id);
+  assert.deepEqual((await gatewayDb.owner.query('SELECT action FROM pactaris.operator_events WHERE operator_account_id=$1 ORDER BY created_at',[account.id])).rows.map(r=>r.action),['report.closed','account.suspended','account.restored']);
+  await assert.rejects(gatewayDb.pool.query('DELETE FROM pactaris.operator_events'));
   for(const table of ['audit_events','household_outbox','household_command_receipts'])assert.equal((await a.owner.query(`SELECT count(*)::int AS count FROM pactaris.${table} WHERE household_id=$1`,[created])).rows[0].count,5);
   const audit=(await a.owner.query('SELECT parameters FROM pactaris.audit_events WHERE household_id=$1',[created])).rows;
   assert.ok(audit.every(row=>Object.keys(row.parameters).join(',')==='operationId'));

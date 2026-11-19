@@ -311,3 +311,62 @@ test('operator access denies unauthenticated and ordinary household sessions',as
   const {cookie}=await login(f);
   assert.equal((await inject(f.app,{url:path,headers:{...headers,cookie,'x-pactaris-operator':'true'}})).statusCode,403);
 });
+test('every state-changing API route rejects a session without exact Origin and CSRF proof',async()=>{
+  const f=fixture();const {cookie}=await login(f);
+  type Layer={route?:{path:unknown;methods:Record<string,boolean>}};
+  const stack=(f.app as unknown as {router:{stack:Layer[]}}).router.stack;
+  const routes=stack.flatMap(layer=>{
+    const route=layer.route;if(!route||typeof route.path!=='string'||!route.path.startsWith('/api/'))return [];
+    return Object.keys(route.methods).filter(method=>['post','put','patch','delete'].includes(method)).map(method=>({method,path:route.path as string}));
+  });
+  // Guard against the enumeration silently finding nothing after a framework change.
+  assert.ok(routes.length>=20,'expected the gateway mutation routes to be enumerable');
+  const id='20000000-0000-4000-8000-000000000001';
+  for(const {method,path} of routes){
+    const url=path.replace(/:[a-zA-Z]+/g,segment=>segment===':action'?'fixture':id);
+    for(const variant of [{cookie},{cookie,origin:'https://attacker.invalid','x-csrf-token':'forged'},{cookie,origin:'https://pactaris.app'}]){
+      const response=await inject(f.app,{method:method.toUpperCase() as 'POST',url,headers:{...headers,...variant},payload:{operationId:randomUUID()}});
+      // Any refusal counts (the restrictive local-safety route answers 503 here without its consent service); success never does.
+      assert.ok(response.statusCode>=400,`${method.toUpperCase()} ${path} accepted a request without CSRF proof (${response.statusCode})`);
+    }
+  }
+});
+test('every API response is uncached and carries the restrictive security headers',async()=>{
+  const f=fixture();const {cookie}=await login(f);
+  for(const url of ['/api/session','/api/households','/api/status','/api/account/sessions','/api/unknown']){
+    const response=await inject(f.app,{url,headers:{...headers,cookie}});
+    assert.match(String(response.headers['cache-control']),/no-store/,url);
+    assert.equal(response.headers['x-content-type-options'],'nosniff',url);
+    assert.match(String(response.headers['content-security-policy']),/frame-ancestors 'none'/,url);
+  }
+});
+test('abuse reports bind the reporter, validate input and cannot name an inaccessible household; moderation is operator-only',async()=>{
+  const {reportInput}=await import('../apps/gateway/moderation.js');
+  const operationId=randomUUID();
+  assert.deepEqual(reportInput({operationId,category:'spam',householdId:null,details:'  Unwanted messages  '}),{operationId,category:'spam',householdId:null,details:'Unwanted messages'});
+  for(const value of [{operationId,category:'spam',householdId:null,details:' '},{operationId,category:'secret',householdId:null,details:'x'},
+    {operationId,category:'spam',householdId:'nope',details:'x'},{operationId,category:'spam',householdId:null,details:'x'.repeat(1001)},
+    {operationId,category:'spam',details:'x'},{operationId,category:'spam',householdId:null,details:'x',reporter:randomUUID()}])assert.equal(reportInput(value),undefined);
+  const store=new FixtureStore(),filed:unknown[]=[],actions:string[]=[];
+  const moderation={report:async(reporter:string,input:unknown)=>{filed.push([reporter,input]);return true;},
+    reports:async()=>{actions.push('reports');return {reports:[],nextCursor:null};},
+    close:async()=>{actions.push('close');return true;},setSuspended:async()=>{actions.push('suspend');return true;}};
+  const args:unknown[]=[config(),store,{start:async()=>'',finish:async()=>{throw Error('fixture');}},{summary:async()=>undefined}];
+  args[21]=moderation;
+  const app=(createGatewayApp as (...input:unknown[])=>ReturnType<typeof createGatewayApp>)(...args);
+  const token='b'.repeat(43),csrf=randomUUID();await store.createSession(token,{id:accountA,displayName:'Reporter'},csrf);
+  const trusted={...headers,cookie:'__Host-pactaris-session='+token,origin:'https://pactaris.app','x-csrf-token':csrf};
+  const send=(payload:Record<string,unknown>)=>inject(app,{method:'POST',url:'/api/account/report',headers:trusted,payload});
+  assert.equal((await send({operationId:randomUUID(),category:'harassment',householdId:householdA,details:'Report text',reporterAccountId:accountB})).statusCode,400);
+  assert.equal((await send({operationId:randomUUID(),category:'harassment',householdId:householdB,details:'Report text'})).statusCode,400);
+  assert.equal((await send({operationId:randomUUID(),category:'harassment',householdId:householdA,details:'Report text'})).statusCode,201);
+  assert.deepEqual((filed[0] as unknown[])[0],accountA);assert.equal(filed.length,1);
+  for(const [method,url] of [['GET','/api/operator/reports'],['POST','/api/operator/reports/'+randomUUID()+'/close'],['POST','/api/operator/accounts/'+accountB+'/suspend']] as const)
+    assert.equal((await inject(app,{method,url,headers:trusted,...(method==='POST'?{payload:{resolution:'noAction'}}:{})})).statusCode,403);
+  store.operatorAllowed=true;
+  assert.equal((await inject(app,{url:'/api/operator/reports?state=open',headers:trusted})).statusCode,200);
+  assert.equal((await inject(app,{url:'/api/operator/reports?state=all',headers:trusted})).statusCode,400);
+  assert.equal((await inject(app,{method:'POST',url:'/api/operator/reports/'+randomUUID()+'/close',headers:trusted,payload:{resolution:'deleted'}})).statusCode,400);
+  assert.equal((await inject(app,{method:'POST',url:'/api/operator/accounts/'+accountB+'/suspend',headers:trusted,payload:{}})).statusCode,204);
+  assert.deepEqual(actions,['reports','suspend']);
+});

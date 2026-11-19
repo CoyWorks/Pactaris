@@ -1,4 +1,5 @@
 import {OperatorInventory} from './operator-inventory.js';
+import {OperatorModeration} from './operator-moderation.js';
 import React,{useEffect,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 
@@ -69,5 +70,6 @@ export function OperatorPage({language}:{language:string}){
       </>}
     </section>
     {settings&&<OperatorInventory language={language} refresh={refresh}/>}
+    {settings&&csrf&&<OperatorModeration csrf={csrf} language={language}/>}
   </main>;
 }

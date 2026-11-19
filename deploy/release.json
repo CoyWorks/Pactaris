@@ -1,5 +1,5 @@
 {
-  "version": "0.13.0-alpha.1",
+  "version": "0.14.0-alpha.1",
   "protocol": 2,
   "migrations": [
     {
@@ -385,6 +385,13 @@
       "id": "0020_account_export",
       "path": "migrations/gateway/0020_account_export.sql",
       "sha256": "9a2ff12530deb92dccd26e77fbe4bb348dc7c3a9f2e9256e803e3a523f48ec1c",
+      "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0021_moderation",
+      "path": "migrations/gateway/0021_moderation.sql",
+      "sha256": "0209ac998cdb9b07b2d7ba0ddedc1a3bed6080c519247ef9f39ab2868dc8a024",
       "backwardCompatible": true
     }
   ]

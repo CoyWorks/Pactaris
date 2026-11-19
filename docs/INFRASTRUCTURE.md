@@ -127,7 +127,7 @@ The initial central identity service must support Google, Apple and local verifi
 
 Central CloudPanel is the public proxy for local main/identity services and private-LAN instances. Internal servers need no CloudPanel. Use systemd and isolated databases/credentials; verified TLS and restricted proxy sources on the LAN. Public proxy failure and manager failure are distinct operational conditions.
 
-#56 is M0: ship GitHub-based install.sh/update.sh/status.sh with the first working slice, including a minimum registered-instance/status path. See [INSTALL_UPDATE.md](INSTALL_UPDATE.md). Preserve a second pinned-version update in the initial acceptance demo. Advanced manager-driven canary/drain/retirement (#59) follows the same safe updater contract. Support read-only source access after the repository becomes private. No script exists yet in this planning-only repository.
+#56 is M0: ship GitHub-based install.sh/update.sh/status.sh with the first working slice, including a minimum registered-instance/status path. See [INSTALL_UPDATE.md](INSTALL_UPDATE.md). Preserve a second pinned-version update in the initial acceptance demo. Advanced manager-driven canary/drain/retirement (#59) follows the same safe updater contract. Support read-only source access after the repository becomes private. The install/update/status scripts exist; see [INSTALL_UPDATE.md](INSTALL_UPDATE.md).
 
 ## Independent component releases
 
@@ -135,7 +135,7 @@ An Identity update never implicitly migrates/restarts an Instance, or vice versa
 
 ## Configurable domains and future public-origin migration
 
-Initial public application domain is coyworks.nl. Every service origin/subdomain is configurable; pactaris.app is only an example future domain, not a confirmed destination or a claim of domain ownership. Individual services can also use unrelated parent domains. The earlier example proxy map is deployment data, not application constants.
+The owner confirmed purchase of pactaris.app, which is the live product origin; coyworks.nl remains in use for existing Identity settings. Every service origin/subdomain is configurable. Individual services can also use unrelated parent domains. The earlier example proxy map is deployment data, not application constants.
 
 Keep base-domain convenience settings separate from explicit canonical Identity issuer/origin, manager origin, each Instance origin, callback/logout allowlists, private backend target and TLS server name. Use validated URL builders and exact allowlists; host-scoped sessions must not infer trust from sharing a domain suffix. Releases/installers preserve operator configuration.
 
