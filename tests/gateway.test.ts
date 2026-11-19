@@ -311,3 +311,31 @@ test('operator access denies unauthenticated and ordinary household sessions',as
   const {cookie}=await login(f);
   assert.equal((await inject(f.app,{url:path,headers:{...headers,cookie,'x-pactaris-operator':'true'}})).statusCode,403);
 });
+test('every state-changing API route rejects a session without exact Origin and CSRF proof',async()=>{
+  const f=fixture();const {cookie}=await login(f);
+  type Layer={route?:{path:unknown;methods:Record<string,boolean>}};
+  const stack=(f.app as unknown as {router:{stack:Layer[]}}).router.stack;
+  const routes=stack.flatMap(layer=>{
+    const route=layer.route;if(!route||typeof route.path!=='string'||!route.path.startsWith('/api/'))return [];
+    return Object.keys(route.methods).filter(method=>['post','put','patch','delete'].includes(method)).map(method=>({method,path:route.path as string}));
+  });
+  // Guard against the enumeration silently finding nothing after a framework change.
+  assert.ok(routes.length>=20,'expected the gateway mutation routes to be enumerable');
+  const id='20000000-0000-4000-8000-000000000001';
+  for(const {method,path} of routes){
+    const url=path.replace(/:[a-zA-Z]+/g,segment=>segment===':action'?'fixture':id);
+    for(const variant of [{cookie},{cookie,origin:'https://attacker.invalid','x-csrf-token':'forged'},{cookie,origin:'https://pactaris.app'}]){
+      const response=await inject(f.app,{method:method.toUpperCase() as 'POST',url,headers:{...headers,...variant},payload:{operationId:randomUUID()}});
+      assert.ok([400,401,403,404].includes(response.statusCode),`${method.toUpperCase()} ${path} accepted a request without CSRF proof (${response.statusCode})`);
+    }
+  }
+});
+test('every API response is uncached and carries the restrictive security headers',async()=>{
+  const f=fixture();const {cookie}=await login(f);
+  for(const url of ['/api/session','/api/households','/api/status','/api/account/sessions','/api/unknown']){
+    const response=await inject(f.app,{url,headers:{...headers,cookie}});
+    assert.match(String(response.headers['cache-control']),/no-store/,url);
+    assert.equal(response.headers['x-content-type-options'],'nosniff',url);
+    assert.match(String(response.headers['content-security-policy']),/frame-ancestors 'none'/,url);
+  }
+});
