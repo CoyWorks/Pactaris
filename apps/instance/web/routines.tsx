@@ -11,10 +11,11 @@ const blank=(kind:RoutineKind,timeZone:string):RoutineFields=>({title:'',descrip
 type Draft={action:string;body:Record<string,unknown>};
 export function RoutinesPanel({householdId,session,language,format,timeZone,section}:{householdId:string;session:{csrfToken:string};language:string;format:string;timeZone:string;section:'habits'|'checkins'}){
  const t=createTranslator(language),[kind,setKind]=useState<RoutineKind>(section==='habits'?'habit':'checkin'),[filter,setFilter]=useState('current'),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[listing,setListing]=useState<RoutineResult>(),[detail,setDetail]=useState<RoutineDetail>(),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[busy,setBusy]=useState(false),[draft,setDraft]=useState<Draft>(),[editor,setEditor]=useState<{fields:RoutineFields;routineId?:string;version?:string}>(),[day,setDay]=useState(''),[eventTime,setEventTime]=useState(''),[count,setCount]=useState(1),[text,setText]=useState(''),[rating,setRating]=useState(3),[confirmed,setConfirmed]=useState(false),[reverse,setReverse]=useState<string>();
- const [showTrend,setShowTrend]=useState(false);
+ const [trendRoutineId,setTrendRoutineId]=useState<string>();
+ const showTrend=detail?.routineId!==undefined&&trendRoutineId===detail.routineId;
  const writing=useRef(false),base='/api/households/'+householdId+'/routines';
  async function read(id:string,selectedDay:string|null=null,revision?:string,after?:string,signal?:AbortSignal){
-  const r=await fetch(base+'/routineRead',{method:'POST',signal,cache:'no-store',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({operationId:crypto.randomUUID(),routineId:id,day:selectedDay,...(revision?{revision}:{}),...(after?{after}:{}),...(showTrend&&kind==='habit'?{includeTrend:true}:{})})}),data=await r.json();if(!r.ok)throw data;return data.routine as RoutineDetail;
+  const r=await fetch(base+'/routineRead',{method:'POST',signal,cache:'no-store',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({operationId:crypto.randomUUID(),routineId:id,day:selectedDay,...(revision?{revision}:{}),...(after?{after}:{}),...(trendRoutineId===id&&kind==='habit'?{includeTrend:true}:{})})}),data=await r.json();if(!r.ok)throw data;return data.routine as RoutineDetail;
  }
  const detailId=detail?.routineId,detailRevision=detail?.revision;
  useEffect(()=>{
@@ -60,7 +61,7 @@ export function RoutinesPanel({householdId,session,language,format,timeZone,sect
    <label>{t('routines.historyDay')}<input type="date" value={day} onChange={e=>setDay(e.target.value)}/></label><p><time dateTime={detail.periodStart}>{formatTime(new Date(detail.periodStart),format,detail.timeZone)}</time><span>{t('routines.periodEnd')}</span><time dateTime={detail.periodEnd}>{formatTime(new Date(detail.periodEnd),format,detail.timeZone)}</time></p>
    <p>{t('routines.total')} <strong>{detail.periodTotal}</strong> <span>{t(detail.mode==='minimum'?'routines.minimum':'routines.maximum')} <strong>{detail.target}</strong></span></p><p>{t(detail.kind==='checkin'&&detail.periodTotal>0?'routines.responseRecorded':resultKeys[detail.result]??'routines.pending')}</p>{detail.mode==='maximum'&&<p>{t('routines.maximumNotice')}</p>}{detail.kind==='checkin'&&<p>{t('routines.reflectionNotice')}</p>}
    {detail.kind==='habit'&&<div>
-    <button type="button" aria-expanded={showTrend} onClick={()=>setShowTrend(current=>!current)}>
+    <button type="button" aria-expanded={showTrend} onClick={()=>setTrendRoutineId(showTrend?undefined:detail.routineId)}>
      {t(showTrend?'routines.hideTrend':'routines.showTrend')}
     </button>
     {showTrend&&detail.trend&&<HabitTrend detail={detail} language={language} format={format}/>}
@@ -81,7 +82,7 @@ export function RoutinesPanel({householdId,session,language,format,timeZone,sect
    </form>}
    <h4>{t('routines.entries')}</h4><ul>{detail.entries.map(e=><li key={e.eventId}><time dateTime={e.occurredAt}>{formatTime(new Date(e.occurredAt),format,detail.timeZone)}</time><p>{t('routines.count')} <strong>{e.count}</strong></p><p className="document-body">{e.text}</p>{e.rating!==null&&<p>{t('routines.rating')} <span>{e.rating}</span></p>}{e.confirmed!==null&&<p>{t(e.confirmed?'routines.yes':'routines.no')}</p>}{e.reversed?<p>{t('routines.reversed')}</p>:<button type="button" disabled={blocked} onClick={()=>setReverse(e.eventId)}>{t('routines.reverse')}</button>}</li>)}</ul>
    {reverse&&<div className="notice"><p>{t('routines.reverseNotice')}</p><button type="button" disabled={blocked} onClick={()=>{void change('progressReverse',{routineId:detail.routineId,eventId:reverse});}}>{t('members.confirm')}</button><button type="button" onClick={()=>setReverse(undefined)}>{t('onboarding.cancel')}</button></div>}
-   {detail.nextCursor&&<button type="button" disabled={busy} onClick={()=>{void open(detail.routineId,day||null,detail.revision,detail.nextCursor!);}}>{t('portal.more')}</button>}<button type="button" onClick={()=>setDetail(undefined)}>{t('library.close')}</button>
+   {detail.nextCursor&&<button type="button" disabled={busy} onClick={()=>{void open(detail.routineId,day||null,detail.revision,detail.nextCursor!);}}>{t('portal.more')}</button>}<button type="button" onClick={()=>{setDetail(undefined);setTrendRoutineId(undefined);}}>{t('library.close')}</button>
   </article>}
   {listing?.nextCursor&&<button type="button" onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}<button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>
  </section>;
@@ -100,7 +101,9 @@ function HabitTrend({detail,language,format}:{detail:RoutineDetail;language:stri
   {trend.length?<ul>{trend.map(({date,count})=><li key={date}>
    <time dateTime={date}>{dates.format(new Date(date+'T00:00:00Z'))}</time>
    <meter min={0} max={max} value={count} aria-hidden="true"/>
-   <span>{numbers.format(count)}</span>
+   <span>{t(detail.mode==='minimum'?'routines.trendMinimum':'routines.trendMaximum',{
+    count:numbers.format(count),target:numbers.format(detail.target)
+   })}</span>
   </li>)}</ul>:<p>{t('routines.trendEmpty')}</p>}
  </figure>;
 }

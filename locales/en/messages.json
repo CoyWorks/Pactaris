@@ -695,6 +695,8 @@
   "routines.hideTrend": "Hide recent habit counts",
   "routines.trendTitle": "Recorded counts by period",
   "routines.trendDescription": "Up to seven periods for this habit version. Periods without a recorded entry show zero.",
+  "routines.trendMinimum": "{count} recorded · minimum {target}",
+  "routines.trendMaximum": "{count} recorded · maximum {target}",
   "routines.trendEmpty": "No periods to display.",
   "operator.authenticationRequired": "Use an authorized operator account and sign in again with multi-factor authentication.",
   "operator.title": "Operator console",

@@ -43,7 +43,7 @@ Custom periods, scheduled breaks, partner assignment/review/sharing, reminders/j
 
 Choose **Show recent habit counts** in a habit's details. The app displays up to seven daily or weekly periods ending at the selected period, using that habit version's time zone. The Instance sums unreversed records, with zero for periods that have no recorded count. Older versions use their own schedule and records.
 
-The chart is optional and uses only counts from the current habit owner's exact membership. A household role does not grant access to someone else's chart. Dates and numbers follow the account's formatting locale. Reports across households or shared members remain future scope in #41.
+The chart is optional and uses only counts from the current habit owner's exact membership. A household role does not grant access to someone else's chart. Each chart row shows the recorded count and the exact revision’s minimum or maximum target in accessible text. Closing the habit view also hides its chart. Dates and numbers follow the account’s formatting locale. Charts read currently retained events directly. An event reversed or removed from the database no longer contributes, and there are no stored trend aggregates to purge. Shared or cross-household reports require a separate visibility and retention design.
 
 ## One-off check-ins with an optional reviewer
 
