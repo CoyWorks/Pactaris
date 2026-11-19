@@ -323,6 +323,13 @@
       "path": "migrations/instance/0029_reward_redemption.sql",
       "sha256": "015f21b576acafc7a16191bb4ac9bdf9cf8c8b77a5e930bbc246ff363130b9f1",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0030_scheduled_records_export",
+      "path": "migrations/instance/0030_scheduled_records_export.sql",
+      "sha256": "2f7e24554f237367088eab86a93378a32fc459aeaf9bf409660bb84682f284fb",
+      "backwardCompatible": true
     }
   ]
 }
