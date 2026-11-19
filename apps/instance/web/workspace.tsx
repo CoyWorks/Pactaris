@@ -13,7 +13,7 @@ import {InvitationManager} from './invitations.js';
 import {MemberAdministration} from './members.js';
 import {Hint,Icon,Layer,Link,Sheet,navigate,useLocation,type IconName} from './navigation.js';
 import {QuickAdd,type QuickKind} from './quick-add.js';
-import {Skeleton,TodayHabits} from './today-habits.js';
+import {Skeleton,TodayCheckins,TodayHabits} from './today-habits.js';
 import {SwipeRow,UndoToast,useUndoable} from './swipe.js';
 type View='home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety';
 type Tab='home'|'tasks'|'routines'|'library'|'dynamic';
@@ -182,6 +182,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
     <div className="section-head"><h2>{t('workspace.todo')}</h2><button type="button" className="link-button" onClick={()=>go('tasks')}>{t('workspace.allTasks')}</button></div>
     {today.length?<ul className="card-list">{today.map(task=>row(task,true))}</ul>:<div className="empty-card"><p>{t('workspace.nothingDue')}</p><button type="button" onClick={()=>setAdding('task')}><Icon name="plus"/>{t('today.addTask')}</button></div>}
     <TodayHabits householdId={householdId} csrfToken={session.csrfToken} language={language} reload={habitsReload} onAdd={()=>setAdding('habit')} onOpen={()=>go('habits')}/>
+    <TodayCheckins householdId={householdId} csrfToken={session.csrfToken} language={language} reload={habitsReload} onSaved={()=>setNotice('routines.confirmed')}/>
     <div className="workspace-stats">{(['open','overdue','done'] as const).map(k=><div key={k}><strong>{data?.counts?.[k]??0}</strong><span>{t(({open:'workspace.open',done:'workspace.done',overdue:'workspace.overdue'} as const)[k])}</span></div>)}</div>
     <div className="tiles"><button type="button" onClick={()=>go('checkins')}><Icon name="routines"/>{t('routines.checkinsTitle')}</button><button type="button" onClick={()=>go('rules')}><Icon name="library"/>{t('library.guidance')}</button><button type="button" onClick={()=>go('notes')}><Icon name="library"/>{t('library.notes')}</button><button type="button" onClick={()=>go('members')}><Icon name="dynamic"/>{t('workspace.invite')}</button></div>
    </section>}

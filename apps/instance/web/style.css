@@ -173,3 +173,10 @@ button.secondary{background:none;border-color:var(--outline);color:var(--accent)
  .layer{padding:0 2rem 2rem}
  .habit-tiles,.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}
 }
+
+/* Answering check-ins from Today. */
+.rating{display:flex;flex-wrap:wrap;gap:.5rem;border:0;padding:0;margin:0}.rating legend{margin-bottom:.4rem;color:var(--muted);font-size:.9rem}
+.rating label{flex:1 1 3rem;display:flex;align-items:center;justify-content:center;gap:.35rem;min-height:44px;margin:0;border:1px solid var(--outline);border-radius:12px;cursor:pointer}
+.rating label:has(input:checked){border-color:var(--primary);background:var(--chip)}
+.rating input{width:18px;height:18px}
+.link-like{color:var(--accent);font-weight:500;font-size:.9rem}
