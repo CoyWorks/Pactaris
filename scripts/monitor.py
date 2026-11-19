@@ -46,6 +46,19 @@ def checkpoint_age(base, now):
     return None
 
 
+def invitation_queue(heartbeat):
+    queue = heartbeat.get('invitationMail')
+    if not isinstance(queue, dict):
+        return None
+    counts = {key: queue.get(key) for key in ('queued', 'due', 'failed')}
+    oldest = queue.get('oldestDueAgeSeconds')
+    if any(type(value) is not int or value < 0 for value in counts.values()):
+        return None
+    if oldest is not None and (type(oldest) is not int or oldest < 0):
+        return None
+    return {**counts, 'oldestDueAgeSeconds': oldest}
+
+
 def report(base):
     state = read_json(base / 'state.json')
     cfg = validate_config(base.name, read_json(base / 'config.json'))
@@ -60,10 +73,13 @@ def report(base):
     duration_ms = round((time.monotonic() - started) * 1000)
     now = datetime.now(timezone.utc)
     heartbeat_age = None
+    queue = None
     if base.name != 'identity':
         try:
             heartbeat = read_json(Path(cfg['worker']['heartbeatFile']))
             heartbeat_age = age_seconds(heartbeat.get('checkedAt'), now)
+            if base.name == 'gateway' and heartbeat_age is not None and heartbeat.get('state') == 'ready':
+                queue = invitation_queue(heartbeat)
         except (DeployError, OSError, TypeError, KeyError):
             pass
     usage = shutil.disk_usage(base)
@@ -72,6 +88,7 @@ def report(base):
         'probeDurationMs': duration_ms, 'workerHeartbeatAgeSeconds': heartbeat_age,
         'databaseCheckpointAgeSeconds': checkpoint_age(base, now),
         'installationDiskFreeBytes': usage.free,
+        **({'invitationMail': queue} if base.name == 'gateway' else {}),
     }
 
 

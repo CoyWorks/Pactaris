@@ -37,6 +37,16 @@ export class InvitationMail {
       WHERE status='queued' AND expires_at<=now()`);
     await pool.query("DELETE FROM pactaris.invitation_mail WHERE expires_at<now()-interval '7 days'");
   }
+  static async metrics(pool:pg.Pool){
+    const result=await pool.query<{queued:number;due:number;failed:number;oldestDueAgeSeconds:number|null}>(`
+      SELECT count(*) FILTER (WHERE status='queued' AND expires_at>now())::int AS queued,
+        count(*) FILTER (WHERE status='queued' AND expires_at>now() AND next_attempt_at<=now())::int AS due,
+        count(*) FILTER (WHERE status='failed')::int AS failed,
+        floor(extract(epoch FROM now()-min(next_attempt_at) FILTER
+          (WHERE status='queued' AND expires_at>now() AND next_attempt_at<=now())))::int AS "oldestDueAgeSeconds"
+      FROM pactaris.invitation_mail`);
+    return result.rows[0];
+  }
   async work(active:(id:string,db:pg.PoolClient)=>Promise<boolean>){
     const db=await this.pool.connect();
     try{
