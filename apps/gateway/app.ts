@@ -1,3 +1,4 @@
+import type {personalExport} from './personal-export.js';
 import type {listRegistryInstances,listRegistryPlacements} from '../../packages/routing/inventory.js';
 import {smtpChanges,type SmtpSettings} from './smtp-settings.js';
 import {accountPresentation} from './account-presentation.js';
@@ -48,7 +49,7 @@ type OperatorInventory={
   instances:(after:string|null)=>ReturnType<typeof listRegistryInstances>;
   placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
 };
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -64,14 +65,14 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     let readiness='unavailable';try{await store.probe();readiness='ready';}catch{}
     res.json({component:'gateway',version:manifest.version,readiness,authentication:'oidc',locale:config.locale});
   });
-  app.get(['/auth/login','/auth/operator'],async(req,res)=>{
+  app.get(['/auth/login','/auth/operator','/auth/reauth'],async(req,res)=>{
     if(req.path==='/auth/operator'&&!config.operatorSubjects.length){
       loginFailure(req,res,404,'not_found','errors.notFound');return;
     }
     if(!await store.throttle(req.ip??'unknown')){loginFailure(req,res,429,'rate_limited','errors.rateLimited');return;}
     const binding=token(),attempt={state:token(),nonce:token(),verifier:token()};
     try {
-      const url=await oidc.start(attempt,req.path==='/auth/operator');
+      const url=await oidc.start(attempt,req.path!=='/auth/login');
       await store.beginLogin(binding,attempt);
       setCookie(res,LOGIN,binding,300);res.redirect(302,url);
     }catch{loginFailure(req,res,503,'login_unavailable','errors.loginUnavailable');}
@@ -90,7 +91,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       }
       const account=await store.account(identity.issuer,identity.subject,identity.name,email);
       const previous=cookie(req,SESSION);if(previous)await store.logout(previous);
-      const sessionToken=token();await store.createSession(sessionToken,account,token(),config.session.idleSeconds,config.session.absoluteSeconds,email,identity.mfaAt);
+      const sessionToken=token();await store.createSession(sessionToken,account,token(),config.session.idleSeconds,config.session.absoluteSeconds,email,identity.mfaAt,identity.authAt);
       setCookie(res,SESSION,sessionToken,config.session.absoluteSeconds);res.redirect(303,'/');
     }catch{loginFailure(req,res,400,'login_failed','errors.loginFailed');}
   });
@@ -173,6 +174,25 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     }
     await store.updateAccountPresentation(session.account.id,value);
     res.json({presentation:value});
+  });
+  app.post('/api/account/export',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){
+      res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;
+    }
+    const token=cookie(req,SESSION)!;
+    if(!await store.recentlyAuthenticated?.(token)){
+      res.status(403).json({code:'recent_authentication_required',messageKey:'account.exportReauthenticate'});return;
+    }
+    if(!await store.throttle('account.export:'+session.account.id,2)){
+      res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;
+    }
+    if(!exportPersonal)throw Error('account.export_unavailable');
+    const data=await exportPersonal(session);
+    if(!await store.recentlyAuthenticated?.(token)){
+      res.status(403).json({code:'recent_authentication_required',messageKey:'account.exportReauthenticate'});return;
+    }
+    res.attachment('pactaris-personal-export.json').json(data);
   });
   app.get('/api/account/sessions',async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;

@@ -232,6 +232,20 @@
       "path": "migrations/gateway/0013_smtp_settings.sql",
       "sha256": "9aa862e95f5bc9228b4e738263c8be2497c634da618ff8b375bc878bc98a1cfc",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0014_recent_authentication",
+      "path": "migrations/gateway/0014_recent_authentication.sql",
+      "sha256": "f64973de733e18a5245c1c147415ef0be883eaa225153b1a5615d5f9e48bd272",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0021_personal_export",
+      "path": "migrations/instance/0021_personal_export.sql",
+      "sha256": "906c2548474b23bda5141b80632d204850afb5c3f421e773d92730c78c295f75",
+      "backwardCompatible": true
     }
   ]
 }

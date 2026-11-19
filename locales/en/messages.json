@@ -666,5 +666,10 @@
   "operator.inventoryActiveCount": "Active placements",
   "operator.inventoryDisabledCount": "Disabled placements",
   "operator.inventoryHouseholds": "View household placements",
-  "operator.inventoryEmpty": "There are no rows on this page."
+  "operator.inventoryEmpty": "There are no rows on this page.",
+  "account.exportTitle": "Personal data export",
+  "account.exportDownload": "Download JSON",
+  "account.exportLimited": "This limited export includes your account and a selection of your own tasks and documents. The file indicates incomplete or unavailable household data.",
+  "account.exportReauthenticate": "Sign in again to authorize a personal data export.",
+  "account.exportSignIn": "Sign in again"
 }

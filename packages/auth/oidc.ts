@@ -5,7 +5,7 @@ import type { LoginAttempt } from '../../apps/gateway/store.js';
 import { verifiedEmailClaim } from './email.js';
 export interface OidcLogin {
   start(attempt:LoginAttempt,reauthenticate?:boolean):Promise<string>;
-  finish(url:URL,attempt:LoginAttempt):Promise<{issuer:string;subject:string;name:string;verifiedEmail?:string;mfaAt?:number}>;
+  finish(url:URL,attempt:LoginAttempt):Promise<{issuer:string;subject:string;name:string;verifiedEmail?:string;mfaAt?:number;authAt?:number}>;
 }
 export class OpenIdLogin implements OidcLogin {
   private cached?:Promise<oidc.Configuration>;
@@ -48,15 +48,15 @@ export class OpenIdLogin implements OidcLogin {
     // No tokens persist. Email is a provider assertion, never an account key or
     // membership grant. Omit malformed/unverified claims without blocking login.
     const verifiedEmail=verifiedEmailClaim(claims);
-    const mfaAt=verifiedMfaClaim(claims);
+    const authAt=verifiedAuthTime(claims.auth_time),mfaAt=verifiedMfaClaim(claims);
     return {issuer:claims.iss,subject:claims.sub,name:typeof claims.name==='string'?claims.name.slice(0,120):'',
-      ...(verifiedEmail?{verifiedEmail}:{}),...(mfaAt===undefined?{}:{mfaAt})};
+      ...(verifiedEmail?{verifiedEmail}:{}),...(mfaAt===undefined?{}:{mfaAt}),...(authAt===undefined?{}:{authAt})};
   }
 }
 
+function verifiedAuthTime(time:unknown):number|undefined {
+  if(typeof time==='number'&&Number.isSafeInteger(time)&&time>0&&time<=Math.floor(Date.now()/1000))return time;
+}
 export function verifiedMfaClaim(claims:Record<string,unknown>):number|undefined {
-  const {amr,auth_time:time}=claims;
-  if(Array.isArray(amr)&&amr.includes('mfa')&&typeof time==='number'&&Number.isSafeInteger(time)&&time>0&&time<=Math.floor(Date.now()/1000)){
-    return time;
-  }
+  if(Array.isArray(claims.amr)&&claims.amr.includes('mfa'))return verifiedAuthTime(claims.auth_time);
 }

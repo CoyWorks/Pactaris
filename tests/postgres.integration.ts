@@ -1,3 +1,4 @@
+import {personalExport} from '../apps/gateway/personal-export.js';
 import {SmtpSettings} from '../apps/gateway/smtp-settings.js';
 import {listRegistryInstances,listRegistryPlacements} from '../packages/routing/inventory.js';
 import {GatewayPartner} from '../apps/gateway/partner.js';
@@ -1040,6 +1041,16 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await client.summary(wsOwner.id,wsPlacement))!.name,'My configured dynamic');
   const createId=randomUUID(),createBody={operationId:createId,fields:wsFields,...await wsEpoch()};
   assert.equal((await wsPost('taskCreate',createBody)).status,200);assert.equal((await wsPost('taskCreate',createBody)).status,200);
+  await (async()=>{
+    const own=await personalExport((await store.session(wsSession,600))!,store,client,signer);
+    const scope=own.households.find(item=>item.householdId===wsHome.householdId);
+    assert.equal(scope?.status,'included');
+    assert.match(JSON.stringify(scope),/My first protocol preparation/);
+    assert.equal(own.complete,false);
+    const operationId=randomUUID(),body=JSON.stringify({operationId,membershipId:wsMember});
+    const forged=await signer.signCommand(account.id,wsHome.householdId,wsPlacement.instanceId,'personalExport',operationId,body);
+    await assert.rejects(services[wsPlacement.instanceId===ids[0]?0:1]!.personalExport(forged,wsHome.householdId,Buffer.from(body)));
+  })();
   assert.equal((await wsPost('taskCreate',{...createBody,fields:{...wsFields,title:'Conflicting retry'}})).status,409);
   ws=await wsRead();assert.equal(ws.data.tasks.length,1);assert.equal(ws.data.counts.overdue,1);assert.equal(ws.data.counts.unassigned,1);
   assert.ok(!JSON.stringify(ws.data).includes(wsOwner.id));assert.ok(!JSON.stringify(ws.data).includes('Private preparation'));

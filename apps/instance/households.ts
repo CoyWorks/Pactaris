@@ -14,7 +14,7 @@ import {InstanceRelationships} from './relationships.js';
 import type {RelationshipAction} from '../../packages/auth/relationships.js';
 import type pg from 'pg';
 import type { InstanceConfig } from '../../packages/config/index.js';
-import { DelegationVerifier } from '../../packages/auth/delegation.js';
+import { CommandVerifier,DelegationError,DelegationVerifier,uuid } from '../../packages/auth/delegation.js';
 import { permits } from '../../packages/auth/permissions.js';
 import { InstanceCommands } from './commands.js';
 import type { HouseholdAction } from '../../packages/auth/delegation.js';
@@ -24,6 +24,7 @@ import {InstanceMembers} from './members.js';
 import type {MembershipAction} from '../../packages/auth/delegation.js';
 export class InstanceHouseholds {
   private verifier:DelegationVerifier;
+  private exportVerifier:CommandVerifier;
   private commands:InstanceCommands;
   private invitations:InstanceInvitations;
   private members:InstanceMembers;
@@ -34,7 +35,7 @@ export class InstanceHouseholds {
   private partnerService:InstancePartner;
   private catalogService:InstanceCatalog;
   private routineService:InstanceRoutines;
-  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new DelegationVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);this.members=new InstanceMembers(pool,config);this.relationships=new InstanceRelationships(pool,config);this.consentService=new InstanceConsent(pool,config);this.workspaceService=new InstanceWorkspace(pool,config);this.libraryService=new InstanceLibrary(pool,config);this.routineService=new InstanceRoutines(pool,config);this.catalogService=new InstanceCatalog(pool,config);this.partnerService=new InstancePartner(pool,config);}
+  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new DelegationVerifier(config);this.exportVerifier=new CommandVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);this.members=new InstanceMembers(pool,config);this.relationships=new InstanceRelationships(pool,config);this.consentService=new InstanceConsent(pool,config);this.workspaceService=new InstanceWorkspace(pool,config);this.libraryService=new InstanceLibrary(pool,config);this.routineService=new InstanceRoutines(pool,config);this.catalogService=new InstanceCatalog(pool,config);this.partnerService=new InstancePartner(pool,config);}
   command(token:string,householdId:string,action:HouseholdAction,body:Buffer){return this.commands.execute(token,householdId,action,body);}
   invitation(token:string,householdId:string,action:InvitationAction,body:Buffer){return this.invitations.execute(token,householdId,action,body);}
   membership(token:string,householdId:string,action:MembershipAction,body:Buffer){return this.members.execute(token,householdId,action,body);}
@@ -45,6 +46,20 @@ export class InstanceHouseholds {
   partner(token:string,householdId:string,action:PartnerAction,body:Buffer){return this.partnerService.execute(token,householdId,action,body);}
   catalog(token:string,householdId:string,action:CatalogAction,body:Buffer){return this.catalogService.execute(token,householdId,action,body);}
   routine(token:string,householdId:string,action:RoutineAction,body:Buffer){return this.routineService.execute(token,householdId,action,body);}
+  async personalExport(token:string,householdId:string,body:Buffer){
+    const proof=await this.exportVerifier.verify(token,householdId,'personalExport',body);
+    const input=JSON.parse(body.toString()) as Record<string,unknown>;
+    if(!input||Object.keys(input).length!==2||input.operationId!==proof.operationId||!uuid(input.membershipId))throw new DelegationError('export.request');
+    const result=await this.pool.query(`
+      WITH fresh AS (
+        INSERT INTO pactaris.delegation_uses(jti,expires_at) VALUES($1,$2)
+        ON CONFLICT DO NOTHING RETURNING jti
+      ) SELECT pactaris.personal_export($3,$4,$5,$6) AS data FROM fresh`,
+      [proof.jti,proof.expiresAt,householdId,this.config.instanceId,proof.accountId,input.membershipId]);
+    const data=result.rows[0]?.data;
+    if(!data)throw new DelegationError('export.denied');
+    return data;
+  }
   async summary(token:string,householdId:string) {
     const verified=await this.verifier.verify(token,householdId);
     const db=await this.pool.connect();

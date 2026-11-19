@@ -1,3 +1,4 @@
+import {personalExport} from './personal-export.js';
 import {listRegistryInstances,listRegistryPlacements} from '../../packages/routing/inventory.js';
 import {SmtpSettings} from './smtp-settings.js';
 import {loadInvitationMail} from './invitation-mail.js';
@@ -31,7 +32,7 @@ try {
   const smtp=config.invitationMailFile?new SmtpSettings(db.pool,config):undefined;
   const app=createGatewayApp(config,store,login,new PrivateHouseholdClient(signer),undefined,onboarding,new GatewayInvitations(db.pool,store,new PrivateHouseholdClient(signer),new PrivateInvitationClient(signer),loadInvitationMail(config,db.pool,smtp)),new GatewayMembers(db.pool,store,new PrivateHouseholdClient(signer),new PrivateMemberClient(signer)),new GatewayRelationships(store,new PrivateHouseholdClient(signer),new PrivateRelationshipClient(signer)),new GatewayConsent(store,new PrivateHouseholdClient(signer),new PrivateConsentClient(signer)),new GatewayWorkspace(store,new PrivateHouseholdClient(signer),new PrivateWorkspaceClient(signer)),new GatewayLibrary(store,new PrivateHouseholdClient(signer),new PrivateLibraryClient(signer)),new GatewayRoutines(store,new PrivateHouseholdClient(signer),new PrivateRoutineClient(signer)),new GatewayCatalog(store,new PrivateHouseholdClient(signer),new PrivateCatalogClient(signer)),new GatewayPartner(store,new PrivateHouseholdClient(signer),new PrivatePartnerClient(signer)),smtp,{
     instances:after=>listRegistryInstances(db.pool,after),placements:(id,after)=>listRegistryPlacements(db.pool,id,after)
-  });
+  },session=>personalExport(session,store,new PrivateHouseholdClient(signer),signer));
   const tls=config.listen.tls;
   const server=tls?https.createServer({key:readFileSync(tls.keyFile),cert:readFileSync(tls.certFile),minVersion:'TLSv1.2'},app):http.createServer(app);
   server.requestTimeout=15000;server.headersTimeout=10000;
