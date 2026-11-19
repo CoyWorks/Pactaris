@@ -1,3 +1,4 @@
+import {announceSignOut} from './session-invalidation.js';
 import {PushDevices} from './push-devices.js';
 import {ExportPanel} from './personal-export.js';
 import {AccountPresentation} from './account-presentation.js';
@@ -81,7 +82,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   }
   async function logout(){
     if(!session||busy)return;setBusy(true);
-    try{const r=await fetch('/auth/logout',{method:'POST',headers:{'X-CSRF-Token':session.csrfToken}});if(!r.ok)throw Error('logout');window.location.assign('/');}
+    try{const r=await fetch('/auth/logout',{method:'POST',headers:{'X-CSRF-Token':session.csrfToken}});if(!r.ok)throw Error('logout');announceSignOut();window.location.assign('/');}
     catch{setError('errors.unavailable');setBusy(false);}
   }
   async function more(){

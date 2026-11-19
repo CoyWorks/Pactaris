@@ -1,3 +1,4 @@
+import {listenForSignOut} from './session-invalidation.js';
 import {OperatorPage} from './operator.js';
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -42,6 +43,13 @@ function App() {
     if(status?.component==='gateway'&&'serviceWorker' in navigator&&window.isSecureContext){
       void navigator.serviceWorker.register('/service-worker.js',{updateViaCache:'none'}).catch(()=>{});
     }
+  },[status?.component]);
+  useEffect(()=>{
+    if(status?.component!=='gateway')return;
+    return listenForSignOut(()=>{
+      document.getElementById('root')?.setAttribute('hidden','');
+      window.location.reload();
+    });
   },[status?.component]);
   if(offline)return <main><h1>{translate('pwa.offlineTitle')}</h1><p role="status">{translate('pwa.offlineDescription')}</p></main>;
   if(status?.component==='gateway')return window.location.pathname==='/operator'?<OperatorPage language={status.locale.language}/>:<Portal {...status.locale}/>;
