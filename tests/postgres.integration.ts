@@ -96,6 +96,12 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    assert.deepEqual(legacy.rows,[{id:'10000000-0000-4000-8000-000000000099',display_name:'Legacy fixture',verified_email:null,verified_email_asserted_at:null}]);
    assert.equal((await pool.query("SELECT csrf_token FROM pactaris.sessions WHERE token_hash=repeat('f',64)")).rows[0].csrf_token,'legacy-csrf');
   }
+  // pg_dump reads every sequence, including implicit identity-column sequences, as the backup role.
+  // GRANT ... ON ALL TABLES does not cover them; a missing grant blocked the 2026-11-19 live checkpoint.
+  const backupReader=new pg.Pool({connectionString:url(database,backup,'fixture-only-password'),max:1});pools.push(backupReader);
+  const sequences=(await owner.query("SELECT format('%I.%I',n.nspname,c.relname) AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='S' AND n.nspname IN ('pactaris','pactaris_meta')")).rows.map(row=>row.name as string);
+  if(kind==='instance')assert.ok(sequences.length>0);
+  for(const sequence of sequences)await backupReader.query(`SELECT last_value,is_called FROM ${sequence}`);
   await requireSchema(pool,kind);
   await assert.rejects(requireSchema(owner,kind));
   await assert.rejects(pool.query('CREATE TABLE pactaris.should_fail(id integer)'));

@@ -13,7 +13,9 @@ import tempfile
 
 from deploy import DeployError, Parser, emit, read_json, repository, run, safe_root, validate_config, preflight
 
-ORDER = ('gateway', 'instance', 'identity')
+# Instances first: their additive migrations keep serving the older gateway, while a newer
+# gateway may depend on Instance contracts that are not yet installed.
+ORDER = ('instance', 'gateway', 'identity')
 DEFAULT_REPOSITORY = 'https://github.com/CoyWorks/Pactaris.git'
 
 def installed(root, selected=None):

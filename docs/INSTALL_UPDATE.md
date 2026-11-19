@@ -12,7 +12,7 @@ bash /opt/pactaris-source/update.sh
 
 This fetches the current `main`, resolves it once to a full commit SHA, and runs the freshly fetched updater/deployer. It does not reset, overwrite or require a clean operator source checkout. Every component in this invocation uses that one selected SHA even if main moves while updating. Main is the owner-authorized source channel; this does not imply the selected commit passed CI or is a signed release. A full reviewed SHA can be pinned with `--revision`.
 
-Installed components are discovered from their separate completion state under `/opt/pactaris`: gateway, Instance, then Identity. It never installs absent components or tries to finish a staged first installation. An incomplete install is an explicit blocker, not something silently ignored.
+Installed components are discovered from their separate completion state under `/opt/pactaris` and updated in the order Instance, gateway, then Identity. Instances go first because their additive migrations keep serving the previous gateway; a failed Instance update therefore leaves the gateway on its earlier compatible release. It never installs absent components or tries to finish a staged first installation. An incomplete install is an explicit blocker, not something silently ignored.
 
 Each changed component retains the existing build, backup, migration, activation/recovery and health gates. No configuration, IdP account, key, database, file or hostname is replaced by an example. Unchanged application revisions receive health checks without rebuilding. Identity is not restarted or relabeled when its Compose deployment is identical; changed pinned provider images block automatic updates before any component activation and require a provider-specific runbook.
 
