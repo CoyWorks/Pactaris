@@ -6,7 +6,7 @@ The browser app is designed for a phone first and scales up to a centred column 
 
 | Route | Content |
 | --- | --- |
-| `/` | Your dynamics. With exactly one dynamic, and no partial list, further page or pending creation, the app replaces this route with that dynamic. |
+| `/` | Your dynamics. With exactly one dynamic, and no partial list, further page or pending creation, the app replaces this route with that dynamic. With several, it opens the dynamic this account last opened in this browser, if it is still in the list. |
 | `/?all` | The list without the automatic opening, used by the dynamic switcher in the top bar and to create another dynamic. |
 | `/households/:id?view=…` | The workspace. `view` selects a section; Today has no parameter. |
 | `/profile` | All account settings. |
@@ -32,9 +32,28 @@ The gateway serves the same HTML for these paths. Moving between them uses the H
 
 Each form keeps its operation ID until the input changes, so retrying after an unconfirmed outcome repeats the same request. **+1** on Today records one `progressRecord` entry at server time with the habit's current version, revision and safety epochs; pause and limit checks apply exactly as in Routines.
 
+## Detail pages
+
+Opening a task, shared task, routine, library item or catalog item, and every create or edit form in those modules, shows a full-screen page with a Back button instead of expanding inside the list. Escape also closes it, and focus returns to where it was. Errors, notices and retry or confirmation prompts of the module are shown on that page while it is open.
+
+## Swipe and undo
+
+In Today and My tasks, swipe a task right to complete it (only self-assigned open tasks) or left to archive it. Each swipe has a visible alternative: the round complete button on the row, and Archive on the task page. Complete and archive wait five seconds before the command is sent, with an **Undo** toast; leaving or hiding the page sends a waiting command immediately. Undo cancels it before anything reaches the server, so there is no reopen or reassignment involved. Tapping an open task opens its edit page.
+
+## Last used dynamic and theme
+
+Two per-browser conveniences are kept in local storage, wrapped so that blocked storage simply disables them:
+
+- `pactaris.lastDynamic`: the account ID and household ID last opened (no names). Ignored for another account and removed on sign-out.
+- `pactaris.theme`: `light` or `dark` from **Appearance** in Profile. Without it the app follows the system colour scheme.
+
+## Wider screens
+
+From 900 CSS pixels the bottom tabs become a side navigation, the content keeps a readable width, sheets become centred dialogs and tile grids use four columns.
+
 ## Profile
 
-The avatar opens Profile: display name, date and time, notifications, signed-in sessions, personal export, report a problem, sign out and delete account. These panels used to sit on the household selector.
+The avatar opens Profile: display name, date and time, notifications, appearance, signed-in sessions, personal export, report a problem, sign out and delete account. These panels used to sit on the household selector.
 
 ## Help text
 
