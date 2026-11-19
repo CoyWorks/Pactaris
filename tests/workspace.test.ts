@@ -39,6 +39,6 @@ test('appearance defaults to the system theme and detail pages are labelled dial
  const {Layer}=await import('../apps/instance/web/navigation.js');
  const appearance=renderToStaticMarkup(React.createElement(AppearancePanel,{language:'en'}));
  assert.match(appearance,/value="system" checked=""/);assert.match(appearance,/Light/);assert.match(appearance,/Dark/);
- const layer=renderToStaticMarkup(React.createElement(Layer,{title:'Draft details',backLabel:'Back',onClose:()=>{}},React.createElement('p',null,'body')));
+ const layer=renderToStaticMarkup(React.createElement(Layer,{title:'Draft details',backLabel:'Back',onClose:()=>{},children:React.createElement('p',null,'body')}));
  assert.match(layer,/role="dialog" aria-modal="true" aria-label="Draft details"/);assert.match(layer,/aria-label="Back"/);
 });
