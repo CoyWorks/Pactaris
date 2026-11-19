@@ -316,6 +316,13 @@
       "path": "migrations/gateway/0017_task_push_queue.sql",
       "sha256": "058374cf4768b306f5f537121a5f4956d9502326ac9742d8fc7c0183d0c2ff3b",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0029_reward_redemption",
+      "path": "migrations/instance/0029_reward_redemption.sql",
+      "sha256": "e5dfd8179e9537c4c63b170ae007315a9a77fde127fae899fb3771ae49cbe08e",
+      "backwardCompatible": true
     }
   ]
 }

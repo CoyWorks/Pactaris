@@ -61,3 +61,10 @@ The participant-tasks tab signals unread notices for the selected household. Whi
 ## Household point settings
 
 Owners and household administrators can rename task points and choose whether new task or series versions may promise points. Existing balances, reversals and already agreed task or series terms are retained. Existing series keep generating under their current terms and safety limits. Remove points from a series revision to save it while new point terms are disabled. A setting change checks the current household settings version and records an audit event without the configured name.
+
+
+## Reward redemption
+
+Open a saved catalog item with an explicit point price, including zero, and select one active partner and an accepted reward agreement. Sharing exposes only this exact version of the reward to those two members. The recipient may request or decline it. A request reserves points atomically against the current available balance. The issuer can fulfill, decline or cancel it; the recipient can cancel their outstanding request. Fulfillment turns the reservation into a debit. The issuer can explicitly reverse a completed debit. Eligible balances retain the history of task grants, debits and linked reversals.
+
+Offers expire at the earlier of seven days or the agreement expiry. Paused, departed or revoked agreement scope cannot be used to request or fulfill an offer, and a reservation without current scope no longer reduces available points. Cancelling and corrective reversals do not require new consent. If reversing a task grant leaves fewer points than active reservations, fulfillment remains blocked until enough points are available. This workflow does not schedule consequences or external actions.

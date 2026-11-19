@@ -21,7 +21,8 @@ export class InstanceCatalog{
    await db.query('BEGIN');
    const used=await db.query('INSERT INTO pactaris.delegation_uses(jti,expires_at) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING jti',[verified.jti,verified.expiresAt]);
    if(!used.rowCount)throw new DelegationError('catalog.replay');
-   const result=await db.query('SELECT pactaris.catalog_command($1,$2,$3,$4,$5,$6,$7) AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint]);
+   const command=action.startsWith('redemption')?'pactaris.reward_redemption_command':'pactaris.catalog_command';
+   const result=await db.query('SELECT '+command+'($1,$2,$3,$4,$5,$6,$7) AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint]);
    await db.query('COMMIT');return result.rows[0].result as CatalogResult;
   }catch(error){
    await db.query('ROLLBACK');

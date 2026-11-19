@@ -5,12 +5,27 @@ export {catalogActions,isCatalogAction,type CatalogAction} from './catalog-actio
 export type CatalogFields={title:string;description:string;category:string;points:number|null;position:number};
 export type CatalogSummary=CatalogFields&{itemId:string;version:string;state:'draft'|'archived'};
 export type CatalogDetail=CatalogSummary&{historical:boolean};
-export type CatalogResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';itemId?:string;items?:CatalogSummary[];item?:CatalogDetail;nextCursor?:string|null};
+export type RewardOption={agreementId:string;version:string;label:string;memberId:string;memberName:string};
+export type Redemption={redemptionId:string;version:string;role:'issuer'|'recipient';state:'offered'|'requested'|'fulfilled'|'declined'|'cancelled'|'reversed'|'expired';title:string;description:string;points:number};
+export type CatalogResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';itemId?:string;rewardOptions?:RewardOption[];redemptions?:Redemption[];items?:CatalogSummary[];item?:CatalogDetail;nextCursor?:string|null};
 export class CatalogError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'unavailable'){super('catalog.'+kind);}}
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 export function catalogInput(action:CatalogAction,value:unknown):Record<string,unknown>&{operationId:string}{
  if(!object(value)||!uuid(value.operationId))throw new CatalogError('invalid');const keys=['operationId'];
- if(action==='catalogList')keys.push('filter',...('after'in value?['after']:[]));
+ if(action==='redemptionOptions'||action==='redemptionList'){
+  if('after'in value){
+   keys.push('after');
+   if(action==='redemptionList'?!uuid(value.after):typeof value.after!=='string'||value.after.split(':').length!==2||!value.after.split(':').every(uuid))
+    throw new CatalogError('invalid');
+  }
+ }else if(action==='redemptionOffer'){
+  keys.push('itemId','itemVersion','agreementId','agreementVersion','recipientId');
+  if(!uuid(value.agreementId)||!uuid(value.recipientId)||!documentVersion(value.itemVersion)||!documentVersion(value.agreementVersion))throw new CatalogError('invalid');
+ }else if(action.startsWith('redemption')){
+  keys.push('redemptionId','version');
+  if(!uuid(value.redemptionId))throw new CatalogError('invalid');
+ }
+ else if(action==='catalogList')keys.push('filter',...('after'in value?['after']:[]));
  else if(action==='catalogCreate')keys.push('fields');
  else {keys.push('itemId');if(action!=='catalogRead'||'version'in value)keys.push('version');if(action==='catalogUpdate')keys.push('fields');}
  if(Object.keys(value).sort().join(',')!==keys.sort().join(',')||('itemId'in value&&!uuid(value.itemId))||('version'in value&&!documentVersion(value.version)))throw new CatalogError('invalid');

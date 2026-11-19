@@ -1,3 +1,4 @@
+import {RewardRedemptions} from './reward-redemptions.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import type {CatalogFields,CatalogDetail,CatalogResult} from '../../../packages/auth/catalog.js';
@@ -41,6 +42,8 @@ export function CatalogPanel({householdId,session,language,format}:{householdId:
    {!detail.historical&&(detail.state==='archived'?<button type="button" disabled={blocked} onClick={()=>{void change('catalogRestore',{itemId:detail.itemId,version:detail.version});}}>{t('library.restore')}</button>:<><button type="button" disabled={blocked} onClick={()=>setEditor({itemId:detail.itemId,version:detail.version,fields:{title:detail.title,description:detail.description,category:detail.category,points:detail.points,position:detail.position}})}>{t('workspace.edit')}</button><button type="button" disabled={blocked} onClick={()=>{void change('catalogArchive',{itemId:detail.itemId,version:detail.version});}}>{t('workspace.archive')}</button></>)}
    {BigInt(detail.version)>1n&&<button type="button" disabled={blocked} onClick={()=>{void open(detail.itemId,(BigInt(detail.version)-1n).toString());}}>{t('library.previousVersion')}</button>}{detail.historical&&<button type="button" disabled={blocked} onClick={()=>{void open(detail.itemId);}}>{t('library.currentVersion')}</button>}<button type="button" disabled={busy} onClick={()=>setDetail(undefined)}>{t('library.close')}</button>
   </article>}
+  <RewardRedemptions base={base} csrfToken={session.csrfToken} language={language} format={format}
+   detail={detail} refresh={refresh} blocked={blocked} onAction={(action,body)=>void change(action,body)}/>
   {listing?.nextCursor&&<button type="button" disabled={blocked} onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" disabled={blocked} onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}<button type="button" disabled={busy} onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>
  </section>;
 }

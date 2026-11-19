@@ -322,7 +322,7 @@ export class PrivateCatalogClient{
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
    if(response.status===403||response.status===404)throw new CatalogError('denied');if(response.status===400)throw new CatalogError('invalid');if(response.status===409)throw new CatalogError('conflict');
    const r=response.data as import('../auth/catalog.js').CatalogResult;
-   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['catalogRead','catalogList'].includes(action)?'listed':'applied'))throw Error('routing.response');
+   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['catalogRead','catalogList','redemptionList','redemptionOptions'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/catalog.js').CatalogResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
    const summary=(s:import('../auth/catalog.js').CatalogSummary)=>{
     if(!s||!uuid(s.itemId)||!documentVersion(s.version)||!['draft','archived'].includes(s.state)||!documentText(s.title,120)||!documentText(s.description,500,true,true)||!documentText(s.category,60,true)||!Number.isInteger(s.position)||s.position<0||s.position>999999||(s.points!==null&&(!Number.isInteger(s.points)||s.points<0||s.points>1000000)))throw Error('routing.response');
@@ -330,6 +330,26 @@ export class PrivateCatalogClient{
    };
    if(r.itemId!==undefined){if(!uuid(r.itemId))throw Error('routing.response');out.itemId=r.itemId;}
    if(action==='catalogList'){if(!Array.isArray(r.items)||r.items.length>10||(r.nextCursor!==null&&(typeof r.nextCursor!=='string'||!/^\d{1,6}:[a-f0-9-]{36}$/.test(r.nextCursor))))throw Error('routing.response');out.items=r.items.map(summary);out.nextCursor=r.nextCursor;}
+   if(action==='redemptionList'){
+    if(!Array.isArray(r.redemptions)||r.redemptions.length>10||(r.nextCursor!==null&&!uuid(r.nextCursor)))throw Error('routing.response');
+    out.redemptions=r.redemptions.map(x=>{
+     if(!uuid(x.redemptionId)||!documentVersion(x.version)||!['issuer','recipient'].includes(x.role)||
+      !['offered','requested','fulfilled','declined','cancelled','reversed','expired'].includes(x.state)||
+      !documentText(x.title,120)||!documentText(x.description,500,true,true)||!Number.isInteger(x.points)||x.points<0||x.points>1000000)throw Error('routing.response');
+     return {redemptionId:x.redemptionId,version:x.version,role:x.role,state:x.state,title:x.title,description:x.description,points:x.points};
+    });
+    out.nextCursor=r.nextCursor;
+   }
+   if(action==='redemptionOptions'){
+    if(!Array.isArray(r.rewardOptions)||r.rewardOptions.length>10||(r.nextCursor!==null&&
+      (typeof r.nextCursor!=='string'||r.nextCursor.split(':').length!==2||!r.nextCursor.split(':').every(uuid))))throw Error('routing.response');
+    out.rewardOptions=r.rewardOptions.map(x=>{
+     if(!uuid(x.agreementId)||!documentVersion(x.version)||!uuid(x.memberId)||x.memberId===input.membershipId||
+      !documentText(x.label,80)||!documentText(x.memberName,80,true))throw Error('routing.response');
+     return {agreementId:x.agreementId,version:x.version,memberId:x.memberId,label:x.label,memberName:x.memberName};
+    });
+    out.nextCursor=r.nextCursor;
+   }
    if(action==='catalogRead'){if(!r.item||typeof r.item.historical!=='boolean')throw Error('routing.response');out.item={...summary(r.item),historical:r.item.historical};}
    return out;
   }catch(error){if(error instanceof CatalogError)throw error;throw new CatalogError('unavailable');}

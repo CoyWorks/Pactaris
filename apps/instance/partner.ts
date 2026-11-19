@@ -34,7 +34,13 @@ export class InstancePartner{
     :action==='partnerInboxPreferences'||action==='partnerInboxConfigure'
     ?await db.query('SELECT pactaris.task_inbox_preference_command($1,$2,$3,$4,$5,$6) AS result',args)
     :await db.query('SELECT pactaris.partner_command($1,$2,$3,$4,$5,$6,$7) AS result',[...args,fingerprint]);
-   await db.query('COMMIT');return result.rows[0].result as PartnerResult;
+   const response=result.rows[0].result as PartnerResult;
+   if(action==='partnerPoints'){
+    const balance=await db.query('SELECT pactaris.reward_balance($1,$2,$3,$4) AS balance',
+     [householdId,this.config.instanceId,verified.accountId,input.membershipId]);
+    response.balance=balance.rows[0].balance;
+   }
+   await db.query('COMMIT');return response;
   }catch(error){
    await db.query('ROLLBACK');
    if(error&&typeof error==='object'&&'code'in error&&error.code==='P0001'&&'message'in error&&typeof error.message==='string'){
