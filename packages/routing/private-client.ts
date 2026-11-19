@@ -320,7 +320,7 @@ export class PrivateCatalogClient{
   try{
    if(!uuid(input.operationId))throw new CatalogError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new CatalogError('invalid');
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
-   if(response.status===422&&action==='redemptionHabitClaim')throw new CatalogError('habitGoalPending');
+   if(response.status===409&&action==='redemptionHabitClaim'&&(response.data as {code?:unknown}|null)?.code==='catalog_habitGoalPending')throw new CatalogError('habitGoalPending');
    if(response.status===403||response.status===404)throw new CatalogError('denied');if(response.status===400)throw new CatalogError('invalid');if(response.status===409)throw new CatalogError('conflict');
    const r=response.data as import('../auth/catalog.js').CatalogResult;
    if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['catalogRead','catalogList','redemptionList','redemptionOptions'].includes(action)?'listed':'applied'))throw Error('routing.response');
