@@ -87,7 +87,7 @@ export function RewardRedemptions({base,csrfToken,language,format,detail,refresh
      onChange={event=>setSelected(event.target.value)}>
      <option value="">{t('catalog.rewardScope')}</option>
      {options.rewardOptions.map(option=><option value={key(option)} key={key(option)}>
-      {option.label} · {option.memberName||t('partner.unnamed')}
+      {option.label}{t('catalog.separator')}{option.memberName||t('partner.unnamed')}
      </option>)}
     </select></label>:null}
     {options?.nextCursor&&<button type="button" onClick={()=>{setSelected('');setOptionsCursor(options.nextCursor!);}}>{t('portal.more')}</button>}
@@ -99,7 +99,7 @@ export function RewardRedemptions({base,csrfToken,language,format,detail,refresh
   {result?.redemptions?.length===0&&<p>{t('catalog.noRedemptions')}</p>}
   <ul>{result?.redemptions?.map(item=><li key={item.redemptionId}>
    <h4>{item.title}</h4><p>{item.description}</p>
-   <p>{t(stateLabels[item.state])} · {item.kind==='consequence'?t('catalog.noPointEffect'):t(item.kind==='grant'?'catalog.pointCredit':'catalog.pointCost',{count:number.format(item.points)})}</p>
+   <p>{t(stateLabels[item.state])}{t('catalog.separator')}{item.kind==='consequence'?t('catalog.noPointEffect'):t(item.kind==='grant'?'catalog.pointCredit':'catalog.pointCost',{count:number.format(item.points)})}</p>
    {availableActions(item).map(action=><button key={action} type="button" disabled={blocked}
     onClick={()=>onAction(action,{redemptionId:item.redemptionId,version:item.version})}>{t(action==='redemptionFulfill'?(item.kind==='grant'?'catalog.fulfillGrant':item.kind==='consequence'?'catalog.recordConsequence':actions[action]):
      action==='redemptionRequest'&&item.kind!=='reward'?'catalog.acceptOutcome':

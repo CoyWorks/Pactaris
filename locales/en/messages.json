@@ -469,6 +469,7 @@
   "catalog.acceptOutcome": "Accept this proposal",
   "catalog.reverseCredit": "Reverse point credit",
   "catalog.correctOutcome": "Correct completion record",
+  "catalog.separator": " · ",
   "catalog.redemptions": "Reward redemption",
   "catalog.noRedemptions": "You have no reward offers or requests.",
   "catalog.offerReward": "Offer this reward",
