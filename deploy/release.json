@@ -295,6 +295,13 @@
       "path": "migrations/instance/0026_household_points.sql",
       "sha256": "21cd6d435973d4ebd3c66013f7cb0d9f83418153b814500a6a293fe241197ae7",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0027_personal_task_series",
+      "path": "migrations/instance/0027_personal_task_series.sql",
+      "sha256": "0efa1266c5f4a2872d2cfb4047e755d7adb679bdce8d419e16900afff435e503",
+      "backwardCompatible": true
     }
   ]
 }

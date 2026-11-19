@@ -38,7 +38,7 @@ export class InstanceWorkspace{
    const result=action==='pointsConfigure'
     ?await db.query("SELECT pactaris.workspace_points($1,$2,$3,$4,'configure',$5,$6) AS result",
       [householdId,this.config.instanceId,verified.accountId,verified.operationId,input,fingerprint])
-    :await db.query(command+unread+' AS result',parameters);
+    :await db.query((action.startsWith('personalSeries')?'SELECT pactaris.personal_series_command($1,$2,$3,$4,$5,$6,$7)':command)+unread+' AS result',parameters);
    const response=result.rows[0].result as WorkspaceResult;
    if(action==='workspaceRead'){
     const settings=await db.query("SELECT pactaris.workspace_points($1,$2,$3,$4,'read',$5,$6) AS result",

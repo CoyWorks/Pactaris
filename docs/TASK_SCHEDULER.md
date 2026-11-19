@@ -34,6 +34,13 @@ Targeted input/render tests cover exact contracts, invalid dates/timezones/weekd
 
 `tests/scheduler.integration.ts` uses disposable databases/roles, a temporary migration manifest, concurrent workers, rollback/restart and pause serialization. Cleanup closes the pools and drops the database without `FORCE`, avoiding administrator-termination errors racing graceful socket shutdown; leaked connections still fail cleanup. The existing native HTTPS/two-Instance fixture remains required. Socket creation is prohibited in the development sandbox, so those suites cannot be reported as locally passed. Live supervised-worker reboot/mobile acceptance is also a release gate.
 
-Owner-only unassigned/self-directed tasks remain available without a partner. This slice schedules participant tasks under adopted standing authority; owner-only series drafts, configurable review policies, reward linkage, reminder delivery, monthly recurrence, fleet migration orchestration and personal export/deletion integration remain follow-up work. Thus this change does not close every broader #18/#17 planning criterion.
+Owner-only unassigned/self-directed tasks remain available without a partner. This slice schedules participant tasks under adopted standing authority; configurable review policies, reminder delivery, monthly recurrence, fleet migration orchestration and personal export/deletion integration remain follow-up work. Thus this change does not close every broader #18/#17 planning criterion.
 
 Documentation consulted: AGENTS.md, README.md, DEVELOPMENT.md, ARCHITECTURE.md, DOMAIN_MODEL.md, PLANS.md, INFRASTRUCTURE.md, EXISTING_SITE.md, OBEDIENCE_BASELINE.md, EARLY_VERSION_BASICS.md, INTERNATIONALIZATION.md, TASK_PLANNING.md, WORKSPACE_TASKS.md, PARTICIPANT_TASKS.md, STANDING_TASK_AUTHORITY.md, CONSENT_SAFETY.md, LOGIN_GATEWAY.md, LOGIN_ROLLOUT.md and CONTRIBUTING.md. Updated: this implementation contract and the scheduling status in TASK_PLANNING.md.
+
+
+## Private scheduled tasks
+
+A member can schedule private tasks for themselves, including while they are the only member. The personal task view lists their rules and offers edit and stop controls. Each edit creates a new version; already generated tasks keep their provenance and are still completed or archived through the normal personal task workflow. One-time, daily and selected-weekday schedules reuse the participant scheduler’s timezone and DST rules.
+
+The worker creates a task when availability arrives, while its deadline is still in the future. It skips earlier local dates on recovery and never duplicates a date across schedule revisions. Generation is transactional with the task, audit and outbox, checks the original membership and current safety epochs, and shares active task capacity. Blocked schedules require an explicit revision. Previously generated tasks stay available after a schedule stops.

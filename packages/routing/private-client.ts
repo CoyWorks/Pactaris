@@ -195,14 +195,14 @@ export class PrivateConsentClient{
 export class PrivateWorkspaceClient{
  constructor(private signer:DelegationSigner){}
  async execute(accountId:string,placement:Placement,action:import('../auth/workspace.js').WorkspaceAction,input:Record<string,unknown>):Promise<import('../auth/workspace.js').WorkspaceResult>{
-  const {WorkspaceError,validPointsSettings}=await import('../auth/workspace.js');
+  const {WorkspaceError,validPointsSettings,workspaceInput}=await import('../auth/workspace.js');
   try{
    if(!uuid(input.operationId))throw new WorkspaceError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new WorkspaceError('invalid');
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body);
    if(response.status===403||response.status===404)throw new WorkspaceError('denied');if(response.status===400)throw new WorkspaceError('invalid');
    if(response.status===409){const code=(response.data as {code?:string})?.code;throw new WorkspaceError(code==='workspace_capacity'?'capacity':code==='workspace_paused'?'paused':'conflict');}
    const r=response.data as import('../auth/workspace.js').WorkspaceResult;
-   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['workspaceRead','workspaceUnread','taskRead'].includes(action)?'listed':'applied'))throw Error('routing.response');
+   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['workspaceRead','workspaceUnread','personalSeriesList','taskRead'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/workspace.js').WorkspaceResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
    const ver=(v:unknown)=>typeof v==='string'&&/^[1-9][0-9]{0,14}$/.test(v);
    const task=(v:import('../auth/workspace.js').TaskSummary)=>{
@@ -211,6 +211,15 @@ export class PrivateWorkspaceClient{
    };
    if(r.taskId!==undefined){if(!uuid(r.taskId))throw Error('routing.response');out.taskId=r.taskId;}
    if(action==='taskRead'){if(!r.task||typeof r.task.description!=='string'||[...r.task.description].length>1000)throw Error('routing.response');out.task={...task(r.task),description:r.task.description};}
+   if(action==='personalSeriesList'){
+    if(!Array.isArray(r.series)||r.series.length>10||(r.nextCursor!==null&&!uuid(r.nextCursor)))throw Error('routing.response');
+    out.series=r.series.map(series=>{
+     if(!series||!uuid(series.seriesId)||!ver(series.version)||!['active','blocked','finished','stopped'].includes(series.state))throw Error('routing.response');
+     workspaceInput('personalSeriesSave',{operationId:input.operationId,fields:series.fields,schedule:series.schedule,epoch:'1',memberEpoch:'1'});
+     return {seriesId:series.seriesId,version:series.version,state:series.state,fields:series.fields,schedule:series.schedule};
+    });
+    out.nextCursor=r.nextCursor;
+   }
    if(action==='workspaceUnread'){
     if(typeof r.hasUnreadTaskInbox!=='boolean')throw Error('routing.response');
     return {...out,hasUnreadTaskInbox:r.hasUnreadTaskInbox};

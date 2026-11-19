@@ -1,3 +1,4 @@
+import {PersonalSeriesPanel} from './personal-series.js';
 import {SharedCheckins} from './shared-checkins.js';
 import {PartnerPanel} from './partner.js';
 import {CatalogPanel} from './catalog.js';
@@ -139,6 +140,12 @@ export function HouseholdWorkspace({householdId,session,language,format,onLeave,
       {task.state!=='open'&&<button type="button" disabled={blocked} onClick={()=>{void change('taskReopen',{taskId:task.taskId,version:task.version});}}>{t('workspace.reopen')}</button>}
      </div></li>)}</ul>
     {data.nextCursor&&<button type="button" disabled={busy} onClick={()=>setCursor(data.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}
+    {h&&<PersonalSeriesPanel base={base} csrfToken={session.csrfToken} language={language} format={format}
+     timeZone={h.timeZone} refresh={refresh} blocked={blocked}
+     onSave={(fields,schedule,series)=>void change('personalSeriesSave',{...safety,fields,schedule,
+      ...(series?{seriesId:series.seriesId,version:series.version}:{})})}
+     onStop={series=>void change('personalSeriesStop',{seriesId:series.seriesId,version:series.version})}/>}
+
    </section>}
    {view==='participantTasks'&&h&&<PartnerPanel householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} onInboxRead={()=>setRefresh(value=>value+1)} pointsSettings={data?.pointsSettings}/>}
    {view==='rewards'&&h&&<CatalogPanel householdId={householdId} session={session} language={language} format={format}/>}
