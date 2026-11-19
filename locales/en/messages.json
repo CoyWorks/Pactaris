@@ -129,7 +129,6 @@
   "members.name": "Your name in this dynamic",
   "members.nameDescription": "Optional. This name is visible to current members of this dynamic. Leave it empty to show your membership ID.",
   "members.saveName": "Save name",
-  "members.you": "You",
   "members.role": "Technical role",
   "members.role.owner": "Owner",
   "members.role.admin": "Administrator",

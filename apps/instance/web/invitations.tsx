@@ -47,9 +47,9 @@ export function InvitationManager({householdId,session,language,format,timeZone}
   {link&&<div role="status"><p>{t('invitations.shareDescription')}</p><label htmlFor="invite-link">{t('invitations.link')}</label><input id="invite-link" readOnly value={link} onFocus={e=>e.target.select()}/>
    <button type="button" onClick={()=>{void (async()=>{try{if(!navigator.clipboard)throw Error('clipboard');await navigator.clipboard.writeText(link);setCopied(true);}catch{setError('invitations.copyManual');}})();}}>{t('invitations.copy')}</button>{copied&&<p>{t('invitations.copied')}</p>}
   </div>}
-  {!!items?.length&&<ul>{items.map(i=><li key={i.invitationId}><code>{i.invitationId}</code><p>{t(stateKey(i.status))}</p><p>{t('invitations.expires')} <time dateTime={i.expiresAt} title={timeZone}>{formatTime(new Date(i.expiresAt),format,timeZone)}</time></p>
-   {i.delivery&&deliveryKeys[i.delivery]&&<p>{t(deliveryKeys[i.delivery]!)}</p>}
-   {i.status==='pending'&&<button type="button" disabled={busy} onClick={()=>{void revoke(i.invitationId);}}>{t('invitations.revoke')}</button>}
+  {!!items?.length&&<ul className="card-list">{items.map(i=><li key={i.invitationId}><span className="grow"><span>{t(stateKey(i.status))}</span><span className="muted">{t('invitations.expires')} <time dateTime={i.expiresAt} title={timeZone}>{formatTime(new Date(i.expiresAt),format,timeZone)}</time></span>
+   {i.delivery&&deliveryKeys[i.delivery]&&<span className="muted">{t(deliveryKeys[i.delivery]!)}</span>}</span>
+   {i.status==='pending'&&<button type="button" className="secondary" disabled={busy} onClick={()=>{void revoke(i.invitationId);}}>{t('invitations.revoke')}</button>}
   </li>)}</ul>}
  </section>;
 }

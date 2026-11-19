@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {Hint} from './navigation.js';
+import {Hint,Icon,Layer} from './navigation.js';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {MemberRow,OwnerOffer} from '../members.js';
 type Session={account:{id:string;displayName:string};csrfToken:string};
@@ -13,6 +13,7 @@ const errorKey=(value:unknown):MessageKey=>(['members.invalid','members.denied',
 export function MemberAdministration({householdId,session,language,format,timeZone}:{householdId:string;session:Session;language:string;format:string;timeZone:string}){
  const t=createTranslator(language),[listing,setListing]=useState<Listing>(),[name,setName]=useState(''),[error,setError]=useState<MessageKey>(),[busy,setBusy]=useState(false),[draft,setDraft]=useState<Draft>(),[confirm,setConfirm]=useState<{action:'remove'|'offer'|'accept';payload:Record<string,string>}>(),[refresh,setRefresh]=useState(0),[notice,setNotice]=useState<MessageKey>();
  const edited=useRef(false);
+ const [naming,setNaming]=useState(false),[openMember,setOpenMember]=useState<string>();
  useEffect(()=>{
   let gone=false,timer:ReturnType<typeof setTimeout>|undefined,active:AbortController|undefined;
   async function load(){
@@ -35,7 +36,7 @@ export function MemberAdministration({householdId,session,language,format,timeZo
   try{
    const r=await fetch('/api/households/'+householdId+'/members/'+current.action,{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({...current.payload,operationId:current.operationId})}),data=await r.json();
    if(!r.ok){setError(errorKey(data.messageKey));setDraft(undefined);setRefresh(v=>v+1);return;}
-   if(data.status==='complete'){setDraft(undefined);edited.current=false;setNotice('members.confirmed');}
+   if(data.status==='complete'){setDraft(undefined);edited.current=false;setNaming(false);setNotice('members.confirmed');}
    else setNotice('members.unknown');
    setRefresh(v=>v+1);
   }catch{setNotice('members.unknown');}finally{clearTimeout(deadline);setBusy(false);}
@@ -50,21 +51,18 @@ export function MemberAdministration({householdId,session,language,format,timeZo
  }
  const alias=(id:string)=>listing?.members.find(m=>m.membershipId===id)?.displayName||id;
  const blocked=busy||!!draft;
- return <section><h2>{t('members.title')}</h2><Hint label={t('hint.more')}>{t('members.description')}</Hint>
-  {error&&<p role="alert">{t(error)}</p>}{error==='members.reauthenticate'&&<p><a href="/auth/login">{t('portal.signIn')}</a></p>}
+ const self=listing?.members.find(m=>m.isSelf),member=listing?.members.find(m=>m.membershipId===openMember),layerOpen=naming||!!member||!!confirm;
+ const status=<>{error&&<p role="alert">{t(error)}</p>}{error==='members.reauthenticate'&&<p><a href="/auth/login">{t('portal.signIn')}</a></p>}
   {notice&&<p role="status">{t(notice)}</p>}
-  {draft&&<div><p>{t('members.retryDescription')}</p><button type="button" disabled={busy} onClick={()=>{void execute(draft.action,draft.payload,draft);}}>{t('onboarding.retry')}</button></div>}
+  {draft&&<div><p>{t('members.retryDescription')}</p><button type="button" disabled={busy} onClick={()=>{void execute(draft.action,draft.payload,draft);}}>{t('onboarding.retry')}</button></div>}</>;
+ return <section><h2>{t('members.title')}</h2><Hint label={t('hint.more')}>{t('members.description')}</Hint>
+  {!layerOpen&&status}
   {!listing?<button type="button" disabled={busy} onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>:<>
-   <form onSubmit={e=>{e.preventDefault();void execute('alias',{name:name.trim()});}}><label htmlFor="membership-name">{t('members.name')}</label>
-    <input id="membership-name" autoComplete="off" maxLength={80} value={name} disabled={blocked} onChange={e=>{edited.current=true;setName(e.target.value);}}/>
-    <Hint label={t('hint.more')}>{t('members.nameDescription')}</Hint><button type="submit" disabled={blocked}>{t('members.saveName')}</button>
-   </form>
    {listing.operations.some(op=>op.status==='pending'&&op.operationId!==draft?.operationId)&&<p role="status">{t('members.otherPending')}</p>}
-   <ul>{listing.members.map(m=><li key={m.membershipId}><h3>{m.displayName||m.membershipId}</h3>{m.isSelf&&<strong>{t('members.you')}</strong>}<code>{m.membershipId}</code>
-    <dl><dt>{t('members.role')}</dt><dd>{t(roles[m.technicalRole]??'members.role.participant')}</dd></dl>
-    {m.canRemove&&<button type="button" disabled={blocked} onClick={()=>setConfirm({action:'remove',payload:{targetMembershipId:m.membershipId}})}>{t('members.remove')}</button>}
-    {m.canOffer&&<button type="button" disabled={blocked} onClick={()=>setConfirm({action:'offer',payload:{targetMembershipId:m.membershipId}})}>{t('members.offer')}</button>}
-   </li>)}</ul>
+   <ul className="menu">
+    <li><button type="button" onClick={()=>setNaming(true)}><span className="grow"><span>{t('members.name')}</span><span className="muted">{self?.displayName||t('partner.unnamed')}</span></span><Icon name="chevron"/></button></li>
+    {listing.members.filter(m=>!m.isSelf).map(m=><li key={m.membershipId}><button type="button" onClick={()=>setOpenMember(m.membershipId)}><span className="grow"><span>{m.displayName||t('partner.unnamed')}</span><span className="muted">{t(roles[m.technicalRole]??'members.role.participant')}</span></span><Icon name="chevron"/></button></li>)}
+   </ul>
    {listing.nextCursor&&<button type="button" disabled={busy} onClick={()=>{void more();}}>{t('portal.more')}</button>}
    {!!listing.offers.length&&<><h3>{t('members.offers')}</h3><ul>{listing.offers.map(o=><li key={o.offerId}>
     <dl><dt>{t('members.from')}</dt><dd>{alias(o.fromMembershipId)}</dd><dt>{t('members.to')}</dt><dd>{alias(o.toMembershipId)}</dd>
@@ -76,11 +74,22 @@ export function MemberAdministration({householdId,session,language,format,timeZo
     </>}
     {o.status==='pending'&&o.fromMembershipId===listing.actorMembershipId&&<button type="button" disabled={blocked} onClick={()=>{void execute('cancel',{offerId:o.offerId});}}>{t('members.cancelOffer')}</button>}
    </li>)}</ul></>}
-   {confirm&&<div className="notice" role="group"><h3>{t(confirm.action==='remove'?'members.confirmRemove':confirm.action==='offer'?'members.confirmOffer':'members.confirmAccept')}</h3>
+   {naming&&<Layer title={t('members.name')} backLabel={t('nav.back')} onClose={()=>setNaming(false)} status={status}>
+   <form onSubmit={e=>{e.preventDefault();void execute('alias',{name:name.trim()});}}><label htmlFor="membership-name">{t('members.name')}</label>
+    <input id="membership-name" autoComplete="off" maxLength={80} value={name} disabled={blocked} onChange={e=>{edited.current=true;setName(e.target.value);}}/>
+    <Hint label={t('hint.more')}>{t('members.nameDescription')}</Hint><button type="submit" disabled={blocked}>{t('members.saveName')}</button>
+   </form>
+   </Layer>}
+   {member&&<Layer title={member.displayName||t('partner.unnamed')} backLabel={t('nav.back')} onClose={()=>setOpenMember(undefined)} status={confirm?undefined:status}>
+    <dl><dt>{t('members.role')}</dt><dd>{t(roles[member.technicalRole]??'members.role.participant')}</dd></dl>
+    <div className="workspace-actions">{member.canRemove&&<button type="button" className="danger" disabled={blocked} onClick={()=>setConfirm({action:'remove',payload:{targetMembershipId:member.membershipId}})}>{t('members.remove')}</button>}
+    {member.canOffer&&<button type="button" disabled={blocked} onClick={()=>setConfirm({action:'offer',payload:{targetMembershipId:member.membershipId}})}>{t('members.offer')}</button>}</div>
+   </Layer>}
+   {confirm&&<Layer title={t(confirm.action==='remove'?'members.confirmRemove':confirm.action==='offer'?'members.confirmOffer':'members.confirmAccept')} backLabel={t('nav.back')} onClose={()=>setConfirm(undefined)} status={status}><div className="notice" role="group">
     {confirm.payload.targetMembershipId&&<p>{alias(confirm.payload.targetMembershipId)} <code>{confirm.payload.targetMembershipId}</code></p>}
     <p>{t(confirm.action==='remove'?'members.removeDescription':'members.transferDescription')}</p>
     <button type="button" disabled={blocked} onClick={()=>{void execute(confirm.action,confirm.payload);}}>{t('members.confirm')}</button><button type="button" disabled={busy} onClick={()=>setConfirm(undefined)}>{t('onboarding.cancel')}</button>
-   </div>}
+</div></Layer>}
   </>}
  </section>;
 }
