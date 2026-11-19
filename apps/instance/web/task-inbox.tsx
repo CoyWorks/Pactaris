@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import {Hint} from './navigation.js';
 import {createTranslator} from '../../../packages/i18n/index.js';
 import type {DeliveryPreferences,InboxPreferences,PartnerResult} from '../../../packages/auth/partner.js';
 
@@ -110,7 +111,7 @@ export function TaskInbox({householdId,csrfToken,language,onRead,pointsLabel}:{h
     <fieldset disabled={saving}><legend>{t('inbox.delivery')}</legend>
      <label><input type="checkbox" checked={delivery.push} onChange={event=>editDelivery({push:event.target.checked})}/>{t('inbox.enablePush')}</label>
      <label><input type="checkbox" checked={delivery.reminders} onChange={event=>editDelivery({reminders:event.target.checked})}/>{t('inbox.enableReminder')}</label>
-     <p>{t('inbox.deliveryHelp')}</p>
+     <Hint label={t('hint.more')}>{t('inbox.deliveryHelp')}</Hint>
      <label>{t('inbox.quietStart')}<input type="time" required={delivery.quietEnd!==null} value={delivery.quietStart??''}
       onChange={event=>editDelivery({quietStart:event.target.value||null})}/></label>
      <label>{t('inbox.quietEnd')}<input type="time" required={delivery.quietStart!==null} value={delivery.quietEnd??''}

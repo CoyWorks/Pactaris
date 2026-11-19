@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import {Hint} from './navigation.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 
 export function PushDevices({csrfToken,language}:{csrfToken:string;language:string}){
@@ -57,7 +58,7 @@ export function PushDevices({csrfToken,language}:{csrfToken:string;language:stri
   }
   if(!browser)return null;
   return <details><summary>{t('push.title')}</summary>
-    <p>{t('push.description')}</p>
+    <Hint label={t('hint.more')}>{t('push.description')}</Hint>
     {active?<div>
       <button type="button" disabled={busy} onClick={()=>void manage('unsubscribe')}>{t('push.disable')}</button>{' '}
       <button type="button" disabled={busy} onClick={()=>void manage('test')}>{t('push.test')}</button>

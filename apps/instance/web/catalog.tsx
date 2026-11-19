@@ -1,4 +1,5 @@
 import {RewardRedemptions} from './reward-redemptions.js';
+import {Hint} from './navigation.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import type {CatalogKind,CatalogFields,CatalogDetail,CatalogResult} from '../../../packages/auth/catalog.js';
@@ -26,7 +27,7 @@ export function CatalogPanel({householdId,session,language,format}:{householdId:
   try{await request(pending.action,pending.body,controller.signal);setDraft(undefined);setEditor(undefined);setDetail(undefined);setRefresh(v=>v+1);setNotice('catalog.saved');}
   catch(e){const status=(e as {status?:number})?.status;setError(failure(e));if(status&&status<500)setDraft(undefined);else setNotice('catalog.unknown');}finally{clearTimeout(deadline);writing.current=false;setBusy(false);}}
  const blocked=busy||!!draft;
- return <section><h2>{t('catalog.title')}</h2><p>{t('catalog.description')}</p>
+ return <section><h2>{t('catalog.title')}</h2><Hint label={t('hint.more')}>{t('catalog.description')}</Hint>
   {error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}
   {draft&&<div className="notice"><p>{t('workspace.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void change(draft.action,draft.body,draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}
   <div className="workspace-actions"><button type="button" disabled={blocked} onClick={()=>{setEditor({fields:blank()});setDetail(undefined);}}>{t('catalog.create')}</button><button type="button" disabled={blocked} onClick={()=>{setFilter(filter==='current'?'archived':'current');setCursor(undefined);setListing(undefined);setDetail(undefined);setEditor(undefined);}}>{t(filter==='current'?'library.archived':'catalog.current')}</button></div>

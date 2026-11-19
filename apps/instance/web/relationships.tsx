@@ -1,4 +1,5 @@
 import {Agreements} from './consent.js';
+import {Hint} from './navigation.js';
 import React,{useEffect,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import type {RelationshipView,RelationshipRole,Proposal} from '../../../packages/auth/relationships.js';
@@ -43,7 +44,7 @@ export function Relationships({householdId,session,language,format,timeZone}:{ho
  const blocked=busy||!!draft,alias=(id:string)=>members.find(m=>m.membershipId===id)?.displayName||id;
  const selected=[...new Set([...(listing?[listing.actorMembershipId]:[]),...participants])];
  const updateRole=(index:number,patch:Partial<RelationshipRole>)=>setRoles(old=>old.map((r,i)=>i===index?{...r,...patch}:r));
- return <section><h2>{t('relationships.title')}</h2><p>{t('relationships.description')}</p><p>{t('relationships.safetyNotice')}</p>
+ return <section><h2>{t('relationships.title')}</h2><Hint label={t('hint.more')}>{t('relationships.description')}</Hint><p>{t('relationships.safetyNotice')}</p>
   {error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}
   {draft&&<div><p>{t('relationships.retryDescription')}</p><button type="button" disabled={busy} onClick={()=>{void execute(draft.action,draft.input,draft);}}>{t('onboarding.retry')}</button></div>}
   <button type="button" disabled={busy} onClick={()=>{setCursor(undefined);setRefresh(v=>v+1);}}>{t('relationships.refresh')}</button>
@@ -54,7 +55,7 @@ export function Relationships({householdId,session,language,format,timeZone}:{ho
     <fieldset disabled={blocked}><legend>{t('relationships.participants')}</legend><p>{t('relationships.selfIncluded')}</p>
      {members.filter(m=>!m.isSelf).map(m=><label key={m.membershipId}><input type="checkbox" checked={participants.includes(m.membershipId)} disabled={!participants.includes(m.membershipId)&&selected.length>=8} onChange={e=>{setParticipants(old=>e.target.checked?[...old,m.membershipId]:old.filter(id=>id!==m.membershipId));setRoles([]);}}/>{alias(m.membershipId)}</label>)}
     </fieldset>
-    <fieldset disabled={blocked}><legend>{t('relationships.roles')}</legend><p>{t('relationships.rolesDescription')}</p>
+    <fieldset disabled={blocked}><legend>{t('relationships.roles')}</legend><Hint label={t('hint.more')}>{t('relationships.rolesDescription')}</Hint>
      {roles.map((role,i)=><div key={i}>
       <label>{t('relationships.person')}<select value={role.membershipId} onChange={e=>updateRole(i,{membershipId:e.target.value,counterpartMembershipId:null})}>{selected.map(id=><option key={id} value={id}>{alias(id)}</option>)}</select></label>
       <label>{t('relationships.roleLabel')}<input value={role.label} maxLength={80} required onChange={e=>updateRole(i,{label:e.target.value})}/></label>

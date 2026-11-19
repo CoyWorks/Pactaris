@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import {Hint} from './navigation.js';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 type Session={account:{id:string;displayName:string};csrfToken:string};
 type Invite={invitationId:string;status:string;role:string;expiresAt:string;delivery?:string};
@@ -35,7 +36,7 @@ export function InvitationManager({householdId,session,language,format,timeZone}
   failed:'invitations.delivery.failed',inactive:'invitations.delivery.inactive'};
  const stateKey=(value:string):MessageKey=>stateKeys[value]??'invitations.state.inactive';
  if(!allowed)return error?<p role="alert">{t(error)}</p>:null;
- return <section><h2>{t('invitations.title')}</h2><p>{t('invitations.createDescription')}</p>
+ return <section><h2>{t('invitations.title')}</h2><Hint label={t('hint.more')}>{t('invitations.createDescription')}</Hint>
   {emailEnabled&&<p>{t('invitations.emailEnabled')}</p>}
   {error&&<p role="alert">{t(error)}</p>}
   <form onSubmit={event=>{void create(event);}}><label htmlFor="invite-email">{t('invitations.email')}</label>
