@@ -17,6 +17,8 @@ class FixtureStore implements GatewayStore {
   async updateAccountPresentation(accountId:string,value:AccountPresentation|null){
     if(value)this.presentation.set(accountId,value);else this.presentation.delete(accountId);
   }
+  operatorAllowed=false;
+  async operatorAuthorized(token:string){return this.operatorAllowed&&this.sessions.has(hash(token));}
   async probe(){}
   async throttle(){return !this.limited;}
   async beginLogin(cookie:string,a:LoginAttempt){this.attempts.set(hash(cookie),a);}
@@ -80,6 +82,47 @@ test('browser-bound one-time login rotates sessions and ignores forged identity 
   const wrongBrowser=await inject(f.app,{url:'/auth/oidc/callback?code=x&state='+state,headers});assert.equal(wrongBrowser.statusCode,400);
   assert.match(String(first.headers['set-cookie']),/Secure; HttpOnly; SameSite=Lax/);
   assert.ok(![...f.store.sessions.keys()].includes(cookie.split('=')[1]!));
+});
+test('operator routes authorize the browser session before reading or changing service settings',async()=>{
+  const store=new FixtureStore();
+  const requests:string[]=[];
+  const smtp={
+    status:async()=>{requests.push('status');return {hasPassword:true};},
+    save:async()=>{requests.push('save');return true;},
+    verify:async()=>{requests.push('verify');},
+    testMail:async()=>{requests.push('test');},
+  } as unknown as NonNullable<Parameters<typeof createGatewayApp>[15]>;
+  const snapshot={source:'registry',observedAt:new Date().toISOString(),nextCursor:null};
+  const inventory={
+    instances:async()=>{requests.push('inventory');return {...snapshot,instances:[]};},
+    placements:async(id:string)=>{requests.push('placements');return {...snapshot,instanceId:id,status:'active' as const,placements:[]};},
+  };
+  const app=createGatewayApp(config(),store,{start:async()=>'',finish:async()=>{throw Error('fixture');}},
+    {summary:async()=>undefined},undefined,undefined,undefined,undefined,undefined,undefined,
+    undefined,undefined,undefined,undefined,undefined,smtp,inventory);
+  const token='a'.repeat(43),csrf=randomUUID();
+  await store.createSession(token,{id:accountA,displayName:'Operator fixture'},csrf);
+  const trusted={...headers,cookie:'__Host-pactaris-session='+token,origin:'https://pactaris.app','x-csrf-token':csrf};
+  const forged={...trusted,'x-forwarded-user':'operator','x-pactaris-role':'admin'};
+  const request=(url:string,requestHeaders:Record<string,string>,method:'GET'|'POST'='GET')=>
+    inject(app,{url,method,headers:requestHeaders,...(method==='POST'?{payload:{}}:{})});
+  const pages=['/api/operator/session','/api/operator/smtp','/api/operator/instances','/api/operator/instances/'+randomUUID()+'/placements'];
+  for(const url of pages){
+    assert.equal((await request(url,headers)).statusCode,401);
+    assert.equal((await request(url,forged)).statusCode,403);
+  }
+  const verify='/api/operator/smtp/verify';
+  assert.equal((await request(verify,forged,'POST')).statusCode,403);
+  assert.deepEqual(requests,[]);
+  store.operatorAllowed=true;
+  for(const url of pages)assert.equal((await request(url,trusted)).statusCode,200);
+  assert.equal((await request(verify,{...trusted,origin:'https://wrong.fixture.invalid'},'POST')).statusCode,403);
+  assert.equal((await request(verify,{...trusted,'x-csrf-token':''},'POST')).statusCode,403);
+  assert.deepEqual(requests,['status','inventory','placements']);
+  assert.equal((await request(verify,trusted,'POST')).statusCode,204);
+  await store.logout(token);
+  assert.equal((await request(verify,trusted,'POST')).statusCode,401);
+  assert.deepEqual(requests,['status','inventory','placements','verify']);
 });
 test('revoking other sessions requires the current session, same origin and CSRF token',async()=>{
   const f=fixture();
