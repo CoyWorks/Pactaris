@@ -28,7 +28,7 @@ test('journal responses are content-free and strictly validated before central s
 test('replay batches and fence reports are strictly shaped',()=>{
   const operationId=randomUUID(),entries=[entry()];
   assert.deepEqual(journalInput('journalReplay',{operationId,entries,final:true}),{operationId,entries,final:true});
-  assert.deepEqual(journalInput('journalReplay',{operationId,entries:[],final:false}).entries,[]);
+  assert.deepEqual(journalInput('journalReplay',{operationId,entries:[],final:false}),{operationId,entries:[],final:false});
   for(const value of [{operationId,entries,final:'yes'},{operationId,entries},{operationId,entries:[entry({kind:'note.text'})],final:true},
     {operationId,entries:Array.from({length:journalBatch+1},()=>entry()),final:true}])assert.throws(()=>journalInput('journalReplay',value));
   assert.equal(journalPending({fenced:true,entries:[]},50).fenced,true);
