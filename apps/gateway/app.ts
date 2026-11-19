@@ -1,6 +1,8 @@
 import { readDeploymentInfo } from '../../packages/http/deployment-info.js';
 import {pushEndpoint,pushSubscription,type WebPushDevices} from './web-push.js';
 import type {personalExport} from './personal-export.js';
+import type {AccountDeletion} from './account-deletion.js';
+import {accountInput,AccountDeletionError} from '../../packages/auth/account-deletion.js';
 import type {listRegistryInstances,listRegistryPlacements} from '../../packages/routing/inventory.js';
 import {smtpChanges,type SmtpSettings} from './smtp-settings.js';
 import {accountPresentation,preferredDisplayName} from './account-presentation.js';
@@ -51,7 +53,7 @@ type OperatorInventory={
   instances:(after:string|null)=>ReturnType<typeof listRegistryInstances>;
   placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
 };
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -248,6 +250,29 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       res.status(403).json({code:'recent_authentication_required',messageKey:'account.exportReauthenticate'});return;
     }
     res.attachment('pactaris-personal-export.json').json(data);
+  });
+  // Account-wide deletion: fresh provider authentication, no blocking sole-owner households.
+  app.post('/api/account/delete',express.json({limit:256,strict:true,inflate:false}),async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    const token=cookie(req,SESSION)!;
+    if(!await store.recentlyAuthenticated?.(token)){
+      res.status(403).json({code:'recent_authentication_required',messageKey:'account.deleteReauthenticate'});return;
+    }
+    if(!await store.throttle('account.delete:'+session.account.id,3)){
+      res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;
+    }
+    let input:{operationId:string};
+    try{input=accountInput(req.body);}catch{res.status(400).json({code:'request_invalid',messageKey:'errors.request'});return;}
+    try{
+      if(!accountDeletion)throw new AccountDeletionError('unavailable');
+      const result=await accountDeletion.request(session.account.id,input.operationId);
+      if(result.status==='blocked'){
+        res.status(409).json({code:'account_delete_blocked',messageKey:'account.deleteBlocked',householdIds:result.blockedHouseholds});return;
+      }
+      consent?.revokeSession(token);setCookie(res,SESSION,'',0);
+      res.status(202).json({status:'pending',messageKey:'account.deletePending'});
+    }catch{res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});}
   });
   app.get('/api/account/sessions',async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;

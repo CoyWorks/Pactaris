@@ -28,6 +28,11 @@ export const journalBodyLimit=32768;
 export type JournalAction=typeof journalActions[number];
 export const isJournalAction=(value:unknown):value is JournalAction=>typeof value==='string'&&(journalActions as readonly string[]).includes(value);
 export const journalPath=(action:JournalAction)=>`/internal/journal/${action}`;
+/** Account-wide erasure on one Instance, bound to the deleting account and that Instance only. */
+export const accountActions=['accountCheck','accountErase'] as const;
+export type AccountAction=typeof accountActions[number];
+export const isAccountAction=(value:unknown):value is AccountAction=>typeof value==='string'&&(accountActions as readonly string[]).includes(value);
+export const accountPath=(action:AccountAction)=>`/internal/account/${action}`;
 export class DelegationSigner {
   private key?:Promise<CryptoKey>;
   constructor(private config:GatewayConfig) {}
@@ -44,6 +49,12 @@ export class DelegationSigner {
     if(!uuid(accountId)||!uuid(householdId)||!uuid(instanceId)||!uuid(operationId)||!isHouseholdAction(action))throw new DelegationError('command.scope');
     return new SignJWT({household_id:householdId,purpose:'household.command.'+action,method:'POST',path:commandPath(householdId,action),operation_id:operationId,body_sha256:digest(body)})
       .setProtectedHeader({alg:'EdDSA',typ:'pactaris-command+jwt',kid:this.config.delegation.keyId})
+      .setIssuer(this.config.delegation.issuer).setSubject(accountId).setAudience(audience(instanceId)).setJti(randomUUID()).setIssuedAt().setExpirationTime('30s').sign(await this.ready());
+  }
+  async signAccount(accountId:string,instanceId:string,action:AccountAction,operationId:string,body:string) {
+    if(!uuid(accountId)||!uuid(instanceId)||!uuid(operationId)||!isAccountAction(action))throw new DelegationError('account.scope');
+    return new SignJWT({purpose:'instance.account.'+action,method:'POST',path:accountPath(action),operation_id:operationId,body_sha256:digest(body)})
+      .setProtectedHeader({alg:'EdDSA',typ:'pactaris-account+jwt',kid:this.config.delegation.keyId})
       .setIssuer(this.config.delegation.issuer).setSubject(accountId).setAudience(audience(instanceId)).setJti(randomUUID()).setIssuedAt().setExpirationTime('30s').sign(await this.ready());
   }
   async signJournal(instanceId:string,action:JournalAction,operationId:string,body:string) {
@@ -73,6 +84,28 @@ export class JournalVerifier {
         typeof payload.iat!=='number'||typeof payload.exp!=='number'||payload.exp-payload.iat>30||payload.iat>now+3||payload.exp<=payload.iat)throw Error('journal.scope');
       return {operationId:payload.operation_id,jti:payload.jti,expiresAt:new Date((payload.exp+3)*1000)};
     }catch{throw new DelegationError('journal.invalid');}
+  }
+}
+
+export class AccountVerifier {
+  private keys=new Map<string,Promise<CryptoKey>>();
+  constructor(private config:InstanceConfig) {}
+  async verify(token:string,action:AccountAction,body:Buffer) {
+    if(!this.config.delegation||token.length>8192||body.length>4096||!isAccountAction(action))throw new DelegationError('account.disabled');
+    try {
+      const {payload}=await jwtVerify(token,async header=>{
+        if(header.alg!=='EdDSA'||header.typ!=='pactaris-account+jwt'||!header.kid)throw Error('account.header');
+        const file=this.config.delegation!.publicKeys[header.kid];if(!file)throw Error('account.key');
+        if(!this.keys.has(header.kid))this.keys.set(header.kid,readFile(file,'utf8').then(pem=>importSPKI(pem,'EdDSA')));
+        return this.keys.get(header.kid)!;
+      },{algorithms:['EdDSA'],issuer:this.config.delegation.issuer,audience:audience(this.config.instanceId),clockTolerance:3,
+        requiredClaims:['sub','jti','iat','exp','purpose','method','path','operation_id','body_sha256']});
+      const now=Math.floor(Date.now()/1000);
+      if(!uuid(payload.sub)||!uuid(payload.jti)||!uuid(payload.operation_id)||payload.purpose!=='instance.account.'+action||
+        payload.method!=='POST'||payload.path!==accountPath(action)||payload.body_sha256!==digest(body)||
+        typeof payload.iat!=='number'||typeof payload.exp!=='number'||payload.exp-payload.iat>30||payload.iat>now+3||payload.exp<=payload.iat)throw Error('account.scope');
+      return {accountId:payload.sub,operationId:payload.operation_id,jti:payload.jti,expiresAt:new Date((payload.exp+3)*1000)};
+    }catch{throw new DelegationError('account.invalid');}
   }
 }
 
