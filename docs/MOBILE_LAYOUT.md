@@ -19,7 +19,18 @@ The gateway serves the same HTML for these paths. Moving between them uses the H
 - **Top bar:** the dynamic's name (opens the switcher list), the safety shield and the avatar (Profile). The shield is on every workspace screen and turns red while the dynamic is paused.
 - **Bottom tabs:** Today, Tasks (My tasks / Shared tasks), Routines (Habits / Rituals and check-ins), Library (Rules and protocols / Notes and ideas) and Dynamic.
 - **Dynamic tab:** members and invitations, relationships and agreements, reward catalog, safety and my limits, and settings (including leave).
-- **Add button:** a bottom sheet with shortcuts to create a private task, a task for someone, a habit, a check-in, a note, a rule or a reward. It opens the relevant section; for a private task it also opens the task editor. Creation still goes through each module's own form and confirmation.
+- **Today:** open tasks with a complete action, unread shared work, up to four active habits with their current period total and a **+1** button, counts and shortcuts. Habits are read when Today opens and after a change, not polled. Empty sections show one line and one action instead of an explanation.
+- **Add button:** a bottom sheet. Private task, habit and note open a short form inside the sheet; **More options** opens the full form. A task for someone, check-ins, rules and rewards open their section, because their consent, audience and scope choices need the full form.
+
+### Quick add
+
+| Item | Fields | Result |
+| --- | --- | --- |
+| Private task | Title, optional due time, "I'll do this myself" (on by default) | `taskCreate`, unassigned when unticked |
+| Habit | Name, times per day, "Start tracking now" (on by default) | `routineCreate` as a daily minimum habit; when ticked, a separate `routineRead` and `routineActivate`. If starting fails (for example during a pause) the draft remains and the sheet says so |
+| Note | Title, optional text | `documentCreate` as a private note with no recipients |
+
+Each form keeps its operation ID until the input changes, so retrying after an unconfirmed outcome repeats the same request. **+1** on Today records one `progressRecord` entry at server time with the habit's current version, revision and safety epochs; pause and limit checks apply exactly as in Routines.
 
 ## Profile
 
@@ -28,6 +39,10 @@ The avatar opens Profile: display name, date and time, notifications, signed-in 
 ## Help text
 
 Longer explanations of a section or form are collapsed behind **More info** (a native `details` element, readable by assistive technology). Confirmation notices, consent statements, errors and safety status shown at the moment of a decision stay visible.
+
+## Loading
+
+Loading shows placeholder rows instead of text. The rows are decorative; a visually hidden status text keeps the loading state available to screen readers, and the shimmer stops when the system asks for reduced motion.
 
 ## Accessibility
 
