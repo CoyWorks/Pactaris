@@ -1,5 +1,5 @@
 import {DraftAttachment} from './draft-attachment.js';
-import {Hint} from './navigation.js';
+import {Hint,Layer} from './navigation.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {DocumentFields,DocumentKind,DocumentSummary,DocumentDetail,LibraryResult} from '../../../packages/auth/library.js';
@@ -54,16 +54,21 @@ export function LibraryPanel({householdId,session,language,format,timeZone,secti
  }
  const blocked=busy||!!draft,alias=(id:string)=>members.find(m=>m.membershipId===id)?.displayName||id;
  const options=[...new Set([...members.filter(m=>!m.isSelf).map(m=>m.membershipId),...(editor?.fields.recipients??[])])];
+ const layerOpen=!!(editor||detail),status=<>{error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}{draft&&<div className="notice"><p>{t('workspace.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void change(draft.action,draft.body,draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}{confirmation&&<div className="notice" role="group"><h3>{t(confirmation.action==='documentPublish'?'library.confirmPublish':confirmation.action==='documentDelete'?'library.confirmDelete':'library.confirmArchive')}</h3><p>{confirmation.document.title}</p><p>{t(visibilities[confirmation.document.visibility])}</p>
+   {confirmation.document.visibility==='participants'&&<ul>{confirmation.document.recipients.map(id=><li key={id}>{alias(id)}</li>)}</ul>}
+   <p>{t(confirmation.action==='documentPublish'?'library.publishNotice':confirmation.action==='documentDelete'?'library.deleteNotice':'library.archiveNotice')}</p>
+   <button type="button" disabled={blocked} onClick={()=>{void change(confirmation.action,{documentId:confirmation.document.documentId,version:confirmation.document.version});}}>{t('members.confirm')}</button><button type="button" disabled={busy} onClick={()=>setConfirmation(undefined)}>{t('onboarding.cancel')}</button>
+  </div>}</>;
  return <section><h2>{t(section==='notes'?'library.notes':'library.guidance')}</h2><Hint label={t('hint.more')}>{t(section==='notes'?'library.notesDescription':'library.guidanceDescription')}</Hint>
-  {error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}
-  {draft&&<div className="notice"><p>{t('workspace.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void change(draft.action,draft.body,draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}
+  {!layerOpen&&<>{error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}</>}
+  {!layerOpen&&<>{draft&&<div className="notice"><p>{t('workspace.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void change(draft.action,draft.body,draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}</>}
   <div className="workspace-actions">{section==='guidance'&&(['rule','protocol'] as const).map(k=><button type="button" key={k} aria-pressed={kind===k} disabled={blocked} onClick={()=>{setKind(k);setCursor(undefined);setEditor(undefined);}}>{t(kinds[k])}</button>)}
    <button type="button" aria-pressed={filter==='active'} onClick={()=>{setFilter('active');setCursor(undefined);}}>{t('library.active')}</button><button type="button" aria-pressed={filter==='archived'} onClick={()=>{setFilter('archived');setCursor(undefined);}}>{t('library.archived')}</button>
    <button type="button" disabled={blocked} onClick={()=>{setDetail(undefined);setEditor({fields:empty()});}}>{t('library.create')}</button>
   </div>
   <form className="library-search" onSubmit={e=>{e.preventDefault();setQuery(search.trim());setCursor(undefined);}}><label>{t('library.searchLabel')}<input maxLength={80} value={search} onChange={e=>setSearch(e.target.value)}/></label><button type="submit">{t('library.search')}</button></form>
   {!listing?<p role="status">{t('library.loading')}</p>:!listing.documents?.length&&<p>{t('library.empty')}</p>}
-  {editor&&<form className="document-editor" onSubmit={e=>{e.preventDefault();const fields={...editor.fields,title:editor.fields.title.trim(),body:editor.fields.body.trim(),category:editor.fields.category.trim()};void change(editor.documentId?'documentUpdate':'documentCreate',editor.documentId?{documentId:editor.documentId,version:editor.version,fields}:{kind,fields});}}>
+  {editor&&<Layer title={t('library.editor')} backLabel={t('nav.back')} onClose={()=>setEditor(undefined)} status={status}><form className="document-editor" onSubmit={e=>{e.preventDefault();const fields={...editor.fields,title:editor.fields.title.trim(),body:editor.fields.body.trim(),category:editor.fields.category.trim()};void change(editor.documentId?'documentUpdate':'documentCreate',editor.documentId?{documentId:editor.documentId,version:editor.version,fields}:{kind,fields});}}>
    <h3>{t('library.editor')}</h3><Hint label={t('hint.more')}>{t('library.draftNotice')}</Hint>
    <label>{t('library.title')}<input maxLength={120} required disabled={blocked} value={editor.fields.title} onChange={e=>setEditor({...editor,fields:{...editor.fields,title:e.target.value}})}/></label>
    <label>{t('library.body')}<textarea maxLength={2000} disabled={blocked} value={editor.fields.body} onChange={e=>setEditor({...editor,fields:{...editor.fields,body:e.target.value}})}/></label>
@@ -73,7 +78,7 @@ export function LibraryPanel({householdId,session,language,format,timeZone,secti
    <Hint label={t('hint.more')}>{t('library.sharingNotice')}</Hint>
    {editor.fields.visibility==='participants'&&<fieldset disabled={blocked}><legend>{t('library.chooseRecipients')}</legend>{options.map(id=><label key={id}><input type="checkbox" checked={editor.fields.recipients.includes(id)} disabled={!editor.fields.recipients.includes(id)&&editor.fields.recipients.length>=8} onChange={e=>setEditor({...editor,fields:{...editor.fields,recipients:e.target.checked?[...editor.fields.recipients,id]:editor.fields.recipients.filter(m=>m!==id)}})}/>{alias(id)}</label>)}{memberCursor&&<button type="button" onClick={()=>{void moreMembers();}}>{t('portal.more')}</button>}</fieldset>}
    <button type="submit" disabled={blocked}>{t('library.saveDraft')}</button><button type="button" disabled={busy} onClick={()=>setEditor(undefined)}>{t('onboarding.cancel')}</button>
-  </form>}
+  </form></Layer>}
   <ul className="task-list">{listing?.documents?.map(d=><li key={d.documentId}><h3>{d.title}</h3><p>{d.category}</p><div className="task-meta"><span>{t(states[d.state])}</span><span>{t(visibilities[d.visibility])}</span><span>{t('relationships.version')} <span>{d.version}</span></span>{d.acknowledged&&<span>{t('library.acknowledged')}</span>}</div>
    <div className="workspace-actions"><button type="button" disabled={busy} onClick={()=>{void open(d,'read');}}>{t('library.read')}</button>
     {d.canEdit&&<>{d.state!=='archived'&&<button type="button" disabled={blocked} onClick={()=>{void open(d,'edit');}}>{t('workspace.edit')}</button>}{d.state==='draft'&&<button type="button" disabled={blocked} onClick={()=>{void open(d,'documentPublish');}}>{t('library.publish')}</button>}
@@ -81,7 +86,7 @@ export function LibraryPanel({householdId,session,language,format,timeZone,secti
      {d.kind==='note'&&<button type="button" disabled={blocked} onClick={()=>{void open(d,'documentDelete');}}>{t('library.delete')}</button>}
     </>}
    </div></li>)}</ul>
-  {detail&&<article className="document-detail"><h3>{detail.title}</h3><p>{t('relationships.version')} <span>{detail.version}</span></p>{detail.historical&&<p>{t('library.historical')}</p>}<div className="document-body">{detail.body}</div>
+  {detail&&<Layer title={detail.title} backLabel={t('nav.back')} onClose={()=>setDetail(undefined)} status={status}><article className="document-detail"><h3>{detail.title}</h3><p>{t('relationships.version')} <span>{detail.version}</span></p>{detail.historical&&<p>{t('library.historical')}</p>}<div className="document-body">{detail.body}</div>
    {detail.canEdit&&<div className="workspace-actions">{BigInt(detail.version)>1n&&<button type="button" disabled={busy} onClick={()=>{void read(detail.documentId,(BigInt(detail.version)-1n).toString()).then(d=>{if(d)setDetail(d);});}}>{t('library.previousVersion')}</button>}<button type="button" disabled={busy} onClick={()=>{void read(detail.documentId).then(d=>{if(d)setDetail(d);});}}>{t('library.currentVersion')}</button></div>}
    {detail.kind!=='note'&&!detail.historical&&detail.state==='published'&&<><p>{t('library.ackNotice')}</p>{detail.acknowledged?<p>{t('library.acknowledged')}</p>:<button type="button" disabled={blocked} onClick={()=>{void change('documentAcknowledge',{documentId:detail.documentId,version:detail.version});}}>{t('library.acknowledge')}</button>}</>}
    {detail.kind!=='note'&&!detail.historical&&detail.state==='published'&&(
@@ -102,12 +107,12 @@ export function LibraryPanel({householdId,session,language,format,timeZone,secti
    {detail.canEdit&&!detail.historical&&detail.state==='draft'&&<DraftAttachment key={detail.documentId+':'+detail.version}
     base={base} documentId={detail.documentId} version={detail.version} csrfToken={session.csrfToken} language={language} disabled={blocked}/>}
    <button type="button" onClick={()=>setDetail(undefined)}>{t('library.close')}</button>
-  </article>}
-  {confirmation&&<div className="notice" role="group"><h3>{t(confirmation.action==='documentPublish'?'library.confirmPublish':confirmation.action==='documentDelete'?'library.confirmDelete':'library.confirmArchive')}</h3><p>{confirmation.document.title}</p><p>{t(visibilities[confirmation.document.visibility])}</p>
+  </article></Layer>}
+  {!layerOpen&&<>{confirmation&&<div className="notice" role="group"><h3>{t(confirmation.action==='documentPublish'?'library.confirmPublish':confirmation.action==='documentDelete'?'library.confirmDelete':'library.confirmArchive')}</h3><p>{confirmation.document.title}</p><p>{t(visibilities[confirmation.document.visibility])}</p>
    {confirmation.document.visibility==='participants'&&<ul>{confirmation.document.recipients.map(id=><li key={id}>{alias(id)}</li>)}</ul>}
    <p>{t(confirmation.action==='documentPublish'?'library.publishNotice':confirmation.action==='documentDelete'?'library.deleteNotice':'library.archiveNotice')}</p>
    <button type="button" disabled={blocked} onClick={()=>{void change(confirmation.action,{documentId:confirmation.document.documentId,version:confirmation.document.version});}}>{t('members.confirm')}</button><button type="button" disabled={busy} onClick={()=>setConfirmation(undefined)}>{t('onboarding.cancel')}</button>
-  </div>}
+  </div>}</>}
   {listing?.nextCursor&&<button type="button" disabled={busy} onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}<button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>
  </section>;
 }
