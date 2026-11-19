@@ -4,7 +4,7 @@ Implements the account-wide deletion contract in [MEMBERSHIP_LIFECYCLE.md](MEMBE
 
 ## User flow
 
-In the household selector, **Delete account** explains the consequences and requires a confirmation checkbox. The request needs the current session, the exact Origin, the CSRF token and a provider authentication from the last five minutes (the same `/auth/reauth` path as personal export). Requests are throttled per account.
+On the Profile page, **Delete account** explains the consequences and requires a confirmation checkbox. The request needs the current session, the exact Origin, the CSRF token and a provider authentication from the last five minutes (the same `/auth/reauth` path as personal export). Requests are throttled per account.
 
 - If the account is the only owner of a dynamic that still has other active members, the request is refused with `account_delete_blocked` and the affected household IDs. Ownership must be transferred first. A sole owner who is also the only member does not block: leaving closes that dynamic.
 - Otherwise the gateway fences the account (`deleting`), revokes every Pactaris session (push devices and task push scopes cascade) and signs the browser out. The account can no longer sign in or create sessions.

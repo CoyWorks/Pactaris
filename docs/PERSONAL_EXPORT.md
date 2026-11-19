@@ -1,6 +1,6 @@
 # Personal export
 
-From the household selector, request the JSON download as the account holder. The gateway checks the browser session, origin, CSRF token and a provider authentication from the last five minutes before it starts. Authentik can reauthenticate through `/auth/reauth`. Requests are throttled per account. Export stays available regardless of plan, quota or storage use.
+From the Profile page, request the JSON download as the account holder. The gateway checks the browser session, origin, CSRF token and a provider authentication from the last five minutes before it starts. Authentik can reauthenticate through `/auth/reauth`. Requests are throttled per account. Export stays available regardless of plan, quota or storage use.
 
 ## Version 2: complete export
 
