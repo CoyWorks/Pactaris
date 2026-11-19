@@ -28,6 +28,7 @@ import { DelegationSigner } from '../packages/auth/delegation.js';
 import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient,PrivateCatalogClient,PrivatePartnerClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
+import { RevocationJournalSync } from '../apps/gateway/revocation-journal.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
 import {InvitationMail} from '../apps/gateway/invitation-mail.js';
 import { GatewayInvitations } from '../apps/gateway/invitations.js';
@@ -464,6 +465,23 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await a.owner.query("SELECT count(*)::int AS count FROM pactaris.memberships WHERE household_id=$1 AND status='active' AND technical_role='owner'",[created])).rows[0].count,0);
   for(const member of additional)await commands.execute(member,destination,'leave',randomUUID());
   assert.equal((await a.owner.query('SELECT status,safety_version FROM pactaris.households WHERE id=$1',[created])).rows[0].status,'closed');
+  // Revocations are copied to the gateway over the signed private path, outside the Instance snapshot.
+  const journal=new RevocationJournalSync(gatewayDb.pool,signer);
+  const firstSync=await journal.sync();assert.equal(firstSync.failedInstances,0);assert.ok(firstSync.received>0);
+  const copied=(await gatewayDb.pool.query("SELECT kind,subject FROM pactaris.revocation_journal WHERE instance_id=$1 AND household_id=$2 ORDER BY occurred_at,entry_id",[ids[0],created])).rows;
+  assert.equal(copied.filter(row=>row.kind==='membership.ended').length,4);
+  assert.deepEqual(copied.filter(row=>row.kind==='household.stopped').map(row=>row.subject.status),['paused','closed']);
+  assert.ok(copied.every(row=>Object.values(row.subject).every(value=>typeof value==='string'&&/^[a-zA-Z0-9-]+$/.test(value as string))));
+  assert.equal((await a.owner.query('SELECT count(*)::int n FROM pactaris.revocation_journal WHERE exported_at IS NULL')).rows[0].n,0);
+  assert.deepEqual(await journal.sync(),{received:0,failedInstances:0});
+  // A lost acknowledgement re-sends the same entries; the central copy stays idempotent.
+  const centralCount=(await gatewayDb.pool.query('SELECT count(*)::int n FROM pactaris.revocation_journal')).rows[0].n;
+  await a.owner.query('UPDATE pactaris.revocation_journal SET exported_at=NULL');
+  assert.ok((await journal.sync()).received>0);
+  assert.equal((await gatewayDb.pool.query('SELECT count(*)::int n FROM pactaris.revocation_journal')).rows[0].n,centralCount);
+  await assert.rejects(a.pool.query('SELECT * FROM pactaris.revocation_journal'));
+  await assert.rejects(gatewayDb.pool.query('DELETE FROM pactaris.revocation_journal'));
+  await assert.rejects(services[0]!.journal(await signer.signCommand(account.id,created,ids[0]!,'create',operation,'{}'),'journalPending',Buffer.from('{}')));
   for(const table of ['audit_events','household_outbox','household_command_receipts'])assert.equal((await a.owner.query(`SELECT count(*)::int AS count FROM pactaris.${table} WHERE household_id=$1`,[created])).rows[0].count,5);
   const audit=(await a.owner.query('SELECT parameters FROM pactaris.audit_events WHERE household_id=$1',[created])).rows;
   assert.ok(audit.every(row=>Object.keys(row.parameters).join(',')==='operationId'));

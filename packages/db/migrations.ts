@@ -58,6 +58,8 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0015_web_push'))await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.push_devices TO ${role}`);
       if(entries.some(m=>m.id==='0013_smtp_settings'))await connection.query(`GRANT SELECT,INSERT,UPDATE ON pactaris.smtp_settings TO ${role}`);
       if(entries.some(m=>m.id==='0010_account_presentation'))await connection.query(`GRANT INSERT ON pactaris.account_presentation_events TO ${role}`);
+      // Append-only from the runtime: journal copies are never updated or deleted by the service.
+      if(entries.some(m=>m.id==='0018_revocation_journal'))await connection.query(`GRANT SELECT,INSERT ON pactaris.revocation_journal TO ${role}`);
     } else {
       await connection.query(`GRANT SELECT ON pactaris.households,pactaris.memberships,pactaris.household_entitlements TO ${role}`);
       await connection.query(`GRANT SELECT,INSERT,DELETE ON pactaris.delegation_uses TO ${role}`);
@@ -88,6 +90,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0008_consent_safety'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.consent_command(uuid,uuid,uuid,uuid,text,jsonb,text),pactaris.activity_guard(uuid,uuid,uuid,uuid,uuid,bigint,text,bigint) TO ${role}`);
       if(entries.some(m=>m.id==='0007_relationships'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.relationship_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0006_member_administration'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.member_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
+      if(entries.some(m=>m.id==='0032_revocation_journal'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.revocation_journal_pending(uuid,integer),pactaris.revocation_journal_ack(uuid,uuid[]) TO ${role}`);
       if(entries.some(m=>m.id==='0003_receipt'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.household_receipt_command(uuid,uuid,uuid,uuid) TO ${role}`);
     }
     await connection.query(`GRANT USAGE ON SCHEMA pactaris,pactaris_meta TO "${backupRole}"`);

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { parseConfig,parseGatewayConfig } from '../packages/config/index.js';
-import { DelegationSigner,DelegationVerifier,CommandVerifier,audience,summaryPath,commandPath,digest } from '../packages/auth/delegation.js';
+import { DelegationSigner,DelegationVerifier,CommandVerifier,JournalVerifier,audience,summaryPath,commandPath,journalPath,digest } from '../packages/auth/delegation.js';
 const account=randomUUID(),household=randomUUID(),instance=randomUUID();
 test('signed delegations bind identity, instance audience, household, method, purpose and lifetime',async()=>{
  const folder=await mkdtemp(join(tmpdir(),'pactaris-delegation-'));
@@ -48,5 +48,29 @@ test('write delegations authenticate exact body, operation, action and destinati
     .setProtectedHeader({alg:'EdDSA',typ:'pactaris-command+jwt',kid:'gateway-v1'}).setIssuer(gateway.publicOrigin).setSubject(account).setAudience(audience(instance)).setJti(randomUUID()).setIssuedAt().setExpirationTime(Math.floor(Date.now()/1000)+seconds).sign(key.privateKey);
   for(const fields of [{method:'GET'},{operation_id:'not-uuid'},{path:'/admin'},{purpose:'household.command.leave'}])await assert.rejects(verifier.verify(await make(fields),household,'create',Buffer.from(body)));
   for(const seconds of [-10,120])await assert.rejects(verifier.verify(await make({},seconds),household,'create',Buffer.from(body)));
+ }finally{await rm(folder,{recursive:true,force:true});}
+});
+test('journal delegations are instance-scoped and cannot authorize household summaries or commands',async()=>{
+ const folder=await mkdtemp(join(tmpdir(),'pactaris-journal-'));
+ try{
+  const key=await generateKeyPair('EdDSA',{extractable:true}),privateFile=join(folder,'private.key'),publicFile=join(folder,'public.pem');
+  await writeFile(privateFile,await exportPKCS8(key.privateKey),{mode:0o600});await writeFile(publicFile,await exportSPKI(key.publicKey));
+  const gateway=parseGatewayConfig(JSON.parse(readFileSync('config/gateway.example.json','utf8')));gateway.delegation.privateKeyFile=privateFile;
+  const config=parseConfig(JSON.parse(readFileSync('config/instance.example.json','utf8')));config.instanceId=instance;config.delegation={issuer:gateway.publicOrigin,publicKeys:{'gateway-v1':publicFile}};
+  const signer=new DelegationSigner(gateway),verifier=new JournalVerifier(config),operation=randomUUID(),body=JSON.stringify({operationId:operation,limit:50});
+  const token=await signer.signJournal(instance,'journalPending',operation,body);
+  assert.equal((await verifier.verify(token,'journalPending',Buffer.from(body))).operationId,operation);
+  await assert.rejects(verifier.verify(token,'journalAck',Buffer.from(body)));
+  await assert.rejects(verifier.verify(token,'journalPending',Buffer.from(body+' ')));
+  await assert.rejects(new JournalVerifier({...config,instanceId:randomUUID()}).verify(token,'journalPending',Buffer.from(body)));
+  await assert.rejects(new CommandVerifier(config).verify(token,household,'create',Buffer.from(body)));
+  await assert.rejects(new DelegationVerifier(config).verify(token,household));
+  await assert.rejects(verifier.verify(await signer.signCommand(account,household,instance,'create',operation,body),'journalPending',Buffer.from(body)));
+  await assert.rejects(signer.signJournal('not-a-uuid','journalPending',operation,body));
+  const make=(fields:Record<string,unknown>,subject=instance,seconds=30)=>new SignJWT({purpose:'instance.journal.journalPending',method:'POST',path:journalPath('journalPending'),operation_id:operation,body_sha256:digest(body),...fields})
+    .setProtectedHeader({alg:'EdDSA',typ:'pactaris-journal+jwt',kid:'gateway-v1'}).setIssuer(gateway.publicOrigin).setSubject(subject).setAudience(audience(instance)).setJti(randomUUID()).setIssuedAt().setExpirationTime(Math.floor(Date.now()/1000)+seconds).sign(key.privateKey);
+  for(const fields of [{method:'GET'},{path:'/admin'},{purpose:'instance.journal.journalAck'},{operation_id:'not-uuid'}])await assert.rejects(verifier.verify(await make(fields),'journalPending',Buffer.from(body)));
+  await assert.rejects(verifier.verify(await make({},account),'journalPending',Buffer.from(body)));
+  for(const seconds of [-10,120])await assert.rejects(verifier.verify(await make({},instance,seconds),'journalPending',Buffer.from(body)));
  }finally{await rm(folder,{recursive:true,force:true});}
 });

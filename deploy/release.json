@@ -337,6 +337,20 @@
       "path": "migrations/instance/0031_habit_reward_claims.sql",
       "sha256": "e38b114ea43d79cbd798c3669d9c7fd44d627949bcec4005726fdba7fe07ffbd",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0018_revocation_journal",
+      "path": "migrations/gateway/0018_revocation_journal.sql",
+      "sha256": "9d2d0760c195bd7387123bf1493c30273d6f611188c24e6dbaf8ef9d5411cead",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0032_revocation_journal",
+      "path": "migrations/instance/0032_revocation_journal.sql",
+      "sha256": "a1d30c4ed47b24c85f313b6047bea28caaeefbe6ff23cbd6d084b0cdabc34711",
+      "backwardCompatible": true
     }
   ]
 }
