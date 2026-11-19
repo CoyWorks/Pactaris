@@ -44,3 +44,7 @@ Custom periods, scheduled breaks, partner assignment/review/sharing, reminders/j
 Choose **Show recent habit counts** in a habit's details. The app displays up to seven daily or weekly periods ending at the selected period, using that habit version's time zone. The Instance sums unreversed records, with zero for periods that have no recorded count. Older versions use their own schedule and records.
 
 The chart is optional and uses only counts from the current habit owner's exact membership. A household role does not grant access to someone else's chart. Dates and numbers follow the account's formatting locale. Reports across households or shared members remain future scope in #41.
+
+## One-off check-ins with an optional reviewer
+
+A member writes their own one-off check-in and chooses sole access or one active reviewer. The app displays the audience before saving. The selected reviewer can mark that exact submission reviewed. The author can withdraw it, clearing its title and response from the live record. Membership departure removes access for the affected member and stops disclosure to any reviewer of an ended author. Pause prevents new shared submissions and reviews, while private entries and withdrawal stay available. No recurring assignment, external notification or consequence is generated.

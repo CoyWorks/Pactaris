@@ -281,6 +281,13 @@
       "path": "migrations/instance/0024_draft_attachments.sql",
       "sha256": "56be6aec287461e8e952c1c39c54b6586a02db1871afafd8d0600bcb87990bb5",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0025_shared_checkins",
+      "path": "migrations/instance/0025_shared_checkins.sql",
+      "sha256": "71ed29aface4bd9cba7a952b520d4eaccb336d0f0188461c4670f63a085400f0",
+      "backwardCompatible": true
     }
   ]
 }

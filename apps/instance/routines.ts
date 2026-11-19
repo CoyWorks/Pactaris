@@ -21,7 +21,9 @@ export class InstanceRoutines{
    await db.query('BEGIN');
    const used=await db.query('INSERT INTO pactaris.delegation_uses(jti,expires_at) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING jti',[verified.jti,verified.expiresAt]);
    if(!used.rowCount)throw new DelegationError('routines.replay');
-   const result=await db.query('SELECT pactaris.routine_command($1,$2,$3,$4,$5,$6,$7) AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint]);
+   const query=action.startsWith('checkin')?'SELECT pactaris.shared_checkin_command($1,$2,$3,$4,$5,$6,$7) AS result'
+    :'SELECT pactaris.routine_command($1,$2,$3,$4,$5,$6,$7) AS result';
+   const result=await db.query(query,[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint]);
    const response=result.rows[0].result as RoutineResult;
    if(action==='routineRead'&&input.includeTrend===true&&response.routine?.kind==='habit'){
     const routine=response.routine;
