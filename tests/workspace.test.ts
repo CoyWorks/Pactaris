@@ -34,3 +34,11 @@ test('quick add forms stay short, private by default and explicit about self-ass
  const habits=renderToStaticMarkup(React.createElement(TodayHabits,{householdId:randomUUID(),csrfToken:'fixture',language:'en',reload:0,onAdd:()=>{},onOpen:()=>{}}));
  assert.match(habits,/Habits today/);assert.match(habits,/aria-busy="true"/);
 });
+test('appearance defaults to the system theme and detail pages are labelled dialogs',async()=>{
+ const {AppearancePanel}=await import('../apps/instance/web/appearance.js');
+ const {Layer}=await import('../apps/instance/web/navigation.js');
+ const appearance=renderToStaticMarkup(React.createElement(AppearancePanel,{language:'en'}));
+ assert.match(appearance,/<input type="radio" name="theme" checked="" value="system"\/>/);assert.match(appearance,/Light/);assert.match(appearance,/Dark/);
+ const layer=renderToStaticMarkup(React.createElement(Layer,{title:'Draft details',backLabel:'Back',onClose:()=>{},children:React.createElement('p',null,'body')}));
+ assert.match(layer,/role="dialog" aria-modal="true" aria-label="Draft details"/);assert.match(layer,/aria-label="Back"/);
+});

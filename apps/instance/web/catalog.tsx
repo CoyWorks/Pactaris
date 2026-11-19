@@ -1,5 +1,5 @@
 import {RewardRedemptions} from './reward-redemptions.js';
-import {Hint} from './navigation.js';
+import {Hint,Layer} from './navigation.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import type {CatalogKind,CatalogFields,CatalogDetail,CatalogResult} from '../../../packages/auth/catalog.js';
@@ -27,11 +27,12 @@ export function CatalogPanel({householdId,session,language,format}:{householdId:
   try{await request(pending.action,pending.body,controller.signal);setDraft(undefined);setEditor(undefined);setDetail(undefined);setRefresh(v=>v+1);setNotice('catalog.saved');}
   catch(e){const status=(e as {status?:number})?.status;setError(failure(e));if(status&&status<500)setDraft(undefined);else setNotice('catalog.unknown');}finally{clearTimeout(deadline);writing.current=false;setBusy(false);}}
  const blocked=busy||!!draft;
+ const layerOpen=!!(editor||detail),status=<>{error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}{draft&&<div className="notice"><p>{t('workspace.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void change(draft.action,draft.body,draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}</>;
  return <section><h2>{t('catalog.title')}</h2><Hint label={t('hint.more')}>{t('catalog.description')}</Hint>
-  {error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}
-  {draft&&<div className="notice"><p>{t('workspace.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void change(draft.action,draft.body,draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}
+  {!layerOpen&&<>{error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}</>}
+  {!layerOpen&&<>{draft&&<div className="notice"><p>{t('workspace.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void change(draft.action,draft.body,draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}</>}
   <div className="workspace-actions"><button type="button" disabled={blocked} onClick={()=>{setEditor({fields:blank()});setDetail(undefined);}}>{t('catalog.create')}</button><button type="button" disabled={blocked} onClick={()=>{setFilter(filter==='current'?'archived':'current');setCursor(undefined);setListing(undefined);setDetail(undefined);setEditor(undefined);}}>{t(filter==='current'?'library.archived':'catalog.current')}</button></div>
-  {editor&&<form className="document-editor" onSubmit={e=>{e.preventDefault();const fields={...editor.fields,title:editor.fields.title.trim(),description:editor.fields.description.trim(),category:editor.fields.category.trim()};void change(editor.itemId?'catalogUpdate':'catalogCreate',editor.itemId?{itemId:editor.itemId,version:editor.version,fields}:{fields});}}>
+  {editor&&<Layer title={t('library.editor')} backLabel={t('nav.back')} onClose={()=>setEditor(undefined)} status={status}><form className="document-editor" onSubmit={e=>{e.preventDefault();const fields={...editor.fields,title:editor.fields.title.trim(),description:editor.fields.description.trim(),category:editor.fields.category.trim()};void change(editor.itemId?'catalogUpdate':'catalogCreate',editor.itemId?{itemId:editor.itemId,version:editor.version,fields}:{fields});}}>
    <h3>{t('catalog.draft')}</h3><label>{t('library.title')}<input required maxLength={120} disabled={blocked} value={editor.fields.title} onChange={e=>setEditor({...editor,fields:{...editor.fields,title:e.target.value}})}/></label>
    <label>{t('catalog.body')}<textarea maxLength={500} disabled={blocked} value={editor.fields.description} onChange={e=>setEditor({...editor,fields:{...editor.fields,description:e.target.value}})}/></label>
    <label>{t('library.category')}<input maxLength={60} disabled={blocked} value={editor.fields.category} onChange={e=>setEditor({...editor,fields:{...editor.fields,category:e.target.value}})}/></label>
@@ -48,13 +49,13 @@ export function CatalogPanel({householdId,session,language,format}:{householdId:
    </>}
    <label>{t('library.position')}<input type="number" min={0} max={999999} step={1} required disabled={blocked} value={editor.fields.position} onChange={e=>setEditor({...editor,fields:{...editor.fields,position:Number(e.target.value)}})}/></label>
    <button type="submit" disabled={blocked}>{t('library.saveDraft')}</button><button type="button" disabled={busy} onClick={()=>setEditor(undefined)}>{t('onboarding.cancel')}</button>
-  </form>}
+  </form></Layer>}
   {!listing&&<p role="status">{t('catalog.loading')}</p>}{listing&&!listing.items?.length&&<p>{t('catalog.empty')}</p>}
   <ul className="task-list">{listing?.items?.map(item=><li key={item.itemId}><h3>{item.title}</h3><p>{item.category}</p><p>{t(typeLabels[item.kind??'reward'])}{t('catalog.separator')}{price(item.points,item.kind)}</p><p>{t(item.state==='archived'?'library.archived':'catalog.draft')}</p><button type="button" disabled={blocked} onClick={()=>{void open(item.itemId);}}>{t('catalog.open')}</button></li>)}</ul>
-  {detail&&<article className="document-detail"><h3>{detail.title}</h3><p className="document-body">{detail.description}</p><p>{detail.category}</p><p>{t(typeLabels[detail.kind??'reward'])}{t('catalog.separator')}{price(detail.points,detail.kind)}</p><p>{t('relationships.version')} <span>{detail.version}</span></p>{detail.historical&&<p>{t('catalog.historical')}</p>}
+  {detail&&<Layer title={detail.title} backLabel={t('nav.back')} onClose={()=>setDetail(undefined)} status={status}><article className="document-detail"><h3>{detail.title}</h3><p className="document-body">{detail.description}</p><p>{detail.category}</p><p>{t(typeLabels[detail.kind??'reward'])}{t('catalog.separator')}{price(detail.points,detail.kind)}</p><p>{t('relationships.version')} <span>{detail.version}</span></p>{detail.historical&&<p>{t('catalog.historical')}</p>}
    {!detail.historical&&(detail.state==='archived'?<button type="button" disabled={blocked} onClick={()=>{void change('catalogRestore',{itemId:detail.itemId,version:detail.version});}}>{t('library.restore')}</button>:<><button type="button" disabled={blocked} onClick={()=>setEditor({itemId:detail.itemId,version:detail.version,fields:{title:detail.title,description:detail.description,category:detail.category,points:detail.points,position:detail.position,kind:detail.kind??'reward'}})}>{t('workspace.edit')}</button><button type="button" disabled={blocked} onClick={()=>{void change('catalogArchive',{itemId:detail.itemId,version:detail.version});}}>{t('workspace.archive')}</button></>)}
    {BigInt(detail.version)>1n&&<button type="button" disabled={blocked} onClick={()=>{void open(detail.itemId,(BigInt(detail.version)-1n).toString());}}>{t('library.previousVersion')}</button>}{detail.historical&&<button type="button" disabled={blocked} onClick={()=>{void open(detail.itemId);}}>{t('library.currentVersion')}</button>}<button type="button" disabled={busy} onClick={()=>setDetail(undefined)}>{t('library.close')}</button>
-  </article>}
+  </article></Layer>}
   <RewardRedemptions base={base} householdId={householdId} csrfToken={session.csrfToken} language={language} format={format}
    detail={detail} refresh={refresh} blocked={blocked} onAction={(action,body)=>void change(action,body)}/>
   {listing?.nextCursor&&<button type="button" disabled={blocked} onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" disabled={blocked} onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}<button type="button" disabled={busy} onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>

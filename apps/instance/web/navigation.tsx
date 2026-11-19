@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 const event='pactaris:navigate';
 /** Moves within the single-page app without a full reload. */
 export function navigate(to:string,replace=false){
@@ -53,9 +53,25 @@ const paths={
  close:<path d="M6 6l12 12M18 6L6 18"/>,
  back:<path d="M15 6l-6 6 6 6"/>,
  chevron:<path d="M9 6l6 6-6 6"/>,
+ check:<path d="M5 12l5 5 9-10"/>,
  down:<path d="M6 9l6 6 6-6"/>,
 };
 export type IconName=keyof typeof paths;
 export function Icon({name}:{name:IconName}){
  return <svg className="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+}
+/** Full-screen detail or form page above a section; Back and Escape close it. */
+export function Layer({title,backLabel,onClose,status,children}:{title:string;backLabel:string;onClose:()=>void;status?:React.ReactNode;children:React.ReactNode}){
+ const close=useRef(onClose);close.current=onClose;
+ const heading=useRef<HTMLHeadingElement>(null);
+ useEffect(()=>{
+  const previous=document.activeElement as HTMLElement|null;
+  const key=(e:KeyboardEvent)=>{if(e.key==='Escape')close.current();};
+  document.body.classList.add('layer-open');window.addEventListener('keydown',key);heading.current?.focus();
+  return()=>{document.body.classList.remove('layer-open');window.removeEventListener('keydown',key);previous?.focus?.();};
+ },[]);
+ return <div className="layer" role="dialog" aria-modal="true" aria-label={title}>
+  <div className="layer-bar"><button type="button" className="icon-button" aria-label={backLabel} onClick={()=>close.current()}><Icon name="back"/></button><h2 ref={heading} tabIndex={-1}>{title}</h2></div>
+  <div className="layer-body">{status}{children}</div>
+ </div>;
 }

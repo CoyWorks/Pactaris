@@ -850,5 +850,13 @@
   "today.addHabit": "Add a habit",
   "today.addTask": "Add a task",
   "today.progress": "{count} of {target}",
-  "today.addOne": "Add one to {title}"
+  "today.addOne": "Add one to {title}",
+  "tasks.completed": "Task completed",
+  "tasks.archived": "Task archived",
+  "tasks.undo": "Undo",
+  "tasks.completeNamed": "Complete {title}",
+  "theme.title": "Appearance",
+  "theme.system": "System",
+  "theme.light": "Light",
+  "theme.dark": "Dark"
 }
