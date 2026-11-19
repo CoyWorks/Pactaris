@@ -100,3 +100,24 @@ bash /opt/pactaris-source/backup.sh --component identity --apply
 Use `gateway` or `instance` for those components. Pass `--root` for a nondefault installation root. The same per-component lock serializes checkpoints and updates. The command reports the resulting private directory. A successful SQL dump and metadata are published as `database.sql` and `backup.completed.json`. A failed dump stays partial. On Identity this also prevents a truncated dump from being mistaken for a usable checkpoint. Keep checkpoint copies of configuration and credentials private.
 
 These local checkpoints cover the database and deployment configuration snapshot. Retain referenced secret files, Identity media and Instance file storage independently. Encrypted off-host copies, restore and reconciliation drills, and retention and recovery targets are tracked in #29. A checkpoint on the original VM alone cannot protect against loss of that VM.
+
+## Encrypted copies and isolated restore drills
+
+Install the age CLI on the backup host. Generate the recipient and the private identity on the recovery host. Keep the private identity offline or in the approved recovery secret store. Only the public recipient is required on the source host.
+
+After `backup.sh --apply` reports a completed checkpoint, encrypt it into an operator-controlled directory. Use a unique filename per checkpoint.
+
+```bash
+python3 scripts/encrypt_checkpoint.py \
+  --checkpoint "$CHECKPOINT_DIRECTORY" \
+  --output "$BACKUP_DIRECTORY/gateway-2026-11-19.tar.age" \
+  --recipient "$AGE_PUBLIC_RECIPIENT"
+```
+
+Transfer the encrypted file to the approved off-host store, or use a protected mounted destination there. The script writes an encrypted temporary file and publishes it after successful encryption. The existing SQL snapshot stays protected on the source host. Back up referenced secret files, media and Instance file data through separate protected copies. Track verification, retention and key recovery as part of the operational backup schedule.
+
+For a restore drill, retrieve a checkpoint from the off-host store and decrypt it on the isolated recovery host. List the archive before extracting. Use a new root-only directory and verify the expected database checkpoint metadata. Restore only into a disposable empty PostgreSQL target with a compatible version and the needed roles. Keep restored app processes offline, with no SMTP, push, live placement publishing or production traffic.
+
+Record the checkpoint age and observed recovery time. Inspect the restored schemas and compare household membership and placement checks against the recorded pre-loss state. In a synthetic dataset, revoke access and delete a record after the checkpoint, then confirm that opening the backup does not reintroduce either into service. Keep traffic disabled until a trusted current revocation/deletion history has been reconciled. The existing checkpoint alone cannot prove that history is complete.
+
+[age CLI reference](https://github.com/FiloSottile/age/blob/main/doc/age.1.html)
