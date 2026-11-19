@@ -92,6 +92,8 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
     }
     await connection.query(`GRANT USAGE ON SCHEMA pactaris,pactaris_meta TO "${backupRole}"`);
     await connection.query(`GRANT SELECT ON ALL TABLES IN SCHEMA pactaris,pactaris_meta TO "${backupRole}"`);
+    // ALL TABLES excludes sequences, including implicit identity-column sequences; pg_dump must read them.
+    await connection.query(`GRANT SELECT ON ALL SEQUENCES IN SCHEMA pactaris,pactaris_meta TO "${backupRole}"`);
     const owner = await connection.query("SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname IN ('pactaris','pactaris_meta') AND r.rolname=$1 LIMIT 1",[runtimeRole]);
     if (owner.rowCount) throw Error('migration.runtime_owner');
     await connection.query('COMMIT');

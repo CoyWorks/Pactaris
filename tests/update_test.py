@@ -58,7 +58,7 @@ class UpdateTests(unittest.TestCase):
             source = self.fixture(root)
             commands = self.execute(root, source)
             applies = [command for command in commands if '--apply' in command]
-            self.assertEqual([command[command.index('--component') + 1] for command in applies], ['gateway', 'instance'])
+            self.assertEqual([command[command.index('--component') + 1] for command in applies], ['instance', 'gateway'])
             self.assertTrue(all(command[command.index('--revision') + 1] == NEW for command in applies))
             self.assertTrue(all(str(source / 'scripts/deploy.py') in command for command in commands))
             self.assertTrue(any('status' in command and 'identity' in command for command in commands))
@@ -103,7 +103,8 @@ class UpdateTests(unittest.TestCase):
             with patch.object(update, 'run', return_value=NEW), patch.object(update, 'safe_root', side_effect=Path), patch.object(update, 'validate_config', side_effect=lambda name, cfg: cfg), patch.object(update, 'preflight'), patch.object(Path, 'stat', root_stat), patch.object(update, 'child', side_effect=child), patch('sys.stdout', new_callable=io.StringIO):
                 with self.assertRaises(deploy.DeployError):
                     update.execute(self.args(root), source)
-            self.assertEqual(applied, ['gateway'])
+            # A failed Instance update must leave the gateway on its previous, compatible release.
+            self.assertEqual(applied, ['instance'])
 
     def test_incomplete_install_and_unsafe_state_are_not_silently_skipped(self):
         with tempfile.TemporaryDirectory() as folder:

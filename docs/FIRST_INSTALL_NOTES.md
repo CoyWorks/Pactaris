@@ -100,6 +100,16 @@ Additive Instance 0012 adds private catalog versions/receipts/outbox and exact-m
 
 Additive Instance 0013 adds participant task history/receipts/outbox, departure cancellation and combined private/shared task-capacity triggers. Activate Instance before gateway through the preserving updater; retain all old migration checksums, credentials/config/data and independent Identity issuer/client/flows/Brand/web certificate/TLS/domain/proxy settings. No new operator input is needed. Preserve the production build/test separation and reduced-stack checks from #72. See [PARTICIPANT_TASKS.md](PARTICIPANT_TASKS.md); code fallback does not undo the additive schema or restore withdrawn authority.
 
+## Live checkpoint blocked by an unreadable sequence — 19 November 2026
+
+Operator-observed on `cw-web01`. The live deployment of `9933326` stopped at the mandatory Instance pg_dump checkpoint, before any Instance migration. The `pg_dump.stderr.log` showed `permission denied for sequence` on the implicit sequence of the identity column added by Instance migration `0028_task_notifications`. The migration runner granted the backup role `SELECT ON ALL TABLES`, which in PostgreSQL excludes sequences. The previous deployment had passed only because its checkpoint ran before 0028 created the sequence.
+
+The updater also activated the gateway before the Instance, contrary to the documented Instance-first contract, so the gateway briefly ran `9933326` against an Instance still at `0aae0a6`. The live-deploy service then paused as designed; its repeated `deployment_paused` exits pushed the original failure out of a short `tail` of the journal. Query the journal with `--until` around the first failure instead.
+
+Recovery: a one-time `GRANT SELECT ON ALL SEQUENCES IN SCHEMA pactaris` to the Instance backup role as the local postgres administrator, a successful on-demand `backup.sh` checkpoint, then archiving `state.json` and restarting the timer per [LIVE_DEPLOY.md](LIVE_DEPLOY.md). Gateway and Instance subsequently reported `2f8710d` and ready. No data, configuration, credentials or Identity settings were changed.
+
+Required behavior: the migration runner grants the backup role `SELECT` on all sequences in the component schemas after every migration, and the integration fixture reads every sequence as the backup role. The updater activates Instance before gateway, and a failed Instance update must not activate the gateway. A future migration that adds a sequence must not need a manual grant.
+
 ## Direct task/to-do checkpoint — 0.13.0-alpha.1
 
 Keep the already merged 0014_standing_assignment immutable; do not introduce a competing migration with the same sequence or silently change its checksum. Additive 0015_assignment_todo adds a read projection while retaining standing-policy/transition guards. Update Instance before gateway with preserved config/data/secrets and separate DB roles. Native upgrade fixtures retain old offered/accepted decisions and events. No Identity/client/Brand/TLS/domain/proxy change is needed. See [STANDING_TASK_AUTHORITY.md](STANDING_TASK_AUTHORITY.md).
