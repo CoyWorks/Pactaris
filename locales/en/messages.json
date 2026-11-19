@@ -671,5 +671,10 @@
   "account.exportDownload": "Download JSON",
   "account.exportLimited": "This limited export includes your account and a selection of your own tasks and documents. The file indicates incomplete or unavailable household data.",
   "account.exportReauthenticate": "Sign in again to authorize a personal data export.",
-  "account.exportSignIn": "Sign in again"
+  "account.exportSignIn": "Sign in again",
+  "partner.catalogReward": "Catalog reward",
+  "partner.catalogRewardHelp": "Attach the selected reward terms to this task. This does not award a reward or charge points.",
+  "partner.loadCatalogRewards": "Load my catalog rewards",
+  "partner.catalogRewardEmpty": "Your catalog has no active drafts.",
+  "partner.removeCatalogReward": "Remove selected reward"
 }
