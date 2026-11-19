@@ -20,7 +20,7 @@ test('safe refusal needs no new consent grant; progress needs versioned scope an
  assert.throws(()=>partnerInput('partnerRead',{operationId:randomUUID(),taskId:refusal.taskId,afterVersion:'0'}),{kind:'invalid'});
 });
 test('participant workspace states privacy and voluntary acceptance without changing private task setup',()=>{
- const html=renderToStaticMarkup(React.createElement(PartnerPanel,{householdId:randomUUID(),session:{csrfToken:'fixture'},language:'en',format:'en-GB',timeZone:'UTC'}));assert.match(html,/Participant tasks/);assert.match(html,/Create a participant task/);assert.match(html,/selected assignee/);assert.doesNotMatch(html,/automatically accepted|Grant points/);
+ const html=renderToStaticMarkup(React.createElement(PartnerPanel,{householdId:randomUUID(),session:{csrfToken:'fixture'},language:'en',format:'en-GB',timeZone:'UTC',onInboxRead:()=>{}}));assert.match(html,/Participant tasks/);assert.match(html,/Create a participant task/);assert.match(html,/selected assignee/);assert.doesNotMatch(html,/automatically accepted|Grant points/);
 });
 
 test('standing authority inputs bind exact direction, policy version and mode; revocation needs no consent packet',()=>{

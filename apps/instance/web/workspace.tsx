@@ -117,7 +117,7 @@ export function HouseholdWorkspace({householdId,session,language,format,onLeave,
      </div></li>)}</ul>
     {data.nextCursor&&<button type="button" disabled={busy} onClick={()=>setCursor(data.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}
    </section>}
-   {view==='participantTasks'&&h&&<PartnerPanel householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone}/>}
+   {view==='participantTasks'&&h&&<PartnerPanel householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} onInboxRead={()=>setRefresh(value=>value+1)}/>}
    {view==='rewards'&&h&&<CatalogPanel householdId={householdId} session={session} language={language} format={format}/>}
    {view==='checkins'&&h&&<SharedCheckins householdId={householdId} csrfToken={session.csrfToken} language={language}/>}
    {(view==='habits'||view==='checkins')&&h&&<RoutinesPanel key={view} householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} section={view}/>}

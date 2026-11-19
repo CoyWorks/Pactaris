@@ -8,7 +8,7 @@ const preferenceLabels={
 const kinds=['assigned','submitted','reviewed'] as const;
 const labels={assigned:'inbox.assigned',submitted:'inbox.submitted',reviewed:'inbox.reviewed'} as const;
 
-export function TaskInbox({householdId,csrfToken,language}:{householdId:string;csrfToken:string;language:string}){
+export function TaskInbox({householdId,csrfToken,language,onRead}:{householdId:string;csrfToken:string;language:string;onRead:()=>void}){
  const t=createTranslator(language);
  const [items,setItems]=useState<PartnerResult['inbox']>();
  const [balance,setBalance]=useState<string>();
@@ -88,7 +88,12 @@ export function TaskInbox({householdId,csrfToken,language}:{householdId:string;c
   {balance!==undefined&&<p>{t('inbox.balance')} <strong>{balance}</strong></p>}
   {items?.length===0&&<p>{t('inbox.empty')}</p>}
   <ul>{items?.map(item=><li key={item.id}>{t(labels[item.kind])} {!item.read&&<button type="button" onClick={async()=>{
-   try{await request('partnerInboxRead',{taskId:item.id},AbortSignal.timeout(12000));setItems(rows=>rows?.map(row=>row.id===item.id?{...row,read:true}:row));}
+   try{
+    await request('partnerInboxRead',{taskId:item.id},AbortSignal.timeout(12000));
+    setItems(rows=>rows?.map(row=>row.id===item.id?{...row,read:true}:row));
+    setRevision(value=>value+1);
+    onRead();
+   }
    catch{setFailed(true);}
   }}>{t('inbox.read')}</button>}</li>)}</ul>
   {items?.length===25&&<button type="button" onClick={()=>setAfter(items.at(-1)?.id)}>{t('portal.more')}</button>}
