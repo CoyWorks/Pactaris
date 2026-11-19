@@ -2,7 +2,13 @@
   "instanceId": "00000000-0000-4000-8000-000000000001",
   "publicOrigin": "http://127.0.0.1:9444",
   "listen": { "address": "127.0.0.1", "port": 9444 },
-  "database": { "url": "postgresql://instance_runtime:REPLACE@127.0.0.1:5432/instance", "maxConnections": 2 },
+  "database": {
+    "url": "postgresql://instance_dev_runtime:dev-fixture-runtime-only@127.0.0.1:55432/instance_dev",
+    "maxConnections": 2,
+    "migrationUrlFile": ".runtime/development/migration-url",
+    "runtimeRole": "instance_dev_runtime",
+    "backupRole": "instance_dev_backup"
+  },
   "locale": { "language": "en", "format": "en-GB", "timeZone": "UTC" },
-  "worker": { "heartbeatFile": "/tmp/pactaris-development/worker.json", "intervalSeconds": 30 }
+  "worker": { "heartbeatFile": ".runtime/development/worker.json", "intervalSeconds": 30 }
 }

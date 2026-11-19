@@ -1,0 +1,19 @@
+name: pactaris-dev
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: instance_dev
+      POSTGRES_PASSWORD: dev-fixture-admin-only
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - development_pg:/var/lib/postgresql/data
+      - ./config/development-postgres.sql:/docker-entrypoint-initdb.d/10-pactaris.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "instance_dev"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+volumes:
+  development_pg:

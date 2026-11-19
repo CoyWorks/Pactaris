@@ -44,13 +44,44 @@ npm run check
 npm run build
 ```
 
-For a local loopback-only development run, copy config/instance.development.example.json to an ignored `instance.local.json`, replace the database URL with a private test database, then:
+### Run the isolated local Instance
+
+Run these commands from the repository root with Node.js 24 and Docker Compose installed. This starts a synthetic PostgreSQL 17 database on loopback port 55432 and uses distinct runtime and migration roles. Use the production installer for a deployed Gateway or Instance.
 
 ```bash
-APP_CONFIG="$PWD/instance.local.json" npm run dev:instance -- --development
+npm ci --ignore-scripts --no-audit --no-fund
+cp -n .env.example .env
+docker compose -f compose.development.yaml up -d --wait
+install -d -m 0700 .runtime/development
+(
+  umask 077
+  printf '%s\n' 'postgresql://instance_dev_migration:dev-fixture-migration-only@127.0.0.1:55432/instance_dev' > .runtime/development/migration-url
+  node --input-type=module <<'JS' > .runtime/development/instance.json
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const config = JSON.parse(readFileSync('config/instance.development.example.json', 'utf8'));
+config.database.migrationUrlFile = resolve(config.database.migrationUrlFile);
+config.worker.heartbeatFile = resolve(config.worker.heartbeatFile);
+console.log(JSON.stringify(config));
+JS
+)
+npm run build
+. ./.env
+export APP_CONFIG
+npm run migrate -- instance
+npm run start:instance -- --development
 ```
 
-The page is at the configured origin. Without PostgreSQL it remains live but readiness returns 503. Development HTTP is explicitly restricted to loopback; deployment mode requires TLS. No service worker caches authenticated pages or APIs in this checkpoint.
+In another terminal at the repository root, start the worker and check readiness:
+
+```bash
+. ./.env
+export APP_CONFIG
+npm run start:worker -- --development
+```
+
+The Instance status page runs at `http://127.0.0.1:9444/`. Use `curl --fail http://127.0.0.1:9444/health/ready` for database readiness and inspect `.runtime/development/worker.json` for the worker heartbeat. This standalone Instance uses no account or household fixtures. The PostgreSQL/HTTPS integration suite exercises authenticated Gateway-to-Instance workflows using synthetic people. Stop the Node processes with Ctrl+C and stop the database with `docker compose -f compose.development.yaml down`. Docker retains the development volume between sessions.
 
 ## Installer planning
 
