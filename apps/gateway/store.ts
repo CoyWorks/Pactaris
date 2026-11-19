@@ -5,13 +5,14 @@ export const hash = (token: string) => createHash('sha256').update(token).digest
 export type LoginAttempt = {state:string;nonce:string;verifier:string};
 export type Account = {id:string;displayName:string};
 export type AccountPresentation = {format:string;timeZone:string};
-export type Session = {account:Account;csrfToken:string;expiresAt:string;presentation?:AccountPresentation};
+export type Session = {account:Account;csrfToken:string;expiresAt:string;presentation?:AccountPresentation;preferredName?:string};
 export type SessionView = {id:string;current:boolean;createdAt:string;expiresAt:string};
 export type Placement = {householdId:string;instanceId:string;endpoint:string;tlsServerName:string;caFile:string;version:string};
 export interface GatewayStore {
   probe():Promise<void>;
   throttle(bucket:string,limit?:number):Promise<boolean>;
   updateAccountPresentation(accountId:string,value:AccountPresentation|null):Promise<void>;
+  updatePreferredName?(accountId:string,value:string|null):Promise<string|undefined>;
   beginLogin(cookie:string, attempt:LoginAttempt):Promise<void>;
   consumeLogin(cookie:string,state:string):Promise<LoginAttempt|undefined>;
   account(issuer:string,subject:string,name:string,verifiedEmail?:string):Promise<Account>;
@@ -65,8 +66,9 @@ export class PgGatewayStore implements GatewayStore {
     const r=await this.pool.query(`UPDATE pactaris.sessions s SET idle_expires_at=LEAST(s.expires_at,now()+$2*interval '1 second')
       FROM pactaris.accounts a WHERE s.token_hash=$1 AND a.id=s.account_id AND a.status='active' AND s.expires_at>now() AND s.idle_expires_at>now()
       AND (NOT $3::boolean OR s.recipient_email=a.verified_email)
-      RETURNING a.id,a.display_name,s.csrf_token,s.expires_at,a.locale_format,a.time_zone`,[hash(token),idle,requireVerifiedEmail]);
+      RETURNING a.id,COALESCE(a.preferred_display_name,a.display_name) AS display_name,a.preferred_display_name,s.csrf_token,s.expires_at,a.locale_format,a.time_zone`,[hash(token),idle,requireVerifiedEmail]);
     const row=r.rows[0];return row?{account:{id:row.id,displayName:row.display_name},csrfToken:row.csrf_token,expiresAt:row.expires_at.toISOString(),
+      ...(row.preferred_display_name?{preferredName:row.preferred_display_name}:{}),
       ...(row.locale_format&&row.time_zone?{presentation:{format:row.locale_format,timeZone:row.time_zone}}:{})}:undefined;
   }
   async recentlyAuthenticated(token:string){
@@ -92,6 +94,19 @@ export class PgGatewayStore implements GatewayStore {
       RETURNING id
     ) INSERT INTO pactaris.account_presentation_events(account_id) SELECT id FROM changed`,
     [accountId,value?.format??null,value?.timeZone??null]);
+  }
+  async updatePreferredName(accountId:string,value:string|null){
+    const result=await this.pool.query<{name:string}>(`WITH changed AS (
+      UPDATE pactaris.accounts SET preferred_display_name=$2
+      WHERE id=$1 AND status='active' AND preferred_display_name IS DISTINCT FROM $2::text
+      RETURNING id,COALESCE(preferred_display_name,display_name) AS name
+    ), recorded AS (
+      INSERT INTO pactaris.account_presentation_events(account_id) SELECT id FROM changed
+    )
+    SELECT name FROM changed UNION ALL
+    SELECT COALESCE(preferred_display_name,display_name) FROM pactaris.accounts
+    WHERE id=$1 AND status='active' AND NOT EXISTS(SELECT 1 FROM changed)`,[accountId,value]);
+    return result.rows[0]?.name;
   }
   async logout(token:string){await this.pool.query('DELETE FROM pactaris.sessions WHERE token_hash=$1',[hash(token)]);}
   async sessionsForAccount(accountId:string,token:string,requireVerifiedEmail=false) {

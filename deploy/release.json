@@ -260,6 +260,13 @@
       "path": "migrations/gateway/0015_web_push.sql",
       "sha256": "096d8500b69ea08b7ffaeb808553cd564292c2d4577f19a17ac5752309116023",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0016_preferred_display_name",
+      "path": "migrations/gateway/0016_preferred_display_name.sql",
+      "sha256": "02920643495d77e0b2eb4df124ef47799bf1db8afe126efa15fc04c93afd887b",
+      "backwardCompatible": true
     }
   ]
 }

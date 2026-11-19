@@ -2,7 +2,7 @@ import {pushEndpoint,pushSubscription,type WebPushDevices} from './web-push.js';
 import type {personalExport} from './personal-export.js';
 import type {listRegistryInstances,listRegistryPlacements} from '../../packages/routing/inventory.js';
 import {smtpChanges,type SmtpSettings} from './smtp-settings.js';
-import {accountPresentation} from './account-presentation.js';
+import {accountPresentation,preferredDisplayName} from './account-presentation.js';
 import {publicPwa} from '../../packages/http/pwa.js';
 import {isPartnerAction,partnerInput,PartnerError} from '../../packages/auth/partner.js';
 import type {GatewayPartner} from './partner.js';
@@ -210,6 +210,24 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     }
     await store.updateAccountPresentation(session.account.id,value);
     res.json({presentation:value});
+  });
+  app.put('/api/account/display-name',express.json({limit:1024,strict:true,inflate:false}),async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){
+      res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;
+    }
+    const name=preferredDisplayName(req.body);
+    if(name===undefined){
+      res.status(400).json({code:'invalid_display_name',messageKey:'account.displayNameInvalid'});return;
+    }
+    if(!await store.throttle('account.presentation:'+session.account.id)){
+      res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;
+    }
+    const displayName=await store.updatePreferredName?.(session.account.id,name);
+    if(displayName===undefined){
+      res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});return;
+    }
+    res.json({displayName,preferredName:name});
   });
   app.post('/api/account/export',async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;

@@ -143,6 +143,17 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       assert.equal((await store.session(token,60))?.presentation,undefined);
       const events=await gatewayDb.owner.query('SELECT count(*)::int n FROM pactaris.account_presentation_events WHERE account_id=$1',[account.id]);
       assert.equal(events.rows[0].n,2);
+      const providerName=(await store.session(token,60))!.account.displayName;
+      assert.equal(await store.updatePreferredName(account.id,'Own display name'),'Own display name');
+      assert.equal(await store.updatePreferredName(account.id,'Own display name'),'Own display name');
+      const updated=await store.account('https://idp.fixture.invalid/','subject-a',providerName,email);
+      assert.equal(updated.id,account.id);
+      assert.equal((await store.session(token,60))!.account.displayName,'Own display name');
+      assert.equal(await store.updatePreferredName(account.id,null),providerName);
+      assert.equal((await store.session(token,60))!.preferredName,undefined);
+      const names=await gatewayDb.owner.query('SELECT count(*)::int n FROM pactaris.account_presentation_events WHERE account_id=$1',[account.id]);
+      assert.equal(names.rows[0].n,4);
+
     }finally{await store.logout(token);}
   })();
   await (async()=>{

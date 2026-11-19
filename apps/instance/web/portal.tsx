@@ -1,3 +1,4 @@
+import {AccountDisplayName} from './account-display-name.js';
 import {announceSignOut} from './session-invalidation.js';
 import {PushDevices} from './push-devices.js';
 import {ExportPanel} from './personal-export.js';
@@ -8,7 +9,7 @@ import {HouseholdWorkspace} from './workspace.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import {InvitationJoin} from './invitations.js';
-type Session={account:{id:string;displayName:string};csrfToken:string;presentation?:Presentation};
+type Session={account:{id:string;displayName:string};csrfToken:string;presentation?:Presentation;preferredName?:string};
 type Summary={id:string;name:string};
 type Listing={households:Summary[];partial:boolean;nextCursor:string|null};
 type Operation={operationId:string;householdId:string;action:'create'|'leave';status:'pending'|'complete'|'released'};
@@ -103,6 +104,9 @@ export function Portal({language,format,timeZone}:{language:string;format:string
     {loading?<p role="status">{t('portal.loading')}</p>:!session?(!loadError&&<section><h2>{t('portal.signInTitle')}</h2><p>{t('portal.signInDescription')}</p><a className="button" href="/auth/login">{t('portal.signIn')}</a></section>):<>
       <p>{session.account.displayName||t('portal.account')}</p>
       {!selectedId&&<>
+        <AccountDisplayName key={'display-name:'+session.account.id} csrfToken={session.csrfToken} language={language}
+          preferredName={session.preferredName} onSave={value=>setSession(current=>current?.account.id===session.account.id
+            ?{...current,account:{...current.account,displayName:value.displayName},preferredName:value.preferredName??undefined}:current)}/>
         <AccountPresentation key={'presentation:'+session.account.id} csrfToken={session.csrfToken} language={language}
           saved={session.presentation} defaults={{format,timeZone}} onSave={value=>setSession(current=>
             current?.account.id===session.account.id?{...current,presentation:value??undefined}:current)}/>

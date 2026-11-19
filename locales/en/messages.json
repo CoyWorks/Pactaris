@@ -686,5 +686,11 @@
   "push.notice": "Open the app to check for updates.",
   "push.testQueued": "Test notification queued.",
   "push.testUnavailable": "The test could not be queued. Wait a minute or reconnect this browser.",
-  "push.failed": "Device notifications could not be updated. Check browser permissions and try again."
+  "push.failed": "Device notifications could not be updated. Check browser permissions and try again.",
+  "account.displayNameTitle": "Display name",
+  "account.displayNameDescription": "Choose the name shown in your account. Manage your name for each dynamic separately in that dynamic.",
+  "account.displayNameLabel": "Preferred display name",
+  "account.displayNameInvalid": "Enter a display name of up to 80 characters.",
+  "account.displayNameReset": "Use sign-in name",
+  "account.displayNameSaved": "Display name saved."
 }
