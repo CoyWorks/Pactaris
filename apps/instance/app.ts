@@ -56,7 +56,7 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
     }
     catch(error){
       if(error instanceof PartnerError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:409).json({code:'partner_'+error.kind,messageKey:'partner.'+error.kind});return;}
-      if(error instanceof CatalogError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:409).json({code:'catalog_'+error.kind,messageKey:'catalog.'+error.kind});return;}
+      if(error instanceof CatalogError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:error.kind==='habitGoalPending'?422:409).json({code:'catalog_'+error.kind,messageKey:'catalog.'+error.kind});return;}
       if(error instanceof RoutineError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:409).json({code:'routines_'+error.kind,messageKey:'routines.'+error.kind});return;}
       if(error instanceof LibraryError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:409).json({code:'library_'+error.kind,messageKey:'library.'+error.kind});return;}
       if(error instanceof WorkspaceError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:409).json({code:'workspace_'+error.kind,messageKey:'workspace.'+error.kind});return;}

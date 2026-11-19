@@ -1720,6 +1720,36 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
     assert.equal((await post(A,'partnerPolicyRevoke',{policyId:policy.policyId,version:'2'})).status,200);
    })();
    const rewardScope=await agreement([A,C],['reward']);assert.ok(!(await options(A)).some((c:any)=>c.agreementId===rewardScope.agreementId));
+   await (async function verifyHabitRewardClaim(){
+    const catalog=(person:Person,action:string,input:Record<string,unknown>)=>api(base+'/catalog/'+action,'POST',{operationId:randomUUID(),...input},person.session);
+    const routine=(person:Person,action:string,input:Record<string,unknown>)=>api(base+'/routines/'+action,'POST',{operationId:randomUUID(),...input},person.session);
+    const grantId=randomUUID(),habitId=randomUUID(),offerId=randomUUID();
+    assert.equal((await catalog(A,'catalogCreate',{operationId:grantId,fields:{title:'Habit reward',description:'',category:'',points:5,position:0,kind:'grant'}})).status,200);
+    const habitFields={title:'Private habit title',description:'',category:'',timeZone:'UTC',period:'daily',date:null,mode:'minimum',target:2,responseType:'text'};
+    assert.equal((await routine(C,'routineCreate',{operationId:habitId,kind:'habit',fields:habitFields})).status,200);
+    const safety=await state(C),epochs={epoch:safety.epoch,memberEpoch:safety.memberEpoch};
+    assert.equal((await routine(C,'routineActivate',{routineId:habitId,version:'1',...epochs})).status,200);
+    const offer=await catalog(A,'redemptionOffer',{operationId:offerId,itemId:grantId,itemVersion:'1',agreementId:rewardScope.agreementId,agreementVersion:'1',recipientId:C.member,habitRequired:true});
+    assert.equal(offer.status,200,JSON.stringify(offer.data));
+    assert.equal((await catalog(C,'redemptionRequest',{redemptionId:offerId,version:'1'})).status,404);
+    const selection={redemptionId:offerId,version:'1',routineId:habitId,routineVersion:'2'};
+    const claim=(person:Person,extra:Record<string,unknown>={})=>catalog(person,'redemptionHabitClaim',{...selection,...extra});
+    assert.equal((await claim(A)).status,404);
+    assert.equal((await claim(C,{routineId:randomUUID()})).status,404);
+    assert.equal((await claim(C)).data.messageKey,'catalog.habitGoalPending');
+    assert.equal((await routine(C,'progressRecord',{routineId:habitId,version:'2',revision:'1',...epochs,occurredAt:null,entry:{count:2,text:'',rating:null,confirmed:null}})).status,200);
+    const op=randomUUID();
+    const race=await Promise.all([claim(C,{operationId:op}),claim(C)]);
+    assert.deepEqual(race.map(result=>result.status).sort(),[200,409]);
+    const winningOp=race[0]!.status===200?op:undefined;
+    if(winningOp)assert.equal((await claim(C,{operationId:winningOp})).status,200);
+    const list=await catalog(A,'redemptionList',{});
+    assert.equal(list.status,200);
+    assert.equal(list.data.redemptions.find((row:any)=>row.redemptionId===offerId)?.state,'fulfilled');
+    assert.ok(!list.body.includes(habitId)&&!list.body.includes(habitFields.title));
+    assert.equal((await db.owner.query("SELECT count(*)::int AS count FROM pactaris.reward_point_entries WHERE redemption_id=$1 AND kind='credit'",[offerId])).rows[0].count,1);
+    assert.equal((await catalog(A,'redemptionReverse',{redemptionId:offerId,version:'2'})).status,200);
+   })();
    const rejectedScope={...await offerBody(A,B),assigneeId:C.member,agreementId:rewardScope.agreementId,safetyVersion:(await db.owner.query('SELECT pactaris.partner_snapshot($1,$2,1) AS v',[home.householdId,rewardScope.agreementId])).rows[0].v};assert.equal((await post(A,'partnerOffer',rejectedScope)).data.code,'partner_paused');
    // Both actor and counterpart pause/re-consent cycles fence old progress packets.
    const protectedTask=await offer();assert.equal((await move(B,'partnerAccept',protectedTask)).status,200);assert.equal((await move(B,'partnerStart',protectedTask)).status,200);

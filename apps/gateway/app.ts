@@ -544,7 +544,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       const action=req.params.action;if(!uuid(req.params.householdId)||!isCatalogAction(action))throw new CatalogError('invalid');const input=catalogInput(action,req.body);
       if(!catalog)throw new CatalogError('unavailable');if(!['catalogRead','catalogList','catalogArchive','redemptionOptions','redemptionList','redemptionDecline','redemptionCancel','redemptionReverse'].includes(action)&&!await store.throttle('catalog:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
       res.json(await catalog.execute(session.account.id,req.params.householdId,action,input));
-    }catch(error){const kind=error instanceof CatalogError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,unavailable:503}[kind]).json({code:'catalog_'+kind,messageKey:('catalog.'+kind) as MessageKey});}
+    }catch(error){const kind=error instanceof CatalogError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,habitGoalPending:422,unavailable:503}[kind]).json({code:'catalog_'+kind,messageKey:('catalog.'+kind) as MessageKey});}
   });
   app.post('/api/households/:householdId/participant-tasks/:action',async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;

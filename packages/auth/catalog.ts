@@ -7,9 +7,9 @@ export type CatalogFields={title:string;description:string;category:string;point
 export type CatalogSummary=CatalogFields&{itemId:string;version:string;state:'draft'|'archived'};
 export type CatalogDetail=CatalogSummary&{historical:boolean};
 export type RewardOption={agreementId:string;version:string;label:string;memberId:string;memberName:string};
-export type Redemption={redemptionId:string;version:string;role:'issuer'|'recipient';state:'offered'|'requested'|'fulfilled'|'declined'|'cancelled'|'reversed'|'expired';title:string;description:string;points:number;kind:CatalogKind};
+export type Redemption={redemptionId:string;version:string;role:'issuer'|'recipient';state:'offered'|'requested'|'fulfilled'|'declined'|'cancelled'|'reversed'|'expired';title:string;description:string;points:number;kind:CatalogKind;habitRequired?:boolean};
 export type CatalogResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';itemId?:string;rewardOptions?:RewardOption[];redemptions?:Redemption[];items?:CatalogSummary[];item?:CatalogDetail;nextCursor?:string|null};
-export class CatalogError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'unavailable'){super('catalog.'+kind);}}
+export class CatalogError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'habitGoalPending'|'unavailable'){super('catalog.'+kind);}}
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 export function catalogInput(action:CatalogAction,value:unknown):Record<string,unknown>&{operationId:string}{
  if(!object(value)||!uuid(value.operationId))throw new CatalogError('invalid');const keys=['operationId'];
@@ -25,9 +25,17 @@ export function catalogInput(action:CatalogAction,value:unknown):Record<string,u
   }
  }else if(action==='redemptionOffer'){
   keys.push('itemId','itemVersion','agreementId','agreementVersion','recipientId');
+  if('habitRequired'in value){
+   keys.push('habitRequired');
+   if(value.habitRequired!==true)throw new CatalogError('invalid');
+  }
   if(!uuid(value.agreementId)||!uuid(value.recipientId)||!documentVersion(value.itemVersion)||!documentVersion(value.agreementVersion))throw new CatalogError('invalid');
  }else if(action.startsWith('redemption')){
   keys.push('redemptionId','version');
+  if(action==='redemptionHabitClaim'){
+   keys.push('routineId','routineVersion');
+   if(!uuid(value.routineId)||!documentVersion(value.routineVersion))throw new CatalogError('invalid');
+  }
   if(!uuid(value.redemptionId))throw new CatalogError('invalid');
  }
  else if(action==='catalogList')keys.push('filter',...('after'in value?['after']:[]));

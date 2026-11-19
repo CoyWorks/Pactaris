@@ -330,6 +330,13 @@
       "path": "migrations/instance/0030_scheduled_records_export.sql",
       "sha256": "2f7e24554f237367088eab86a93378a32fc459aeaf9bf409660bb84682f284fb",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0031_habit_reward_claims",
+      "path": "migrations/instance/0031_habit_reward_claims.sql",
+      "sha256": "e38b114ea43d79cbd798c3669d9c7fd44d627949bcec4005726fdba7fe07ffbd",
+      "backwardCompatible": true
     }
   ]
 }

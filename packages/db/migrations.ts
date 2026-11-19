@@ -75,6 +75,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0013_participant_tasks'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.partner_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0012_reward_catalog'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.catalog_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0029_reward_redemption'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.reward_redemption_command(uuid,uuid,uuid,uuid,text,jsonb,text),pactaris.reward_balance(uuid,uuid,uuid,uuid) TO ${role}`);
+      if(entries.some(m=>m.id==='0031_habit_reward_claims'))await connection.query(`REVOKE EXECUTE ON FUNCTION pactaris.reward_redemption_base(uuid,uuid,uuid,uuid,text,jsonb,text) FROM ${role}`);
       if(entries.some(m=>m.id==='0028_task_notifications'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.task_delivery_command(uuid,uuid,uuid,uuid,text,jsonb),pactaris.run_task_reminders(uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0027_personal_task_series'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.personal_series_command(uuid,uuid,uuid,uuid,text,jsonb,text),pactaris.run_personal_scheduler(uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0026_household_points'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.workspace_points(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);

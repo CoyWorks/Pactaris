@@ -320,6 +320,7 @@ export class PrivateCatalogClient{
   try{
    if(!uuid(input.operationId))throw new CatalogError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new CatalogError('invalid');
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
+   if(response.status===422&&action==='redemptionHabitClaim')throw new CatalogError('habitGoalPending');
    if(response.status===403||response.status===404)throw new CatalogError('denied');if(response.status===400)throw new CatalogError('invalid');if(response.status===409)throw new CatalogError('conflict');
    const r=response.data as import('../auth/catalog.js').CatalogResult;
    if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['catalogRead','catalogList','redemptionList','redemptionOptions'].includes(action)?'listed':'applied'))throw Error('routing.response');
@@ -335,8 +336,8 @@ export class PrivateCatalogClient{
     out.redemptions=r.redemptions.map(x=>{
      if(!uuid(x.redemptionId)||!documentVersion(x.version)||!['issuer','recipient'].includes(x.role)||
       !['offered','requested','fulfilled','declined','cancelled','reversed','expired'].includes(x.state)||
-      !['reward','grant','consequence'].includes(x.kind)||!documentText(x.title,120)||!documentText(x.description,500,true,true)||!Number.isInteger(x.points)||x.points<0||x.points>1000000)throw Error('routing.response');
-     return {redemptionId:x.redemptionId,version:x.version,role:x.role,state:x.state,title:x.title,description:x.description,points:x.points,kind:x.kind};
+      !['reward','grant','consequence'].includes(x.kind)||(x.habitRequired!==undefined&&(typeof x.habitRequired!=='boolean'||(x.habitRequired&&x.kind!=='grant')))||!documentText(x.title,120)||!documentText(x.description,500,true,true)||!Number.isInteger(x.points)||x.points<0||x.points>1000000)throw Error('routing.response');
+     return {redemptionId:x.redemptionId,version:x.version,role:x.role,state:x.state,title:x.title,description:x.description,points:x.points,kind:x.kind,habitRequired:x.habitRequired};
     });
     out.nextCursor=r.nextCursor;
    }
