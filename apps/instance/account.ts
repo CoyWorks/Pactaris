@@ -1,7 +1,7 @@
 import type pg from 'pg';
 import type { InstanceConfig } from '../../packages/config/index.js';
 import { AccountVerifier, DelegationError, type AccountAction } from '../../packages/auth/delegation.js';
-import { accountInput, AccountDeletionError } from '../../packages/auth/account-deletion.js';
+import { accountInput, exportInput, exportSections, AccountDeletionError } from '../../packages/auth/account-deletion.js';
 
 /** Account-wide check and erasure for the gateway's deletion worker. */
 export class InstanceAccount {
@@ -9,8 +9,8 @@ export class InstanceAccount {
   constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new AccountVerifier(config);}
   async execute(token:string,action:AccountAction,body:Buffer):Promise<unknown> {
     const verified=await this.verifier.verify(token,action,body);
-    let input:{operationId:string};
-    try{input=accountInput(JSON.parse(body.toString('utf8')));}catch{throw new AccountDeletionError('invalid');}
+    let input:{operationId:string}&Partial<ReturnType<typeof exportInput>>;
+    try{const parsed=JSON.parse(body.toString('utf8'));input=action==='accountExport'?exportInput(parsed):accountInput(parsed);}catch{throw new AccountDeletionError('invalid');}
     if(input.operationId!==verified.operationId)throw new AccountDeletionError('invalid');
     const db=await this.pool.connect();
     try{
@@ -19,8 +19,11 @@ export class InstanceAccount {
       if(!used.rowCount)throw new DelegationError('account.replay');
       // A restored database erases only through replay, after its fence is released.
       if((await db.query('SELECT pactaris.restore_fenced() AS fenced')).rows[0].fenced!==false)throw new AccountDeletionError('unavailable');
-      const result=(await db.query('SELECT pactaris.account_erasure($1,$2,$3) AS result',
-        [this.config.instanceId,verified.accountId,action==='accountErase'?'erase':'check'])).rows[0].result;
+      const result=action==='accountExport'&&input.section
+        ?(await db.query('SELECT pactaris.account_export_page($1,$2,$3,$4,$5) AS result',
+          [this.config.instanceId,verified.accountId,input.section,input.after??null,exportSections[input.section]])).rows[0].result
+        :(await db.query('SELECT pactaris.account_erasure($1,$2,$3) AS result',
+          [this.config.instanceId,verified.accountId,action==='accountErase'?'erase':'check'])).rows[0].result;
       await db.query('COMMIT');
       return result;
     }catch(error){

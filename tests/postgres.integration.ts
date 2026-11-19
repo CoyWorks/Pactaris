@@ -30,6 +30,7 @@ import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import { RevocationJournalSync } from '../apps/gateway/revocation-journal.js';
 import { AccountDeletion } from '../apps/gateway/account-deletion.js';
+import { streamAccountExport } from '../apps/gateway/account-export.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
 import {InvitationMail} from '../apps/gateway/invitation-mail.js';
 import { GatewayInvitations } from '../apps/gateway/invitations.js';
@@ -520,6 +521,18 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await a.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[doomedHousehold,partnerMembership,randomUUID()]);
   const doomedMembership=(await a.owner.query('SELECT id FROM pactaris.memberships WHERE household_id=$1 AND account_id=$2',[doomedHousehold,doomed.id])).rows[0].id;
   await a.owner.query("INSERT INTO pactaris.tasks(household_id,id,creator_membership_id,title,priority) VALUES($1,$2,$3,'Private deletion fixture','normal')",[doomedHousehold,randomUUID(),doomedMembership]);
+  // Complete export (version 2): own records from every Instance, never another member's private content.
+  await a.owner.query("INSERT INTO pactaris.tasks(household_id,id,creator_membership_id,title,priority) VALUES($1,$2,$3,'Partner private fixture','normal')",[doomedHousehold,randomUUID(),partnerMembership]);
+  await store.createSession('doomed-export',doomed,'csrf',60,120);
+  const exported:string[]=[];await streamAccountExport((await store.session('doomed-export',60))!,gatewayDb.pool,signer,async chunk=>{exported.push(chunk);});
+  const exportData=JSON.parse(exported.join(''));
+  assert.equal(exportData.version,2);assert.equal(exportData.complete,true);assert.equal(exportData.unavailableSources,0);
+  assert.deepEqual(Object.keys(exportData.sections),['memberships','limits','tasks','documents','acknowledgements','routines','catalog','partnerTasks','series','personalSeries','checkins','relationships','agreements','redemptions','inbox']);
+  assert.ok(exportData.sections.memberships.some((m:{householdId:string;household?:{name:string}})=>m.householdId===doomedHousehold&&m.household?.name==='Deletion fixture'));
+  assert.ok(exportData.sections.tasks.some((t:{title:string})=>t.title==='Private deletion fixture'));
+  assert.ok(!exported.join('').includes('Partner private fixture'));
+  assert.ok(!exported.join('').includes(ids[0]!)&&!exported.join('').includes(ids[1]!));
+  assert.equal((await gatewayDb.owner.query('SELECT count(*)::int n FROM pactaris.account_export_events WHERE account_id=$1 AND complete',[doomed.id])).rows[0].n,1);
   assert.deepEqual(await deletions.request(doomed.id,randomUUID()),{status:'blocked',blockedHouseholds:[doomedHousehold]});
   assert.equal((await gatewayDb.pool.query('SELECT status FROM pactaris.accounts WHERE id=$1',[doomed.id])).rows[0].status,'active');
   await a.owner.query("UPDATE pactaris.memberships SET technical_role='owner' WHERE household_id=$1 AND id=$2",[doomedHousehold,partnerMembership]);

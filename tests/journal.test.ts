@@ -37,3 +37,17 @@ test('replay batches and fence reports are strictly shaped',()=>{
   for(const value of [null,{fenced:true,applied:1,skipped:0},{fenced:'true',applied:1,skipped:0,released:false},{fenced:true,applied:1.5,skipped:0,released:false}])
     assert.throws(()=>replayResult(value));
 });
+
+test('complete export requests and pages are strictly shaped',async()=>{
+  const {exportInput,exportPage,exportSections}=await import('../packages/auth/account-deletion.js');
+  const operationId=randomUUID(),key=randomUUID()+':'+randomUUID();
+  assert.deepEqual(exportInput({operationId,section:'tasks',after:null}),{operationId,section:'tasks',after:null});
+  assert.equal(exportInput({operationId,section:'agreements',after:key+':00000000000000000001'}).section,'agreements');
+  for(const value of [{operationId,section:'toString',after:null},{operationId,section:'secrets',after:null},{operationId,section:'tasks'},
+    {operationId,section:'tasks',after:"x' OR 1=1"},{operationId,section:'tasks',after:null,extra:1}])assert.throws(()=>exportInput(value));
+  assert.deepEqual(exportPage({section:'tasks',records:[{id:'x'}],next:null},'tasks'),{records:[{id:'x'}],next:null});
+  assert.throws(()=>exportPage({section:'documents',records:[],next:null},'tasks'));
+  assert.throws(()=>exportPage({section:'tasks',records:['text'],next:null},'tasks'));
+  assert.throws(()=>exportPage({section:'tasks',records:[],next:"x' OR 1=1"},'tasks'));
+  assert.throws(()=>exportPage({section:'documents',records:Array.from({length:exportSections.documents+1},()=>({})),next:null},'documents'));
+});

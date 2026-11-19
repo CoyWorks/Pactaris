@@ -737,7 +737,7 @@
   "operator.inventoryEmpty": "There are no rows on this page.",
   "account.exportTitle": "Personal data export",
   "account.exportDownload": "Download JSON",
-  "account.exportLimited": "This limited export includes your account and a selection of your own tasks and documents. The file indicates incomplete or unavailable household data.",
+  "account.exportLimited": "The export contains your account and your own records from every dynamic you belong to or belonged to, including ended memberships. Content other people keep private is not included. If a part cannot be reached, the file says it is incomplete.",
   "account.exportReauthenticate": "Sign in again to authorize a personal data export.",
   "account.exportSignIn": "Sign in again",
   "account.deleteTitle": "Delete account",
