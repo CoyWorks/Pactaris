@@ -79,8 +79,10 @@ def change_brand(origin, brand_id, domain, language, token, apply, backup=None, 
         file.flush()
         os.fsync(file.fileno())
     updated = request(endpoint, token, changes)
+    preserved = {'web_certificate', 'default', 'client_certificates', 'attributes'}
+    preserved.update(key for key in current if key.startswith('flow_'))
     if (updated.get('domain') != domain or updated.get('brand_uuid') != brand_id
-            or updated.get('web_certificate') != current.get('web_certificate')
+            or any(updated.get(key) != current.get(key) for key in preserved)
             or brand_fields(updated) != desired):
         raise DeployError('cli.brandVerify')
     emit('cli.brandApplied', domain=domain, fields=sorted(changes))

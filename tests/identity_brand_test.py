@@ -53,3 +53,18 @@ class IdentityBrandTests(unittest.TestCase):
             with self.assertRaises(brand.DeployError):
                 brand.change_brand('https://identity.example.invalid', 'id', 'expected', 'en', 'fixture-token', True)
             api.assert_called_once()
+
+    def test_changed_authentication_flow_fails_verification_and_keeps_backup(self):
+        origin = 'https://identity.example.invalid'
+        brand_id = '6aef4af8-9d3d-4efa-be12-4d719e6e411c'
+        current = dict.fromkeys(brand.FIELDS, 'legacy')
+        current.update(brand_uuid=brand_id, domain='authentik-default', flow_authentication='previous')
+        patched = dict(current, **brand.desired_brand('en'))
+        patched['flow_authentication'] = 'changed'
+        with tempfile.TemporaryDirectory() as temp:
+            backup = Path(temp) / 'before.json'
+            with patch.object(brand, 'request', side_effect=[current, patched]):
+                with self.assertRaises(brand.DeployError) as failure:
+                    brand.change_brand(origin, brand_id, current['domain'], 'en', 'fixture-token', True, backup)
+            self.assertEqual(failure.exception.key, 'cli.brandVerify')
+            self.assertEqual(json.loads(backup.read_text())['target']['brand'], brand_id)

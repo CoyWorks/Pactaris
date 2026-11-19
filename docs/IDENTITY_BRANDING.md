@@ -32,3 +32,7 @@ python3 scripts/identity_brand.py --brand "$PACTARIS_BRAND_UUID" --domain "$PACT
 ```
 
 [Authentik Branding](https://docs.goauthentik.io/customize/branding/) · [File picker paths](https://docs.goauthentik.io/customize/file-picker/) · [Brand update API](https://api.goauthentik.io/reference/core-brands-partial-update/)
+
+## Rehearsal evidence
+
+Run the apply and restore sequence against a disposable deployment of the same Identity image before rolling out to the live Brand. Capture the Brand domain, web certificate, selected flows and OIDC discovery issuer before and after both changes. Keep the application client and redirect configuration out of the change. Verify sign-in and cancelled sign-in from the app, then test MFA and recovery and record the device/browser used. The tool verifies the returned Brand after every write and keeps the pre-change snapshot if protected Brand settings differ. The automated fixture verifies detection and the backup; it does not exercise a running Identity provider.
