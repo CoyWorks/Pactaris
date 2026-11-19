@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
+import {Hint} from './navigation.js';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {MemberRow,OwnerOffer} from '../members.js';
 type Session={account:{id:string;displayName:string};csrfToken:string};
@@ -49,14 +50,14 @@ export function MemberAdministration({householdId,session,language,format,timeZo
  }
  const alias=(id:string)=>listing?.members.find(m=>m.membershipId===id)?.displayName||id;
  const blocked=busy||!!draft;
- return <section><h2>{t('members.title')}</h2><p>{t('members.description')}</p>
+ return <section><h2>{t('members.title')}</h2><Hint label={t('hint.more')}>{t('members.description')}</Hint>
   {error&&<p role="alert">{t(error)}</p>}{error==='members.reauthenticate'&&<p><a href="/auth/login">{t('portal.signIn')}</a></p>}
   {notice&&<p role="status">{t(notice)}</p>}
   {draft&&<div><p>{t('members.retryDescription')}</p><button type="button" disabled={busy} onClick={()=>{void execute(draft.action,draft.payload,draft);}}>{t('onboarding.retry')}</button></div>}
   {!listing?<button type="button" disabled={busy} onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>:<>
    <form onSubmit={e=>{e.preventDefault();void execute('alias',{name:name.trim()});}}><label htmlFor="membership-name">{t('members.name')}</label>
     <input id="membership-name" autoComplete="off" maxLength={80} value={name} disabled={blocked} onChange={e=>{edited.current=true;setName(e.target.value);}}/>
-    <p>{t('members.nameDescription')}</p><button type="submit" disabled={blocked}>{t('members.saveName')}</button>
+    <Hint label={t('hint.more')}>{t('members.nameDescription')}</Hint><button type="submit" disabled={blocked}>{t('members.saveName')}</button>
    </form>
    {listing.operations.some(op=>op.status==='pending'&&op.operationId!==draft?.operationId)&&<p role="status">{t('members.otherPending')}</p>}
    <ul>{listing.members.map(m=><li key={m.membershipId}><h3>{m.displayName||m.membershipId}</h3>{m.isSelf&&<strong>{t('members.you')}</strong>}<code>{m.membershipId}</code>

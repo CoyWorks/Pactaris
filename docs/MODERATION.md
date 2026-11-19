@@ -4,7 +4,7 @@ Platform operators run the hosted service without routine access to household co
 
 ## Reporting
 
-Every signed-in person can open **Report a problem** in the household selector, choose a category and describe what happened (at most 1000 characters). Categories: harassment, unwanted invitation, non-consensual content or behaviour, possible minor, impersonation, spam, other. The request needs the session, exact Origin and CSRF token and is throttled per account. The operation ID is the report ID, so an uncertain retry cannot file a duplicate.
+Every signed-in person can open **Report a problem** on the Profile page, choose a category and describe what happened (at most 1000 characters). Categories: harassment, unwanted invitation, non-consensual content or behaviour, possible minor, impersonation, spam, other. The request needs the session, exact Origin and CSRF token and is throttled per account. The operation ID is the report ID, so an uncertain retry cannot file a duplicate.
 
 A report may name a household only if the reporter can currently access it; the API refuses any other household ID. Operators see the category, the reporter's account ID, the optional household ID, the text and the time. They see no household names, members, tasks, agreements or other content.
 

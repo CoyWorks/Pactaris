@@ -1,4 +1,5 @@
 import React,{useState} from 'react';
+import {Hint} from './navigation.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import type {AccountPresentation as Presentation} from '../../gateway/store.js';
 
@@ -32,7 +33,7 @@ export function AccountPresentation({csrfToken,language,saved,defaults,onSave}:{
       event.preventDefault();
       if(!busy)void save({format:draft.format.trim(),timeZone:draft.timeZone.trim()});
     }}>
-      <p>{t('account.presentationDescription')}</p>
+      <Hint label={t('hint.more')}>{t('account.presentationDescription')}</Hint>
       <label htmlFor="account-format">{t('account.presentationFormat')}</label>
       <input id="account-format" value={draft.format} required maxLength={64} disabled={busy}
         onChange={event=>{setDone(false);setDraft({...draft,format:event.target.value});}}/>

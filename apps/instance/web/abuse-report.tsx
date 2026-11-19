@@ -1,4 +1,5 @@
 import React,{useState} from 'react';
+import {Hint} from './navigation.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 
 const categories:[string,MessageKey][]=[['harassment','account.reportHarassment'],['unwantedInvitation','account.reportUnwantedInvitation'],
@@ -21,7 +22,7 @@ export function ReportPanel({csrfToken,language}:{csrfToken:string;language:stri
       setMessage('account.reportReceived');setDetails('');setOperationId(crypto.randomUUID());
     }catch{setMessage('errors.unavailable');}finally{setBusy(false);}
   }
-  return <section><h2>{t('account.reportTitle')}</h2><p>{t('account.reportExplanation')}</p>
+  return <section><h2>{t('account.reportTitle')}</h2><Hint label={t('hint.more')}>{t('account.reportExplanation')}</Hint>
     <label>{t('account.reportCategory')}<select value={category} onChange={event=>setCategory(event.target.value)}>
       {categories.map(([value,key])=><option key={value} value={value}>{t(key)}</option>)}</select></label>
     <label>{t('account.reportDetails')}<textarea value={details} maxLength={1000} onChange={event=>setDetails(event.target.value)}/></label>

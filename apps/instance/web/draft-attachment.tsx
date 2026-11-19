@@ -1,4 +1,5 @@
 import {useRef,useState} from 'react';
+import {Hint} from './navigation.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 
 export function DraftAttachment({base,documentId,version,csrfToken,language,disabled}:{
@@ -43,7 +44,7 @@ export function DraftAttachment({base,documentId,version,csrfToken,language,disa
   }
   return <fieldset disabled={disabled||busy}>
     <legend>{t('library.attachmentTitle')}</legend>
-    <p>{t('library.attachmentDescription')}</p>
+    <Hint label={t('hint.more')}>{t('library.attachmentDescription')}</Hint>
     <label>{t('library.attachmentFile')}<input ref={file} type="file" accept=".txt,text/plain"/></label>
     <button type="button" onClick={()=>void run('Put')}>{t('library.attachmentUpload')}</button>
     <button type="button" onClick={()=>void run('Get')}>{t('library.attachmentDownload')}</button>

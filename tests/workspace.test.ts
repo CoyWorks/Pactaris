@@ -14,8 +14,10 @@ test('basic setup and tasks do not require a partner, relationship or implied as
  assert.throws(()=>workspaceInput('settingsUpdate',{operationId:randomUUID(),version:'1',name:'Dynamic',timeZone:'Invalid/Zone'}),{kind:'invalid'});
  assert.throws(()=>workspaceInput('taskComplete',{operationId:randomUUID(),taskId:randomUUID(),version:'0',epoch:'1',memberEpoch:'1'}),{kind:'invalid'});
 });
-test('the initial workspace has navigation and collapsed safety, without auto-opening advanced forms',()=>{
- const html=renderToStaticMarkup(React.createElement(HouseholdWorkspace,{householdId:randomUUID(),session:{account:{id:randomUUID(),displayName:''},csrfToken:'fixture'},language:'en',format:'en-GB',onLeave:()=>{},children:null}));
- assert.match(html,/Household workspace navigation/);assert.match(html,/aria-current="page"/);assert.match(html,/<details class="safety-drawer"/);assert.doesNotMatch(html,/<details open/);
+test('the initial workspace opens on Today with bottom tabs, a safety shield and no inline safety forms',()=>{
+ const html=renderToStaticMarkup(React.createElement(HouseholdWorkspace,{householdId:randomUUID(),session:{account:{id:randomUUID(),displayName:''},csrfToken:'fixture'},language:'en',format:'en-GB',avatar:null,onLeave:()=>{},children:null}));
+ assert.match(html,/<nav class="bottom-nav" aria-label="Household workspace navigation"/);assert.match(html,/aria-current="page"[^>]*>.*?Today/);
+ for(const label of ['Tasks','Routines','Library','Dynamic'])assert.match(html,new RegExp('<span>'+label+'</span>'));
+ assert.match(html,/aria-label="Safety and my limits"/);assert.match(html,/<details open="" hidden="" class="safety-drawer"/);
  assert.doesNotMatch(html,/Create proposal|Create agreement proposal|Transfer ownership/);
 });

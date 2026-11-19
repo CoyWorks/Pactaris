@@ -1,4 +1,5 @@
 import React,{useState} from 'react';
+import {Hint} from './navigation.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 
 export function ExportPanel({csrfToken,language}:{csrfToken:string;language:string}){
@@ -17,7 +18,7 @@ export function ExportPanel({csrfToken,language}:{csrfToken:string;language:stri
       setTimeout(()=>URL.revokeObjectURL(url),1000);
     }catch{setMessage('errors.unavailable');}finally{setBusy(false);}
   }
-  return <section><h2>{t('account.exportTitle')}</h2><p>{t('account.exportLimited')}</p>
+  return <section><h2>{t('account.exportTitle')}</h2><Hint label={t('hint.more')}>{t('account.exportLimited')}</Hint>
     <button type="button" disabled={busy} onClick={()=>void download()}>{t('account.exportDownload')}</button>
     {message&&<p role="alert">{t(message)}</p>}
     {message==='account.exportReauthenticate'&&<a href="/auth/reauth" target="_blank" rel="noopener">{t('account.exportSignIn')}</a>}

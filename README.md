@@ -105,6 +105,8 @@ Versioned consent, private limits and safety (0.7.0-alpha.1): [CONSENT_SAFETY.md
 
 Everyday owner-only workspace (0.8.0-alpha.1): [WORKSPACE_TASKS.md](docs/WORKSPACE_TASKS.md) covers the dashboard, household name/timezone, private unassigned/self-directed tasks, safety/capacity boundaries and remaining feature scope.
 
+Mobile navigation and layout: [MOBILE_LAYOUT.md](docs/MOBILE_LAYOUT.md) covers the start page (a single dynamic opens directly), bottom tabs, Profile and collapsed help text.
+
 Rules/protocols and notes (0.9.0-alpha.1): [LIBRARY_NOTES.md](docs/LIBRARY_NOTES.md) covers private drafts, explicit publication, saved versions/acknowledgement, categories/order/search, archival and live-Instance note deletion with scope limits.
 
 Personal habits, rituals and check-ins (0.10.0-alpha.1): [HABITS_CHECKINS.md](docs/HABITS_CHECKINS.md) covers private owner-only definitions, calendar periods, progress/reversals and scope limits. Merged feature branch cleanup: [BRANCH_CLEANUP.md](docs/BRANCH_CLEANUP.md).

@@ -1,4 +1,5 @@
 import React,{useState} from 'react';
+import {Hint} from './navigation.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 
 export function DeleteAccountPanel({csrfToken,language}:{csrfToken:string;language:string}){
@@ -19,7 +20,7 @@ export function DeleteAccountPanel({csrfToken,language}:{csrfToken:string;langua
       setTimeout(()=>window.location.assign('/'),3000);
     }catch{setMessage('errors.unavailable');}finally{setBusy(false);}
   }
-  return <section><h2>{t('account.deleteTitle')}</h2><p>{t('account.deleteExplanation')}</p>
+  return <section><h2>{t('account.deleteTitle')}</h2><Hint label={t('hint.more')}>{t('account.deleteExplanation')}</Hint>
     <label><input type="checkbox" checked={confirmed} onChange={event=>setConfirmed(event.target.checked)}/> {t('account.deleteConfirm')}</label>
     <button type="button" disabled={busy||!confirmed||message==='account.deletePending'} onClick={()=>void remove()}>{t('account.deleteButton')}</button>
     {message&&<p role="alert">{t(message)}</p>}

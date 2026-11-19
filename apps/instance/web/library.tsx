@@ -1,4 +1,5 @@
 import {DraftAttachment} from './draft-attachment.js';
+import {Hint} from './navigation.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {DocumentFields,DocumentKind,DocumentSummary,DocumentDetail,LibraryResult} from '../../../packages/auth/library.js';
@@ -53,7 +54,7 @@ export function LibraryPanel({householdId,session,language,format,timeZone,secti
  }
  const blocked=busy||!!draft,alias=(id:string)=>members.find(m=>m.membershipId===id)?.displayName||id;
  const options=[...new Set([...members.filter(m=>!m.isSelf).map(m=>m.membershipId),...(editor?.fields.recipients??[])])];
- return <section><h2>{t(section==='notes'?'library.notes':'library.guidance')}</h2><p>{t(section==='notes'?'library.notesDescription':'library.guidanceDescription')}</p>
+ return <section><h2>{t(section==='notes'?'library.notes':'library.guidance')}</h2><Hint label={t('hint.more')}>{t(section==='notes'?'library.notesDescription':'library.guidanceDescription')}</Hint>
   {error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}
   {draft&&<div className="notice"><p>{t('workspace.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void change(draft.action,draft.body,draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}
   <div className="workspace-actions">{section==='guidance'&&(['rule','protocol'] as const).map(k=><button type="button" key={k} aria-pressed={kind===k} disabled={blocked} onClick={()=>{setKind(k);setCursor(undefined);setEditor(undefined);}}>{t(kinds[k])}</button>)}
@@ -63,13 +64,13 @@ export function LibraryPanel({householdId,session,language,format,timeZone,secti
   <form className="library-search" onSubmit={e=>{e.preventDefault();setQuery(search.trim());setCursor(undefined);}}><label>{t('library.searchLabel')}<input maxLength={80} value={search} onChange={e=>setSearch(e.target.value)}/></label><button type="submit">{t('library.search')}</button></form>
   {!listing?<p role="status">{t('library.loading')}</p>:!listing.documents?.length&&<p>{t('library.empty')}</p>}
   {editor&&<form className="document-editor" onSubmit={e=>{e.preventDefault();const fields={...editor.fields,title:editor.fields.title.trim(),body:editor.fields.body.trim(),category:editor.fields.category.trim()};void change(editor.documentId?'documentUpdate':'documentCreate',editor.documentId?{documentId:editor.documentId,version:editor.version,fields}:{kind,fields});}}>
-   <h3>{t('library.editor')}</h3><p>{t('library.draftNotice')}</p>
+   <h3>{t('library.editor')}</h3><Hint label={t('hint.more')}>{t('library.draftNotice')}</Hint>
    <label>{t('library.title')}<input maxLength={120} required disabled={blocked} value={editor.fields.title} onChange={e=>setEditor({...editor,fields:{...editor.fields,title:e.target.value}})}/></label>
    <label>{t('library.body')}<textarea maxLength={2000} disabled={blocked} value={editor.fields.body} onChange={e=>setEditor({...editor,fields:{...editor.fields,body:e.target.value}})}/></label>
    <label>{t('library.category')}<input maxLength={60} disabled={blocked} value={editor.fields.category} onChange={e=>setEditor({...editor,fields:{...editor.fields,category:e.target.value}})}/></label>
    <label>{t('library.position')}<input type="number" min={0} max={999999} required disabled={blocked} value={editor.fields.position} onChange={e=>setEditor({...editor,fields:{...editor.fields,position:Number(e.target.value)}})}/></label>
    <label>{t('library.visibility')}<select disabled={blocked} value={editor.fields.visibility} onChange={e=>setEditor({...editor,fields:{...editor.fields,visibility:e.target.value as DocumentFields['visibility'],recipients:[]}})}>{Object.keys(visibilities).map(v=><option key={v} value={v}>{t(visibilities[v as DocumentFields['visibility']])}</option>)}</select></label>
-   <p>{t('library.sharingNotice')}</p>
+   <Hint label={t('hint.more')}>{t('library.sharingNotice')}</Hint>
    {editor.fields.visibility==='participants'&&<fieldset disabled={blocked}><legend>{t('library.chooseRecipients')}</legend>{options.map(id=><label key={id}><input type="checkbox" checked={editor.fields.recipients.includes(id)} disabled={!editor.fields.recipients.includes(id)&&editor.fields.recipients.length>=8} onChange={e=>setEditor({...editor,fields:{...editor.fields,recipients:e.target.checked?[...editor.fields.recipients,id]:editor.fields.recipients.filter(m=>m!==id)}})}/>{alias(id)}</label>)}{memberCursor&&<button type="button" onClick={()=>{void moreMembers();}}>{t('portal.more')}</button>}</fieldset>}
    <button type="submit" disabled={blocked}>{t('library.saveDraft')}</button><button type="button" disabled={busy} onClick={()=>setEditor(undefined)}>{t('onboarding.cancel')}</button>
   </form>}
