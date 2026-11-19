@@ -1,4 +1,5 @@
 import {GatewayPartner} from './partner.js';
+import {RevocationJournalSync} from './revocation-journal.js';
 import {WebPushDevices} from './web-push.js';
 import {InvitationMail,loadInvitationMail} from './invitation-mail.js';
 import { loadGatewayConfig } from '../../packages/config/index.js';
@@ -18,6 +19,7 @@ const store=new PgGatewayStore(db.pool,()=>requireSchema(db.pool,'gateway'));let
 const onboarding=new OnboardingService(new PgOnboardingStore(db.pool,config.onboarding.maxOwnedHouseholds,new PrivateHouseholdClient(new DelegationSigner(config))),new PrivateCommandClient(new DelegationSigner(config)));
 const invitationSigner=new DelegationSigner(config),invitations=new GatewayInvitations(db.pool,store,new PrivateHouseholdClient(invitationSigner),new PrivateInvitationClient(invitationSigner),loadInvitationMail(config,db.pool));
 const members=new GatewayMembers(db.pool,store,new PrivateHouseholdClient(invitationSigner),new PrivateMemberClient(invitationSigner));
+const journal=new RevocationJournalSync(db.pool,invitationSigner);
 const partner=new GatewayPartner(store,new PrivateHouseholdClient(invitationSigner),new PrivatePartnerClient(invitationSigner));
 async function tick(){
   if(stopped)return;let state='ready';
@@ -25,6 +27,8 @@ async function tick(){
   try{await store.probe();await store.cleanup();await onboarding.reconcile();await invitations.reconcile();await members.reconcile();await InvitationMail.expire(db.pool);if(config.invitationMailFile)invitationMail=await InvitationMail.metrics(db.pool);}catch{state='unavailable';}
   await mkdir(dirname(config.worker.heartbeatFile),{recursive:true,mode:0o700});
   const file=config.worker.heartbeatFile+'.tmp';await writeFile(file,JSON.stringify({component:'worker',state,checkedAt:new Date().toISOString(),invitationMail}),{mode:0o600});await rename(file,config.worker.heartbeatFile);
+  // Keep the central revocation copy current; a failure defers, never blocks other work.
+  if(!stopped)try{const result=await journal.sync();if(result.failedInstances)process.stderr.write(JSON.stringify({code:'journal.sync_deferred',instances:result.failedInstances})+'\n');}catch{process.stderr.write(JSON.stringify({code:'journal.sync_deferred'})+'\n');}
   if(!stopped)try{await invitations.deliverMail();}catch{process.stderr.write(JSON.stringify({code:'invitation.mail_deferred'})+'\n');}
   if(!stopped&&webPush)try{await webPush.work();}catch{process.stderr.write(JSON.stringify({code:'push.delivery_deferred'})+'\n');}
   if(!stopped&&webPush)try{await webPush.workTaskNotices(store,partner);}catch{process.stderr.write(JSON.stringify({code:'push.task_delivery_deferred'})+'\n');}

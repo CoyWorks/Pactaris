@@ -116,3 +116,5 @@ Participant task lifecycle (0.12.0-alpha.1): [PARTICIPANT_TASKS.md](docs/PARTICI
 Standing task authority (current source): [STANDING_TASK_AUTHORITY.md](docs/STANDING_TASK_AUTHORITY.md) covers explicit adoption, direct one-off assignment, optional acceptance and the remaining planning/reward scope.
 
 Direct assignment and personal to-do (0.13.0-alpha.1): [STANDING_TASK_AUTHORITY.md](docs/STANDING_TASK_AUTHORITY.md) covers one-time scoped policy adoption, direct task assignment, optional per-task acceptance, preferred policy selection and immediate My to-do list visibility. Recurrence/reward engines remain follow-up work.
+
+Revocation journal (current source): [REVOCATION_JOURNAL.md](docs/REVOCATION_JOURNAL.md) records content-free revocations and deletions per Instance and copies them to the gateway, the foundation for restore replay and account deletion (#26/#29).

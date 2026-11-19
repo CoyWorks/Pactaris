@@ -21,6 +21,11 @@ export const isHouseholdAction=(value:unknown):value is HouseholdAction=>typeof 
 export const commandPath=(id:string,action:HouseholdAction)=>`/internal/households/${id}/commands/${action}`;
 export const digest=(body:string|Buffer)=>createHash('sha256').update(body).digest('hex');
 export const uuid=(value:unknown):value is string=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
+/** Instance-scoped revocation journal transfer. Not bound to any account or household. */
+export const journalActions=['journalPending','journalAck'] as const;
+export type JournalAction=typeof journalActions[number];
+export const isJournalAction=(value:unknown):value is JournalAction=>typeof value==='string'&&(journalActions as readonly string[]).includes(value);
+export const journalPath=(action:JournalAction)=>`/internal/journal/${action}`;
 export class DelegationSigner {
   private key?:Promise<CryptoKey>;
   constructor(private config:GatewayConfig) {}
@@ -38,6 +43,34 @@ export class DelegationSigner {
     return new SignJWT({household_id:householdId,purpose:'household.command.'+action,method:'POST',path:commandPath(householdId,action),operation_id:operationId,body_sha256:digest(body)})
       .setProtectedHeader({alg:'EdDSA',typ:'pactaris-command+jwt',kid:this.config.delegation.keyId})
       .setIssuer(this.config.delegation.issuer).setSubject(accountId).setAudience(audience(instanceId)).setJti(randomUUID()).setIssuedAt().setExpirationTime('30s').sign(await this.ready());
+  }
+  async signJournal(instanceId:string,action:JournalAction,operationId:string,body:string) {
+    if(!uuid(instanceId)||!uuid(operationId)||!isJournalAction(action))throw new DelegationError('journal.scope');
+    return new SignJWT({purpose:'instance.journal.'+action,method:'POST',path:journalPath(action),operation_id:operationId,body_sha256:digest(body)})
+      .setProtectedHeader({alg:'EdDSA',typ:'pactaris-journal+jwt',kid:this.config.delegation.keyId})
+      .setIssuer(this.config.delegation.issuer).setSubject(instanceId).setAudience(audience(instanceId)).setJti(randomUUID()).setIssuedAt().setExpirationTime('30s').sign(await this.ready());
+  }
+}
+
+export class JournalVerifier {
+  private keys=new Map<string,Promise<CryptoKey>>();
+  constructor(private config:InstanceConfig) {}
+  async verify(token:string,action:JournalAction,body:Buffer) {
+    if(!this.config.delegation||token.length>8192||body.length>4096||!isJournalAction(action))throw new DelegationError('journal.disabled');
+    try {
+      const {payload}=await jwtVerify(token,async header=>{
+        if(header.alg!=='EdDSA'||header.typ!=='pactaris-journal+jwt'||!header.kid)throw Error('journal.header');
+        const file=this.config.delegation!.publicKeys[header.kid];if(!file)throw Error('journal.key');
+        if(!this.keys.has(header.kid))this.keys.set(header.kid,readFile(file,'utf8').then(pem=>importSPKI(pem,'EdDSA')));
+        return this.keys.get(header.kid)!;
+      },{algorithms:['EdDSA'],issuer:this.config.delegation.issuer,audience:audience(this.config.instanceId),clockTolerance:3,
+        requiredClaims:['sub','jti','iat','exp','purpose','method','path','operation_id','body_sha256']});
+      const now=Math.floor(Date.now()/1000);
+      if(payload.sub!==this.config.instanceId||!uuid(payload.jti)||!uuid(payload.operation_id)||payload.purpose!=='instance.journal.'+action||
+        payload.method!=='POST'||payload.path!==journalPath(action)||payload.body_sha256!==digest(body)||
+        typeof payload.iat!=='number'||typeof payload.exp!=='number'||payload.exp-payload.iat>30||payload.iat>now+3||payload.exp<=payload.iat)throw Error('journal.scope');
+      return {operationId:payload.operation_id,jti:payload.jti,expiresAt:new Date((payload.exp+3)*1000)};
+    }catch{throw new DelegationError('journal.invalid');}
   }
 }
 

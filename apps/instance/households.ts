@@ -1,4 +1,6 @@
 import {InstancePartner} from './partner.js';
+import {InstanceJournal} from './journal.js';
+import type {JournalAction} from '../../packages/auth/delegation.js';
 import type {PartnerAction} from '../../packages/auth/partner.js';
 import {InstanceCatalog} from './catalog.js';
 import type {CatalogAction} from '../../packages/auth/catalog.js';
@@ -35,7 +37,8 @@ export class InstanceHouseholds {
   private partnerService:InstancePartner;
   private catalogService:InstanceCatalog;
   private routineService:InstanceRoutines;
-  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new DelegationVerifier(config);this.exportVerifier=new CommandVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);this.members=new InstanceMembers(pool,config);this.relationships=new InstanceRelationships(pool,config);this.consentService=new InstanceConsent(pool,config);this.workspaceService=new InstanceWorkspace(pool,config);this.libraryService=new InstanceLibrary(pool,config);this.routineService=new InstanceRoutines(pool,config);this.catalogService=new InstanceCatalog(pool,config);this.partnerService=new InstancePartner(pool,config);}
+  private journalService:InstanceJournal;
+  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new DelegationVerifier(config);this.exportVerifier=new CommandVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);this.members=new InstanceMembers(pool,config);this.relationships=new InstanceRelationships(pool,config);this.consentService=new InstanceConsent(pool,config);this.workspaceService=new InstanceWorkspace(pool,config);this.libraryService=new InstanceLibrary(pool,config);this.routineService=new InstanceRoutines(pool,config);this.catalogService=new InstanceCatalog(pool,config);this.partnerService=new InstancePartner(pool,config);this.journalService=new InstanceJournal(pool,config);}
   command(token:string,householdId:string,action:HouseholdAction,body:Buffer){return this.commands.execute(token,householdId,action,body);}
   invitation(token:string,householdId:string,action:InvitationAction,body:Buffer){return this.invitations.execute(token,householdId,action,body);}
   membership(token:string,householdId:string,action:MembershipAction,body:Buffer){return this.members.execute(token,householdId,action,body);}
@@ -46,6 +49,7 @@ export class InstanceHouseholds {
   partner(token:string,householdId:string,action:PartnerAction,body:Buffer){return this.partnerService.execute(token,householdId,action,body);}
   catalog(token:string,householdId:string,action:CatalogAction,body:Buffer){return this.catalogService.execute(token,householdId,action,body);}
   routine(token:string,householdId:string,action:RoutineAction,body:Buffer){return this.routineService.execute(token,householdId,action,body);}
+  journal(token:string,action:JournalAction,body:Buffer){return this.journalService.execute(token,action,body);}
   async personalExport(token:string,householdId:string,body:Buffer){
     const proof=await this.exportVerifier.verify(token,householdId,'personalExport',body);
     const input=JSON.parse(body.toString()) as Record<string,unknown>;
