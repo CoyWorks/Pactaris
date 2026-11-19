@@ -5,7 +5,7 @@ import {RoutinesPanel} from './routines.js';
 import {LibraryPanel} from './library.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
-import type {TaskDetail,TaskFields,TaskSummary,WorkspaceResult} from '../../../packages/auth/workspace.js';
+import type {PointsSettings,TaskDetail,TaskFields,TaskSummary,WorkspaceResult} from '../../../packages/auth/workspace.js';
 import {SafetyProvider} from './consent.js';
 import {Relationships} from './relationships.js';
 import {InvitationManager} from './invitations.js';
@@ -19,6 +19,7 @@ const errorKey=(key:unknown):MessageKey=>(['workspace.invalid','workspace.denied
 const blank=():TaskFields=>({title:'',description:'',priority:'normal',dueAt:null,assignment:'unassigned'});
 export function HouseholdWorkspace({householdId,session,language,format,onLeave,children}:{householdId:string;session:{account:{id:string;displayName:string};csrfToken:string};language:string;format:string;onLeave:()=>void;children:React.ReactNode}){
  const t=createTranslator(language),[view,setView]=useState<View>('home'),[data,setData]=useState<WorkspaceResult>(),[filter,setFilter]=useState('open'),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[draft,setDraft]=useState<Draft>(),[editor,setEditor]=useState<{fields:TaskFields;taskId?:string;version?:string}>(),[settings,setSettings]=useState<{name:string;timeZone:string;version:string}>();
+ const [pointsDraft,setPointsDraft]=useState<PointsSettings & {version:string}>();
  const activeWrite=useRef(false),base='/api/households/'+householdId+'/workspace';
  useEffect(()=>{
   let stopped=false,active:AbortController|undefined,timer:ReturnType<typeof setTimeout>|undefined;
@@ -113,7 +114,7 @@ export function HouseholdWorkspace({householdId,session,language,format,onLeave,
   const request=retry??{action,body:{operationId:crypto.randomUUID(),...input}},controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),15000);setDraft(request);
   try{const r=await fetch(base+'/'+request.action,{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify(request.body)}),result=await r.json();
    if(!r.ok){setError(errorKey(result.messageKey));if(r.status<500)setDraft(undefined);else setNotice('workspace.unknown');return;}
-   setDraft(undefined);setEditor(undefined);setSettings(undefined);setNotice('workspace.confirmed');setRefresh(v=>v+1);
+   setDraft(undefined);setEditor(undefined);setSettings(undefined);setPointsDraft(undefined);setNotice('workspace.confirmed');setRefresh(v=>v+1);
   }catch{setNotice('workspace.unknown');}finally{clearTimeout(deadline);activeWrite.current=false;setBusy(false);}
  }
  const h=data?.household,blocked=busy||!!draft,safety=h?{epoch:h.epoch,memberEpoch:h.memberEpoch}:{};
@@ -139,7 +140,7 @@ export function HouseholdWorkspace({householdId,session,language,format,onLeave,
      </div></li>)}</ul>
     {data.nextCursor&&<button type="button" disabled={busy} onClick={()=>setCursor(data.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}
    </section>}
-   {view==='participantTasks'&&h&&<PartnerPanel householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} onInboxRead={()=>setRefresh(value=>value+1)}/>}
+   {view==='participantTasks'&&h&&<PartnerPanel householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} onInboxRead={()=>setRefresh(value=>value+1)} pointsSettings={data?.pointsSettings}/>}
    {view==='rewards'&&h&&<CatalogPanel householdId={householdId} session={session} language={language} format={format}/>}
    {view==='checkins'&&h&&<SharedCheckins householdId={householdId} csrfToken={session.csrfToken} language={language}/>}
    {(view==='habits'||view==='checkins')&&h&&<RoutinesPanel key={view} householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} section={view}/>}
@@ -149,7 +150,20 @@ export function HouseholdWorkspace({householdId,session,language,format,onLeave,
    {view==='settings'&&h&&<section><h2>{t('workspace.settings')}</h2>{h.canEdit?<form onSubmit={e=>{e.preventDefault();const current=settings??{name:h.name,timeZone:h.timeZone,version:h.version};void change('settingsUpdate',{...current,name:current.name.trim(),timeZone:current.timeZone.trim()});}}>
     <label>{t('onboarding.name')}<input required maxLength={120} disabled={blocked} value={settings?.name??h.name} onChange={e=>setSettings(old=>({...old??{name:h.name,timeZone:h.timeZone,version:h.version},name:e.target.value}))}/></label>
     <label>{t('workspace.timeZone')}<input required maxLength={100} disabled={blocked} value={settings?.timeZone??h.timeZone} onChange={e=>setSettings(old=>({...old??{name:h.name,timeZone:h.timeZone,version:h.version},timeZone:e.target.value}))}/></label><p>{t('workspace.timeZoneHelp')}</p><button type="submit" disabled={blocked}>{t('workspace.saveSettings')}</button>
-   </form>:<p>{t('workspace.settingsDenied')}</p>}<button type="button" onClick={onLeave}>{t('onboarding.leave')}</button>{children}</section>}
+   </form>:<p>{t('workspace.settingsDenied')}</p>}
+   {h.canEdit&&data?.pointsSettings&&<form onSubmit={event=>{
+    event.preventDefault();
+    if(pointsDraft)void change('pointsConfigure',{version:pointsDraft.version,pointsSettings:{enabled:pointsDraft.enabled,label:pointsDraft.label?.trim()||null}});
+   }}>
+    <h3>{t('workspace.pointsSettings')}</h3>
+    <p>{t('workspace.pointsSettingsHelp')}</p>
+    <label><input type="checkbox" disabled={blocked} checked={(pointsDraft??data.pointsSettings).enabled}
+     onChange={event=>setPointsDraft({...pointsDraft??data.pointsSettings!,version:pointsDraft?.version??h.version,enabled:event.target.checked})}/>{t('workspace.pointsEnabled')}</label>
+    <label>{t('workspace.pointsLabel')}<input maxLength={32} disabled={blocked} value={(pointsDraft??data.pointsSettings).label??''}
+     onChange={event=>setPointsDraft({...pointsDraft??data.pointsSettings!,version:pointsDraft?.version??h.version,label:event.target.value})}/></label>
+    <button type="submit" disabled={blocked||!pointsDraft}>{t('workspace.saveSettings')}</button>
+   </form>}
+   <button type="button" onClick={onLeave}>{t('onboarding.leave')}</button>{children}</section>}
   </SafetyProvider>
  </div>;
 }

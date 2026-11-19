@@ -73,6 +73,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0016_task_scheduling'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.run_task_scheduler(uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0013_participant_tasks'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.partner_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0012_reward_catalog'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.catalog_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
+      if(entries.some(m=>m.id==='0026_household_points'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.workspace_points(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0025_shared_checkins'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.shared_checkin_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0011_routines'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.routine_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0024_draft_attachments'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.draft_attachment_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);

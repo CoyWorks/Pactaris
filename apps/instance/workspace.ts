@@ -21,6 +21,7 @@ export class InstanceWorkspace{
    await db.query('BEGIN');
    const used=await db.query('INSERT INTO pactaris.delegation_uses(jti,expires_at) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING jti',[verified.jti,verified.expiresAt]);
    if(!used.rowCount)throw new DelegationError('workspace.replay');
+   const parameters=[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint];
    const command='SELECT pactaris.workspace_command($1,$2,$3,$4,$5,$6,$7)';
    const unread=action==='workspaceRead'
     ?` || jsonb_build_object('hasUnreadTaskInbox',pactaris.workspace_has_unread($1,$2,$3,($6::jsonb->>'membershipId')::uuid))`:'';
@@ -34,8 +35,17 @@ export class InstanceWorkspace{
     return {householdId,operationId:verified.operationId,actorMembershipId:input.membershipId,
      status:'listed',hasUnreadTaskInbox:unreadRow.unread};
    }
-   const result=await db.query(command+unread+' AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint]);
-   await db.query('COMMIT');return result.rows[0].result as WorkspaceResult;
+   const result=action==='pointsConfigure'
+    ?await db.query("SELECT pactaris.workspace_points($1,$2,$3,$4,'configure',$5,$6) AS result",
+      [householdId,this.config.instanceId,verified.accountId,verified.operationId,input,fingerprint])
+    :await db.query(command+unread+' AS result',parameters);
+   const response=result.rows[0].result as WorkspaceResult;
+   if(action==='workspaceRead'){
+    const settings=await db.query("SELECT pactaris.workspace_points($1,$2,$3,$4,'read',$5,$6) AS result",
+     [householdId,this.config.instanceId,verified.accountId,verified.operationId,input,fingerprint]);
+    response.pointsSettings=settings.rows[0].result;
+   }
+   await db.query('COMMIT');return response;
   }catch(error){
    await db.query('ROLLBACK');
    if(error&&typeof error==='object'&&'code'in error&&error.code==='P0001'&&'message'in error&&typeof error.message==='string'){

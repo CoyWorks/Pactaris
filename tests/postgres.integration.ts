@@ -1618,6 +1618,20 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       }
       assert.equal(await inboxState(B),false);
     })();
+    const readPoints=async(p:Person)=>(await api(base+'/workspace','GET',undefined,p.session)).data;
+    const pointsVersion=(await readPoints(A)).household.version;
+    const disablePoints={operationId:randomUUID(),version:pointsVersion,pointsSettings:{enabled:false,label:'Stars'}};
+    const configurePoints=(p:Person,input:typeof disablePoints)=>api(base+'/workspace/pointsConfigure','POST',input,p.session);
+    assert.equal((await configurePoints(B,disablePoints)).status,404);
+    assert.equal((await configurePoints(A,disablePoints)).status,200);
+    assert.equal((await configurePoints(A,disablePoints)).status,200);
+    assert.deepEqual((await readPoints(B)).pointsSettings,{enabled:false,label:'Stars'});
+    const blockedPoints={...await offerBody(A,B),policyId:active.policyId,policyVersion:active.version,fields:{...fields,rewardPoints:3}};
+    assert.equal((await post(A,'partnerAssign',blockedPoints)).status,409);
+    const enablePoints={operationId:randomUUID(),version:(await readPoints(A)).household.version,pointsSettings:{enabled:true,label:'Stars'}};
+    assert.equal((await configurePoints(A,enablePoints)).status,200);
+    assert.equal((await configurePoints(A,disablePoints)).status,200);
+    assert.deepEqual((await readPoints(B)).pointsSettings,{enabled:true,label:'Stars'});
     body={...await offerBody(A,B),policyId:active.policyId,policyVersion:active.version};
     const reward=await api(base+'/catalog/catalogCreate','POST',{
       operationId:randomUUID(),fields:{title:'Reward fixture',description:'Chosen reward terms',category:'',points:null,position:0}

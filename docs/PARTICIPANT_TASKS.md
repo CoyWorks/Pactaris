@@ -57,3 +57,7 @@ Open the private task inbox and choose **Task inbox preferences**. Active partic
 The Instance applies the recipient's selection during inbox insertion. Gateway/Instance calls require the usual current session, exact membership and origin/CSRF checks. There are no email or push subscriptions in these settings. Quiet hours and preferences for external channels remain follow-up in #22 and #23.
 
 The participant-tasks tab signals unread notices for the selected household. While the workspace is visible and online, the Gateway checks the current placement and membership, then requests a single Boolean from the Instance’s indexed unread query. The client refreshes the full workspace on entry, reconnection, return to the tab and every five minutes while active. It also refreshes after a confirmed mark-as-read, so the badge stays on if there are still unread notices on other pages. Failed unread checks clear the indicator, and rate limits defer the next check. No notification content is included in the indicator response.
+
+## Household point settings
+
+Owners and household administrators can rename task points and choose whether new task or series versions may promise points. Existing balances, reversals and already agreed task or series terms are retained. Existing series keep generating under their current terms and safety limits. Remove points from a series revision to save it while new point terms are disabled. A setting change checks the current household settings version and records an audit event without the configured name.

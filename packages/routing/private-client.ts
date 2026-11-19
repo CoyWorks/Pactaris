@@ -195,7 +195,7 @@ export class PrivateConsentClient{
 export class PrivateWorkspaceClient{
  constructor(private signer:DelegationSigner){}
  async execute(accountId:string,placement:Placement,action:import('../auth/workspace.js').WorkspaceAction,input:Record<string,unknown>):Promise<import('../auth/workspace.js').WorkspaceResult>{
-  const {WorkspaceError}=await import('../auth/workspace.js');
+  const {WorkspaceError,validPointsSettings}=await import('../auth/workspace.js');
   try{
    if(!uuid(input.operationId))throw new WorkspaceError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new WorkspaceError('invalid');
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body);
@@ -216,6 +216,10 @@ export class PrivateWorkspaceClient{
     return {...out,hasUnreadTaskInbox:r.hasUnreadTaskInbox};
    }
    if(action==='workspaceRead'){
+    if(r.pointsSettings!==undefined){
+     if(!validPointsSettings(r.pointsSettings))throw Error('routing.response');
+     out.pointsSettings=r.pointsSettings;
+    }
     if(r.hasUnreadTaskInbox!==undefined){
       if(typeof r.hasUnreadTaskInbox!=='boolean')throw Error('routing.response');
       out.hasUnreadTaskInbox=r.hasUnreadTaskInbox;

@@ -8,7 +8,7 @@ const preferenceLabels={
 const kinds=['assigned','submitted','reviewed'] as const;
 const labels={assigned:'inbox.assigned',submitted:'inbox.submitted',reviewed:'inbox.reviewed'} as const;
 
-export function TaskInbox({householdId,csrfToken,language,onRead}:{householdId:string;csrfToken:string;language:string;onRead:()=>void}){
+export function TaskInbox({householdId,csrfToken,language,onRead,pointsLabel}:{householdId:string;csrfToken:string;language:string;onRead:()=>void;pointsLabel?:string|null}){
  const t=createTranslator(language);
  const [items,setItems]=useState<PartnerResult['inbox']>();
  const [balance,setBalance]=useState<string>();
@@ -85,7 +85,7 @@ export function TaskInbox({householdId,csrfToken,language,onRead}:{householdId:s
    </form>}
   </div>}
   {failed&&<p role="alert">{t('inbox.error')}</p>}
-  {balance!==undefined&&<p>{t('inbox.balance')} <strong>{balance}</strong></p>}
+  {balance!==undefined&&<p>{pointsLabel?t('inbox.namedBalance',{label:pointsLabel}):t('inbox.balance')} <strong>{balance}</strong></p>}
   {items?.length===0&&<p>{t('inbox.empty')}</p>}
   <ul>{items?.map(item=><li key={item.id}>{t(labels[item.kind])} {!item.read&&<button type="button" onClick={async()=>{
    try{
