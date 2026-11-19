@@ -33,3 +33,8 @@ ak-flow-executor::part(locale-select) { /* keep language selector available */ }
 @media (forced-colors: active) {
   .pf-c-button.pf-m-primary, .pf-v5-c-button.pf-m-primary { forced-color-adjust: auto; }
 }
+
+/* Keep the light Pactaris wordmark legible on the flow card. */
+ak-flow-executor::part(branding) {
+  background-color: #241a30;
+}

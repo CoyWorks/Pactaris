@@ -24,6 +24,8 @@ python3 scripts/identity_brand.py --brand "$PACTARIS_BRAND_UUID" --domain "$PACT
 
 Confirm the public Identity URL and sign-in through the public app. Verify the existing web certificate and issuer, then test errors, aborting sign-in, MFA, recovery and mobile keyboard/focus with test accounts. For manual application, use the same files and CSS under **System > Brands**. Leave the existing routing, web certificate and flow selections in place.
 
+Set the public flow heading separately in **Flows and Stages > Flows**. Locate the existing Authentication flow that serves the public sign-in and record its current **Title**. On the current deployment its slug is `default-authentication-flow`. Set **Title** to the English value of `portal.signInTitle` in [the message catalog](../locales/en/messages.json), currently “Welcome to Pactaris”. Save only that field and reopen the public sign-in page. Preserve the internal name, slug, designation, stages and provider bindings. To undo the heading change, restore its recorded title in the same flow. The Brand tool manages only Brand fields.
+
 To restore only the earlier cosmetic values, use that backup as input and a new path for the pre-restore snapshot.
 
 ```bash
