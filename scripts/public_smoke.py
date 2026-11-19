@@ -52,11 +52,18 @@ def smoke(app, issuer):
 
     check('gatewayReady', app + '/health/ready', 200, lambda headers, body:
           no_store(headers) and json.loads(body).get('status') == 'ready')
+    check('gatewayEntry', app + '/', 200, lambda headers, _body:
+          no_store(headers) and headers.get('Content-Type', '').lower().startswith('text/html')
+          and bool(headers.get('Content-Security-Policy')))
     check('anonymousSession', app + '/api/session', 401, lambda headers, body:
           no_store(headers) and json.loads(body).get('code') == 'authentication_required')
-    check('installManifest', app + '/manifest.webmanifest', 200, lambda headers, body:
-          headers.get('Content-Type', '').startswith('application/manifest+json')
-          and json.loads(body).get('start_url') == '/')
+    def manifest(headers, body):
+        if not headers.get('Content-Type', '').startswith('application/manifest+json'):
+            return False
+        value = json.loads(body)
+        return all(value.get(key) == '/' for key in ('start_url', 'scope', 'id'))
+
+    check('installManifest', app + '/manifest.webmanifest', 200, manifest)
     check('serviceWorker', app + '/service-worker.js', 200, lambda headers, _body:
           no_store(headers) and 'javascript' in headers.get('Content-Type', ''))
     check('identityDiscovery', issuer.rstrip('/') + '/.well-known/openid-configuration', 200, discovery)

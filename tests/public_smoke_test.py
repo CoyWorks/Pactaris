@@ -23,10 +23,12 @@ class SmokeTests(unittest.TestCase):
             'issuer': issuer, 'authorization_endpoint': identity + '/authorize',
             'token_endpoint': identity + '/token', 'jwks_uri': identity + '/jwks',
         }
+        entry = {**privacy, 'Content-Type': 'text/html', 'Content-Security-Policy': "default-src 'self'"}
         responses = {
+            '/': (200, entry, '<html></html>'),
             '/health/ready': (200, privacy, '{"status":"ready"}'),
             '/api/session': (401, privacy, '{"code":"authentication_required"}'),
-            '/manifest.webmanifest': (200, {'Content-Type': 'application/manifest+json'}, '{"start_url":"/"}'),
+            '/manifest.webmanifest': (200, {'Content-Type': 'application/manifest+json'}, '{"start_url":"/","scope":"/","id":"/"}'),
             '/service-worker.js': (200, {**privacy, 'Content-Type': 'text/javascript'}, 'script'),
         }
         def get(url):
@@ -38,8 +40,10 @@ class SmokeTests(unittest.TestCase):
         with patch.object(smoke, 'get', side_effect=get):
             self.assertTrue(all(smoke.smoke(app, issuer).values()))
             responses['/api/session'] = (302, privacy, '')
+            responses['/'] = (200, {'Content-Type': 'text/html'}, '<html></html>')
             discovery['jwks_uri'] = 'https://unrelated.example.invalid/jwks'
             report = smoke.smoke(app, issuer)
             self.assertFalse(report['anonymousSession'])
+            self.assertFalse(report['gatewayEntry'])
             self.assertFalse(report['identityDiscovery'])
             self.assertTrue(report['gatewayReady'])
