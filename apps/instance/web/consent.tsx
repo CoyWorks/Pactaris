@@ -50,7 +50,7 @@ export function SafetyProvider({householdId,session,language,children,compact=fa
   const operationId=crypto.randomUUID(),ticket=grant.current;
   try{return await send(restrictive&&ticket&&Date.parse(ticket.expiresAt)>Date.now()?{url:'/api/local-safety/'+ticket.ticketId,body:{operationId,proof:ticket.proof,restriction:{action,...input}}}:{url:base+'/consent/'+action,body:{operationId,...input}});}finally{if(!restrictive)active.current=false;}
  }
- return <SafetyContext.Provider value={{state,actor,refresh,read,command}}><details open={!compact} className="safety-drawer"><summary>{t('workspace.safety')}</summary><section className="notice"><h2>{t('consent.safetyTitle')}</h2><p>{t('consent.ackNotice')}</p>
+ return <SafetyContext.Provider value={{state,actor,refresh,read,command}}><details open hidden={compact} className="safety-drawer"><summary>{t('workspace.safety')}</summary><section className="notice"><h2>{t('consent.safetyTitle')}</h2><p>{t('consent.ackNotice')}</p>
   {state&&<><p>{t(state.householdStatus==='active'?'consent.householdActive':'consent.householdPaused')}</p><p>{t(state.selfPaused?'consent.selfPaused':'consent.selfActive')}</p></>}
   {error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}
   <button type="button" onClick={()=>{void command('selfPause',{},true);}}>{t('consent.pauseSelf')}</button>
