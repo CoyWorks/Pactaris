@@ -525,7 +525,6 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   // Complete export (version 2): own records from every Instance, never another member's private content.
   await a.owner.query("INSERT INTO pactaris.tasks(household_id,id,creator_membership_id,title,priority) VALUES($1,$2,$3,'Partner private fixture','normal')",[doomedHousehold,randomUUID(),partnerMembership]);
   await store.createSession('doomed-export',doomed,'csrf',60,120);
-  for(const [db,instanceId] of [[a,ids[0]],[b,ids[1]]] as const)await db.pool.query('SELECT pactaris.exchange_export_page($1,$2,NULL,10) AS page',[instanceId,doomed.id]);
   const exported:string[]=[];await streamAccountExport((await store.session('doomed-export',60))!,gatewayDb.pool,signer,async chunk=>{exported.push(chunk);});
   const exportData=JSON.parse(exported.join(''));
   assert.equal(exportData.version,2);assert.equal(exportData.complete,true);assert.equal(exportData.unavailableSources,0);
