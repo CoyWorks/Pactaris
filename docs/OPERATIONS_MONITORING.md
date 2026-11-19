@@ -16,6 +16,7 @@ Use `--root` for a custom installation root. The command emits one JSON object. 
 | `probeDurationMs` | Time spent checking local readiness |
 | `workerHeartbeatAgeSeconds` | Time since the Node worker published its last heartbeat, or null for Identity or an unavailable heartbeat |
 | `databaseCheckpointAgeSeconds` | Time since the latest marked local checkpoint with a matching SQL dump size, or null if none is known |
+| `offsiteBackupAgeSeconds` | Time since the last confirmed off-host copy for this component, or null if none is recorded (see [RECOVERY.md](RECOVERY.md#scheduled-off-host-backups)) |
 | `installationDiskFreeBytes` | Free bytes on the installation filesystem |
 
 The report contains no database URLs, credentials, account identifiers, household content, invite links or private paths. Treat the local monitoring account as an operator credential. Keep collected status data within the operator monitoring system.

@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily encrypted off-host Pactaris backup
+
+[Timer]
+OnCalendar=*-*-* 02:47:00
+RandomizedDelaySec=20min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

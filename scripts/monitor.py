@@ -59,6 +59,15 @@ def invitation_queue(heartbeat):
     return {**counts, 'oldestDueAgeSeconds': oldest}
 
 
+def offsite_age(component, now, state_file=Path('/var/lib/pactaris-offsite-backup/state.json')):
+    """Age of the last confirmed off-host copy, or None when none is recorded."""
+    try:
+        value = read_json(state_file).get(component, {}).get('lastSuccessAt')
+        return age_seconds(value, now) if isinstance(value, str) else None
+    except (DeployError, OSError, AttributeError, TypeError):
+        return None
+
+
 def report(base):
     state = read_json(base / 'state.json')
     cfg = validate_config(base.name, read_json(base / 'config.json'))
@@ -87,6 +96,7 @@ def report(base):
         'component': base.name, 'revision': revision, 'ready': ready,
         'probeDurationMs': duration_ms, 'workerHeartbeatAgeSeconds': heartbeat_age,
         'databaseCheckpointAgeSeconds': checkpoint_age(base, now),
+        'offsiteBackupAgeSeconds': offsite_age(base.name, now),
         'installationDiskFreeBytes': usage.free,
         **({'invitationMail': queue} if base.name == 'gateway' else {}),
     }
