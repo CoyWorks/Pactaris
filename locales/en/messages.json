@@ -707,5 +707,17 @@
   "library.attachmentInvalid": "Choose a valid UTF-8 text file up to 1,536 bytes.",
   "library.attachmentMissing": "This attachment is unavailable.",
   "library.attachmentSaved": "Attachment saved.",
-  "library.attachmentRemoved": "Attachment removed."
+  "library.attachmentRemoved": "Attachment removed.",
+  "checkins.title": "One-off check-ins",
+  "checkins.subject": "Subject",
+  "checkins.response": "Your response",
+  "checkins.reviewer": "Optional reviewer",
+  "checkins.private": "Only me",
+  "checkins.privateNotice": "Only you can read this response.",
+  "checkins.sharedNotice": "You and the selected reviewer can read this response. The reviewer can mark it as reviewed.",
+  "checkins.save": "Save check-in",
+  "checkins.saved": "Check-in updated.",
+  "checkins.reviewed": "Reviewed",
+  "checkins.withdraw": "Withdraw response",
+  "checkins.review": "Mark as reviewed"
 }

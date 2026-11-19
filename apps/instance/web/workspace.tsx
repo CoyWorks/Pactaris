@@ -1,3 +1,4 @@
+import {SharedCheckins} from './shared-checkins.js';
 import {PartnerPanel} from './partner.js';
 import {CatalogPanel} from './catalog.js';
 import {RoutinesPanel} from './routines.js';
@@ -68,6 +69,7 @@ export function HouseholdWorkspace({householdId,session,language,format,onLeave,
    </section>}
    {view==='participantTasks'&&h&&<PartnerPanel householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone}/>}
    {view==='rewards'&&h&&<CatalogPanel householdId={householdId} session={session} language={language} format={format}/>}
+   {view==='checkins'&&h&&<SharedCheckins householdId={householdId} csrfToken={session.csrfToken} language={language}/>}
    {(view==='habits'||view==='checkins')&&h&&<RoutinesPanel key={view} householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} section={view}/>}
    {(view==='rules'||view==='notes')&&h&&<LibraryPanel key={view} householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} section={view==='notes'?'notes':'guidance'}/>}
    {view==='members'&&h&&<><InvitationManager householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone}/><MemberAdministration householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone}/></>}

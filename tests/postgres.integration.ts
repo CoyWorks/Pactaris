@@ -1353,6 +1353,34 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   // Keep scenario control-flow graphs separate: one ever-growing async test
   // can exhaust the TypeScript checker stack on smaller-stack runtimes.
   // Owner-only everyday routines: real private HTTPS, database transactions and calendar periods.
+  await (async function verifyScopedCheckin(){
+    const owner=await store.account('https://idp.fixture.invalid/','checkin-writer','Check-in writer');
+    const session=randomBytes(32).toString('base64url');await store.createSession(session,owner,'registration-csrf',600,1200);
+    const home=await onboarding.create(owner.id,randomUUID(),'Private check-in fixture'),place=(await store.placement(owner.id,home.householdId))!;
+    const db=place.instanceId===ids[0]?a:b,route='/api/households/'+home.householdId+'/routines/';
+    async function add(label:string,role:string){
+      const person=await store.account('https://idp.fixture.invalid/',label,label),member=randomUUID(),session=randomBytes(32).toString('base64url');
+      await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role) VALUES($1,$2,$3,'active',$4)",[home.householdId,member,person.id,role]);
+      await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id,membership_id) VALUES($1,$2,$3)',[person.id,home.householdId,member]);
+      await store.createSession(session,person,'registration-csrf',600,1200);
+      return {member,session};
+    }
+    const reviewer=await add('checkin-reviewer','participant'),admin=await add('checkin-admin','admin');
+    const post=(action:string,input:Record<string,unknown>={},cookie=session)=>api(route+action,'POST',{operationId:randomUUID(),...input},cookie);
+    const operationId=randomUUID(),input={operationId,reviewerId:reviewer.member,title:'Fixture check-in',text:'Scoped response'};
+    assert.equal((await post('checkinSubmit',input)).status,200);
+    assert.equal((await post('checkinSubmit',input)).status,200);
+    assert.equal((await post('checkinList',{},admin.session)).data.checkins.length,0);
+    assert.equal((await post('checkinList',{},reviewer.session)).data.checkins[0].text,input.text);
+    assert.equal((await post('checkinReview',{checkinId:operationId,version:'1'},admin.session)).status,404);
+    assert.equal((await post('checkinReview',{checkinId:operationId,version:'1'},reviewer.session)).status,200);
+    assert.equal((await post('checkinList')).data.checkins[0].state,'reviewed');
+    assert.equal((await post('checkinWithdraw',{checkinId:operationId,version:'1'})).status,409);
+    assert.equal((await post('checkinWithdraw',{checkinId:operationId,version:'2'})).status,200);
+    assert.deepEqual((await post('checkinList',{},reviewer.session)).data.checkins,[]);
+    assert.equal((await db.owner.query('SELECT response FROM pactaris.shared_checkins WHERE id=$1',[operationId])).rows[0].response,null);
+  })();
+
   await (async function verifyPersonalRoutines(){
    const person=await store.account('https://idp.fixture.invalid/','routine-owner','Routine owner'),session=randomBytes(32).toString('base64url');
    await store.createSession(session,person,'registration-csrf',600,1200);

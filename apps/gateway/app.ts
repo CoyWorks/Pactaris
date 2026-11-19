@@ -500,7 +500,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     try{const session=await authenticate(req,res);if(!session)return;
       if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
       const action=req.params.action;if(!uuid(req.params.householdId)||!isRoutineAction(action))throw new RoutineError('invalid');const input=routineInput(action,req.body);
-      if(!routines)throw new RoutineError('unavailable');if(!['routineRead','routineList','routinePause','routineArchive','progressReverse'].includes(action)&&!await store.throttle('routine:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+      if(!routines)throw new RoutineError('unavailable');if(!['routineRead','routineList','routinePause','routineArchive','progressReverse','checkinList','checkinWithdraw'].includes(action)&&!await store.throttle('routine:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
       res.json(await routines.execute(session.account.id,req.params.householdId,action,input));
     }catch(error){routineFailure(res,error);}
   });
