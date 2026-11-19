@@ -132,3 +132,19 @@ body.layer-open{overflow:hidden}
 .layer-body{max-width:40rem;margin:0 auto}
 .layer-body>.document-detail,.layer-body>.document-editor{border:0;padding:0;margin:0}
 .layer-body>.document-detail>h3:first-child,.layer-body>.document-editor>h3:first-child{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* Swipeable task rows and the undo toast. */
+.card-list li.swipe-row{position:relative;display:block;padding:0;overflow:hidden;min-height:0}
+.swipe-content{position:relative;z-index:1;display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem .35rem 0;background:var(--surface);touch-action:pan-y;transition:transform .2s ease;user-select:none}
+.swipe-hint{position:absolute;inset:0;display:flex;align-items:center;padding:0 1.25rem;font-weight:600;font-size:.9rem;opacity:0}
+.swipe-hint.right{justify-content:flex-start;background:#1f4a35;color:#b8e6c8}.swipe-hint.left{justify-content:flex-end;background:#4a2430;color:var(--danger)}
+.swipe-row[data-direction=right] .swipe-hint.right,.swipe-row[data-direction=left] .swipe-hint.left{opacity:1}
+.row-main{flex:1;min-width:0;justify-content:flex-start;text-align:left;background:none;border:0;border-radius:0;padding:.5rem 1rem;color:var(--text);font-weight:400}
+.row-main:disabled{opacity:1;cursor:default}.row-title{font-size:.95rem}
+.complete-button{width:44px;height:44px;padding:0;border-radius:22px;background:none;border:2px solid #5a4b7a;color:transparent}
+.complete-button:hover,.complete-button:focus-visible{color:var(--accent);border-color:var(--accent)}
+button.secondary{background:none;border-color:#3a3052;color:var(--accent);min-height:40px;padding:.4rem .8rem;font-size:.875rem}
+.toast{position:fixed;z-index:12;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-height) + 5.5rem + env(safe-area-inset-bottom));display:flex;align-items:center;gap:1rem;width:min(calc(100% - 2rem),26rem);padding:.4rem .5rem .4rem 1rem;border-radius:14px;background:#3a2d5c;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.toast span{flex:1}
+.task-list>li p{margin:.15rem 0}
+@media(prefers-reduced-motion:reduce){.swipe-content{transition:none}}

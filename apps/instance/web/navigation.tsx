@@ -53,6 +53,7 @@ const paths={
  close:<path d="M6 6l12 12M18 6L6 18"/>,
  back:<path d="M15 6l-6 6 6 6"/>,
  chevron:<path d="M9 6l6 6-6 6"/>,
+ check:<path d="M5 12l5 5 9-10"/>,
  down:<path d="M6 9l6 6 6-6"/>,
 };
 export type IconName=keyof typeof paths;
