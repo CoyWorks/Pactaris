@@ -67,7 +67,7 @@ Use the Gateway's active release to run the newest installed status command agai
 
 ```bash
 for component in gateway instance identity; do
-  sudo bash /opt/pactaris/gateway/current/status.sh --component "$component"
+  sudo bash /opt/pactaris/gateway/current/status.sh --component "$component" --root /opt/pactaris
 done
 ```
 
