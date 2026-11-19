@@ -19,7 +19,7 @@ The gateway serves the same HTML for these paths. Moving between them uses the H
 - **Top bar:** the dynamic's name (opens the switcher list), the safety shield and the avatar (Profile). The shield is on every workspace screen and turns red while the dynamic is paused.
 - **Bottom tabs:** Today, Tasks (My tasks / Shared tasks), Routines (Habits / Rituals and check-ins), Library (Rules and protocols / Notes and ideas) and Dynamic.
 - **Dynamic tab:** members and invitations, relationships and agreements, reward catalog, safety and my limits, and settings (including leave).
-- **Today:** open tasks with a complete action, unread shared work, up to four active habits with their current period total and a **+1** button, counts and shortcuts. Habits are read when Today opens and after a change, not polled. Empty sections show one line and one action instead of an explanation.
+- **Today:** open tasks with a complete action, unread shared work, up to four active habits with their current period total and a **+1** button, counts and shortcuts. Habits are read when Today opens and after a change, not polled. Below them, check-ins and rituals that are active, open in their current period and not yet answered appear with **Answer**; the section is hidden when nothing is due. Answering opens a page with the prompt, the response type's input (text, a 1–5 rating, or yes/no; rituals only confirm) and an optional note, and records one `progressRecord` at server time. The reflection notice stays visible on that page. At most four check-ins and rituals are read. Empty sections show one line and one action instead of an explanation.
 - **Add button:** a bottom sheet. Private task, habit and note open a short form inside the sheet; **More options** opens the full form. A task for someone, check-ins, rules and rewards open their section, because their consent, audience and scope choices need the full form.
 
 ### Quick add
@@ -35,6 +35,8 @@ Each form keeps its operation ID until the input changes, so retrying after an u
 ## Detail pages
 
 Opening a task, shared task, routine, library item or catalog item, and every create or edit form in those modules, shows a full-screen page with a Back button instead of expanding inside the list. Escape also closes it, and focus returns to where it was. Errors, notices and retry or confirmation prompts of the module are shown on that page while it is open.
+
+Relationships, members and invitations use the same pattern: compact lists, with a page for a relationship (details, roles, agreements, accept/decline/withdraw and its confirmation), for proposing a relationship, for your name in the dynamic, for another member (role, remove, offer ownership) and for each member confirmation. Raw membership and invitation IDs are no longer shown in the lists. When pages are stacked, Escape closes only the top one.
 
 ## Swipe and undo
 
