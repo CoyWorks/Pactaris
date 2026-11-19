@@ -56,6 +56,28 @@ class DeploymentTests(unittest.TestCase):
             other = deploy.compose(Path(folder) / 'instance', Path('/release'))
             self.assertNotEqual(identity[3], other[3])
 
+    def test_status_reports_installed_version_and_keeps_legacy_records_readable(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder) / 'identity'
+            base.mkdir()
+            (base / 'config.json').write_text(json.dumps(self.identity()))
+            state_file = base / 'state.json'
+            state = {'revision': 'a' * 40, 'release': '/private/release/fixture'}
+            args = ['status', '--component', 'identity', '--root', folder]
+            for version, healthy in [('0.13.0-alpha.1', True), (None, False)]:
+                with self.subTest(version=version, healthy=healthy):
+                    extra = {'version': version} if version is not None else {}
+                    state_file.write_text(json.dumps({**state, **extra}))
+                    health_error = None if healthy else OSError('private fixture details')
+                    with patch.object(deploy, 'health', side_effect=health_error), patch(
+                        'sys.stdout', new_callable=io.StringIO
+                    ) as output:
+                        self.assertEqual(deploy.main(args), 0 if healthy else 1)
+                    self.assertNotIn('/private/', output.getvalue())
+                    self.assertEqual(json.loads(output.getvalue())['version'], version)
+                    self.assertEqual(json.loads(output.getvalue())['revision'], state['revision'])
+                    self.assertEqual(json.loads(output.getvalue())['ready'], healthy)
+
     def test_atomic_release_link_switch_preserves_data_and_previous_release(self):
         with tempfile.TemporaryDirectory() as folder:
             base = Path(folder)

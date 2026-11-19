@@ -448,7 +448,8 @@ def deploy(args):
             health(base, cfg, Path(existing['release']))
         except Exception:
             ready = False
-        emit('cli.status', component=args.component, revision=existing['revision'], ready=ready)
+        emit('cli.status', component=args.component, revision=existing['revision'],
+             version=existing.get('version'), ready=ready)
         return 0 if ready else 1
     if args.action == 'install' and existing:
         raise DeployError('cli.exists')

@@ -63,6 +63,16 @@ Git checkout refuses conflicting tracked edits; do not use reset --hard or disca
 | update.sh | Fetch/stage/check a pinned GitHub version, migrate, activate, verify and recover |
 | status.sh | Installed version/commit, service/readiness/worker status and last update outcome |
 
+Use the Gateway's active release to run the newest installed status command against each component:
+
+```bash
+for component in gateway instance identity; do
+  sudo bash /opt/pactaris/gateway/current/status.sh --component "$component"
+done
+```
+
+The status record includes the component's installed `version`, `revision` and current `ready` result. A legacy state without a recorded version returns `null` for `version`. An unchanged Identity deployment can retain its previous revision after an application update.
+
 Keep commands small and operationally familiar; detailed implementation may use shared internal helpers. CLI prose uses #44 catalogs, secrets never appear in output.
 
 ## Independent installable components
