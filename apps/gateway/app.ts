@@ -2,6 +2,7 @@ import { readDeploymentInfo } from '../../packages/http/deployment-info.js';
 import {pushEndpoint,pushSubscription,type WebPushDevices} from './web-push.js';
 import type {personalExport} from './personal-export.js';
 import type {AccountDeletion} from './account-deletion.js';
+import {reportInput,reportResolutions,type Moderation} from './moderation.js';
 import {accountInput,AccountDeletionError} from '../../packages/auth/account-deletion.js';
 import type {listRegistryInstances,listRegistryPlacements} from '../../packages/routing/inventory.js';
 import {smtpChanges,type SmtpSettings} from './smtp-settings.js';
@@ -53,7 +54,7 @@ type OperatorInventory={
   instances:(after:string|null)=>ReturnType<typeof listRegistryInstances>;
   placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
 };
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -155,6 +156,49 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     }else if(recipient)await smtp.testMail(recipient);
     else await smtp.verify();
     res.status(204).end();
+  });
+  // Abuse reports and limited account actions. Operators never receive household content.
+  app.get('/api/operator/reports',async(req,res)=>{
+    if(!await authorizeOperator(req,res))return;
+    const state=req.query.state??'open',after=req.query.after;
+    if(Object.keys(req.query).some(key=>!['state','after'].includes(key))||!['open','closed'].includes(String(state))||(after!==undefined&&!uuid(after))){
+      res.status(400).json({code:'invalid_request',messageKey:'errors.request'});return;
+    }
+    if(!moderation){res.status(404).json({code:'not_found',messageKey:'errors.notFound'});return;}
+    res.json(await moderation.reports(state as 'open'|'closed',(after as string|undefined)??null));
+  });
+  app.post('/api/operator/reports/:id/close',express.json({limit:256,strict:true,inflate:false}),async(req,res)=>{
+    const session=await authorizeOperator(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    const resolution=req.body?.resolution;
+    if(!moderation||!uuid(req.params.id)||Object.keys(req.body??{}).join(',')!=='resolution'||!(reportResolutions as readonly unknown[]).includes(resolution)){
+      res.status(400).json({code:'invalid_request',messageKey:'errors.request'});return;
+    }
+    res.status(await moderation.close(session.account.id,req.params.id,resolution)?204:409).end();
+  });
+  app.post('/api/operator/accounts/:id/:action',express.json({limit:64,strict:true,inflate:false}),async(req,res)=>{
+    const session=await authorizeOperator(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    if(!moderation||!uuid(req.params.id)||!['suspend','restore'].includes(req.params.action)){
+      res.status(400).json({code:'invalid_request',messageKey:'errors.request'});return;
+    }
+    if(!await store.throttle('operator.account:'+session.account.id,20)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+    res.status(await moderation.setSuspended(session.account.id,req.params.id,req.params.action==='suspend')?204:409).end();
+  });
+  app.post('/api/account/report',express.json({limit:4096,strict:true,inflate:false}),async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    const input=reportInput(req.body);
+    if(!input||!moderation){res.status(400).json({code:'invalid_report',messageKey:'account.reportInvalid'});return;}
+    // A household can only be named by someone who can currently access it.
+    if(input.householdId&&!await store.placement(session.account.id,input.householdId)){
+      res.status(400).json({code:'invalid_report',messageKey:'account.reportInvalid'});return;
+    }
+    if(!await store.throttle('account.report:'+session.account.id,5)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+    try{
+      if(!await moderation.report(session.account.id,input)){res.status(409).json({code:'conflict',messageKey:'errors.commandConflict'});return;}
+      res.status(201).json({status:'received',messageKey:'account.reportReceived'});
+    }catch{res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});}
   });
   function onboardingFailure(res:express.Response,error:unknown){
     if(error instanceof OnboardingError){

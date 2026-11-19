@@ -4,6 +4,7 @@ import {announceSignOut} from './session-invalidation.js';
 import {PushDevices} from './push-devices.js';
 import {ExportPanel} from './personal-export.js';
 import {DeleteAccountPanel} from './account-deletion.js';
+import {ReportPanel} from './abuse-report.js';
 import {AccountPresentation} from './account-presentation.js';
 import type {AccountPresentation as Presentation} from '../../gateway/store.js';
 import {AccountSessions} from './account-sessions.js';
@@ -116,6 +117,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
             current?.account.id===session.account.id?{...current,presentation:value??undefined}:current)}/>
         <PushDevices key={'push:'+session.account.id} csrfToken={session.csrfToken} language={language}/>
         <ExportPanel csrfToken={session.csrfToken} language={language}/>
+        <ReportPanel csrfToken={session.csrfToken} language={language}/>
         <DeleteAccountPanel csrfToken={session.csrfToken} language={language}/>
         <AccountSessions key={'sessions:'+session.account.id} csrfToken={session.csrfToken} language={language}
           format={session.presentation?.format??format} timeZone={session.presentation?.timeZone??timeZone}/>
