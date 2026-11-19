@@ -41,6 +41,7 @@
   "portal.title": "Your dynamics",
   "portal.dynamicTitle": "Your dynamic",
   "portal.loading": "Loading your account…",
+  "portal.retryLoad": "Reload dashboard",
   "portal.signInTitle": "Welcome to Pactaris",
   "portal.signInDescription": "Sign in to see the dynamics you belong to.",
   "portal.signIn": "Sign in",

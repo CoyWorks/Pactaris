@@ -16,6 +16,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   const t=createTranslator(language);
   const [session,setSession]=useState<Session>(),[loading,setLoading]=useState(true),[error,setError]=useState<MessageKey>(),[listing,setListing]=useState<Listing>(),[selected,setSelected]=useState<Summary>(),[busy,setBusy]=useState(false);
   const [name,setName]=useState(''),[createId,setCreateId]=useState<string>(),[createPending,setCreatePending]=useState(false),[leaveId,setLeaveId]=useState<string>(),[confirmLeave,setConfirmLeave]=useState(false),[leavePending,setLeavePending]=useState(false),[refresh,setRefresh]=useState(0);
+  const [loadError,setLoadError]=useState<MessageKey>();
   const accountId=useRef<string|undefined>(undefined);
   const selectedId=/^\/households\/([a-f0-9-]{36})$/i.exec(window.location.pathname)?.[1];
   useEffect(()=>{
@@ -25,7 +26,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
       active=new AbortController();const timeout=setTimeout(()=>active?.abort(),12000);
       try{
         const response=await fetch('/api/session',{cache:'no-store',signal:active.signal});
-        if(response.status===401){if(!gone){setSession(undefined);setListing(undefined);setSelected(undefined);setError(undefined);}return;}
+        if(response.status===401){if(!gone){setSession(undefined);setListing(undefined);setSelected(undefined);setLoadError(undefined);setError(undefined);}return;}
         if(!response.ok)throw Error('session');
         const current=await response.json() as Session;
         if(gone)return;
@@ -36,17 +37,17 @@ export function Portal({language,format,timeZone}:{language:string;format:string
         accountId.current=current.account.id;
         setSession(current);
         const data=await fetch(selectedId?`/api/households/${selectedId}`:'/api/households',{cache:'no-store',signal:active.signal});
-        if(data.status===404){if(!gone){setSelected(undefined);setError('portal.notFound');}return;}
+        if(data.status===404){if(!gone){setSelected(undefined);setLoadError('portal.notFound');}return;}
         if(!data.ok)throw Error('households');
         const result=await data.json();
-        if(!gone){if(selectedId){if(!leavePending)setSelected(result as Summary);}else setListing(result as Listing);setError(undefined);}
+        if(!gone){if(selectedId){if(!leavePending)setSelected(result as Summary);}else setListing(result as Listing);setLoadError(undefined);}
         if(!selectedId){
           const operations=await fetch('/api/households/operations',{cache:'no-store',signal:active.signal});
           if(!operations.ok)throw Error('operations');
           const pending=(await operations.json() as {operations:Operation[]}).operations.find(op=>op.action==='create');
           if(pending&&!gone){setCreateId(pending.operationId);setCreatePending(true);}
         }
-      }catch{if(!gone){setSelected(undefined);setListing(undefined);setError('errors.unavailable');}}
+      }catch{if(!gone){setSelected(undefined);setListing(undefined);setLoadError('errors.unavailable');}}
       finally{clearTimeout(timeout);active=undefined;if(!gone){setLoading(false);timer=setTimeout(()=>{void load();},60000);}}
     }
     const resume=()=>{if(timer)clearTimeout(timer);if(document.hidden)active?.abort();else void load();};
@@ -95,7 +96,11 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   return <main><header><span className="eyebrow">{t('app.title')}</span>{session&&<button type="button" disabled={busy} onClick={()=>{void logout();}}>{t('portal.logout')}</button>}</header>
     <h1>{t(selectedId?'portal.dynamicTitle':'portal.title')}</h1>
     <p>{t('app.description')}</p>
-    {loading?<p role="status">{t('portal.loading')}</p>:!session?<section><h2>{t('portal.signInTitle')}</h2><p>{t('portal.signInDescription')}</p><a className="button" href="/auth/login">{t('portal.signIn')}</a></section>:<>
+    {!loading&&loadError&&<section>
+      <p role="alert">{t(loadError)}</p>
+      {loadError==='errors.unavailable'&&<button type="button" onClick={()=>{setLoading(true);setRefresh(value=>value+1);}}>{t('portal.retryLoad')}</button>}
+    </section>}
+    {loading?<p role="status">{t('portal.loading')}</p>:!session?(!loadError&&<section><h2>{t('portal.signInTitle')}</h2><p>{t('portal.signInDescription')}</p><a className="button" href="/auth/login">{t('portal.signIn')}</a></section>):<>
       <p>{session.account.displayName||t('portal.account')}</p>
       {!selectedId&&<>
         <AccountPresentation key={'presentation:'+session.account.id} csrfToken={session.csrfToken} language={language}

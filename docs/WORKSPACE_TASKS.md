@@ -8,7 +8,7 @@ The workspace opens on Overview with the household name/timezone, current member
 
 Owners/admins can edit the household name and IANA timezone. Version-conflicting edits require refresh; a changed name appears through the existing household selector's live summary without persisting names in the manager. Display language remains English via catalogs; formatting locale, household timezone and user-authored content remain separate. Due date/time entry uses the device timezone; stored instants are UTC and displayed in the household timezone. No time is silently interpreted as household-local input. Global profile editing, themes and terminology/categories remain broader #27 work.
 
-Only the active section mounts its membership/relationship forms. Visible online workspace reads occur once per minute plus explicit actions, with bounded deadlines and navigation cancellation. The shared session and safety refreshes remain separate. No authenticated data is cached offline and no mutation is automatically queued or retried.
+Only the active section mounts its membership/relationship forms. Visible online workspace reads occur once per minute plus explicit actions, with bounded deadlines and navigation cancellation. The shared session and safety refreshes remain separate. No authenticated data is cached offline and no mutation is automatically queued or retried. The selector and selected household provide an explicit reload for a failed read. A failed account lookup displays an availability error, while a confirmed signed-out response opens the sign-in view. The reload fetches the session and current household access again.
 
 ## Task scope and privacy
 
