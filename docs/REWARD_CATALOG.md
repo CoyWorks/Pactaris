@@ -27,3 +27,9 @@ Use the existing preserving updater; Instance must activate before gateway. No n
 Local tests cover exact input/identity/version/cursor validation, zero/null/cost bounds and keyed private UI. Native PostgreSQL/HTTPS acceptance exercises one-member setup, content/version persistence, idempotency/conflicts, unrelated-admin and tenant/Instance/CSRF boundaries, paused preparation without safety changes, pagination, optimistic races, failed-final-outbox rollback/replay, read-only backup/runtime denial and departure/rejoin fencing. Real operator/mobile acceptance remains separate from CI.
 
 Next scope: explicit sharing/publication and request/review/fulfillment/cancel/reversal with the consent-aware non-monetary ledger (#64/#20). Partner task flow #17 remains a separate priority. Full export/deletion/retention and trusted off-host restore replay are still open privacy gates.
+
+## Catalog selection in task planning
+
+The participant-task editor can attach a current version of one of the creator's own reward drafts to an offer, a direct assignment or a series. The Instance binds the selection to the same household, actor membership and exact catalog version before writing the task. It snapshots the title and terms. Later catalog edits do not change previously assigned tasks; scheduled occurrences retain the selected terms. Only task parties can open the attached snapshot, and the recipient does not receive the source catalog reference.
+
+Attaching terms is a proposal. It does not automatically grant the reward, initiate redemption, charge points or alter existing consent checks. The separate optional reward-points field keeps its existing review and policy behavior. Redemption and fulfillment remain follow-up in #64.

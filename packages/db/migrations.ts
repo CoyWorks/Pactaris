@@ -64,6 +64,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       }
       if(entries.some(m=>m.id==='0004_membership_fencing'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.leave_household_command(uuid,uuid,uuid,uuid,text,uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0005_invitations'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.invitation_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
+      if(entries.some(m=>m.id==='0022_task_catalog_rewards'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.prepare_task_catalog_reward(uuid,uuid,uuid,uuid,uuid,uuid,bigint) TO ${role}`);
       if(entries.some(m=>m.id==='0021_personal_export'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.personal_export(uuid,uuid,uuid,uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0020_private_habit_trend'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.habit_trend(uuid,uuid,uuid,uuid,uuid,bigint,date) TO ${role}`);
       if(entries.some(m=>m.id==='0019_workspace_unread_inbox'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.workspace_has_unread(uuid,uuid,uuid,uuid) TO ${role}`);

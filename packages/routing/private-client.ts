@@ -310,7 +310,7 @@ export class PrivateCatalogClient{
 export class PrivatePartnerClient{
  constructor(private signer:DelegationSigner){}
  async execute(accountId:string,placement:Placement,action:import('../auth/partner.js').PartnerAction,input:Record<string,unknown>):Promise<import('../auth/partner.js').PartnerResult>{
-  const {PartnerError,partnerStates,isPartnerAction,validTaskSchedule,validInboxPreferences}=await import('../auth/partner.js'),{documentText,documentVersion}=await import('../auth/library.js'),{utcInstant}=await import('../auth/routines.js');
+  const {PartnerError,partnerStates,isPartnerAction,validTaskSchedule,validInboxPreferences,validTaskRewardReference}=await import('../auth/partner.js'),{documentText,documentVersion}=await import('../auth/library.js'),{utcInstant}=await import('../auth/routines.js');
   const snapshot=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{32}$/.test(v);
   try{
    if(!uuid(input.operationId))throw new PartnerError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new PartnerError('invalid');
@@ -328,7 +328,7 @@ export class PrivatePartnerClient{
    if(r.seriesId!==undefined){if(!uuid(r.seriesId))throw Error('routing.response');out.seriesId=r.seriesId;}
    if(action==='partnerSeriesList'){
     if(!Array.isArray(r.series)||r.series.length>10||(r.nextCursor!==null&&!uuid(r.nextCursor)))throw Error('routing.response');out.nextCursor=r.nextCursor;
-    out.series=r.series.map(s=>{const f=s.fields;if(!uuid(s.policyId)||!uuid(s.seriesId)||!documentVersion(s.version)||!uuid(s.creatorId)||!uuid(s.assigneeId)||![s.creatorId,s.assigneeId].includes(input.membershipId as string)||!['active','blocked','cancelled','finished'].includes(s.state)||!validTaskSchedule(s.schedule)||!f||!documentText(f.title,120)||!documentText(f.description,500,true,true)||!['low','normal','high'].includes(f.priority)||(f.dueAt!==null&&!utcInstant(f.dueAt)))throw Error('routing.response');return {policyId:s.policyId,seriesId:s.seriesId,version:s.version,creatorId:s.creatorId,assigneeId:s.assigneeId,state:s.state,fields:{title:f.title,description:f.description,priority:f.priority,dueAt:f.dueAt,...(Number.isInteger(f.rewardPoints)&&f.rewardPoints!>=1&&f.rewardPoints!<=10000?{rewardPoints:f.rewardPoints}:{})},schedule:s.schedule};});
+    out.series=r.series.map(s=>{const f=s.fields;if(!uuid(s.policyId)||!uuid(s.seriesId)||!documentVersion(s.version)||!uuid(s.creatorId)||!uuid(s.assigneeId)||![s.creatorId,s.assigneeId].includes(input.membershipId as string)||!['active','blocked','cancelled','finished'].includes(s.state)||!validTaskSchedule(s.schedule)||!f||!documentText(f.title,120)||!documentText(f.description,500,true,true)||!['low','normal','high'].includes(f.priority)||(f.dueAt!==null&&!utcInstant(f.dueAt)))throw Error('routing.response');return {policyId:s.policyId,seriesId:s.seriesId,version:s.version,creatorId:s.creatorId,assigneeId:s.assigneeId,state:s.state,fields:{title:f.title,description:f.description,priority:f.priority,dueAt:f.dueAt,...(Number.isInteger(f.rewardPoints)&&f.rewardPoints!>=1&&f.rewardPoints!<=10000?{rewardPoints:f.rewardPoints}:{}),...(s.creatorId===input.membershipId&&validTaskRewardReference(f.rewardSelection)?{rewardSelection:f.rewardSelection}:{})},schedule:s.schedule};});
    }
    if(r.policyId!==undefined){if(!uuid(r.policyId))throw Error('routing.response');out.policyId=r.policyId;}
    if(action==='partnerPolicyList'){
@@ -362,7 +362,9 @@ export class PrivatePartnerClient{
    if(action==='partnerRead'){
     const s=r.task;if(!s||!['offer','direct','explicit'].includes(s.assignmentMode)||(s.policyVersion!==null&&!documentVersion(s.policyVersion))||(s.assignmentMode==='offer')!==(s.policyVersion===null)||!uuid(s.agreementId)||!documentVersion(s.agreementVersion)||!documentText(s.agreementLabel,80)||!documentVersion(s.epoch)||!snapshot(s.safetyVersion)||typeof s.eligible!=='boolean'||!Array.isArray(s.events)||s.events.length>10||(s.nextEventCursor!==null&&!documentVersion(s.nextEventCursor)))throw Error('routing.response');
     const events=s.events.map(e=>{if(!documentVersion(e.version)||!(isPartnerAction(e.action)||e.action==='membershipEnded')||!uuid(e.actorId)||![s.creatorId,s.assigneeId].includes(e.actorId)||!documentText(e.note,500,true,true)||!Number.isFinite(Date.parse(e.at)))throw Error('routing.response');return {version:e.version,action:e.action,actorId:e.actorId,note:e.note,at:e.at};});
-    out.task={...summary(s),assignmentMode:s.assignmentMode,policyVersion:s.policyVersion,agreementId:s.agreementId,agreementVersion:s.agreementVersion,agreementLabel:s.agreementLabel,epoch:s.epoch,safetyVersion:s.safetyVersion,eligible:s.eligible,events,nextEventCursor:s.nextEventCursor};
+    const reward=s.sharedReward;
+    if(reward!==undefined&&(!reward||!documentText(reward.title,120)||!documentText(reward.description,500,true,true)))throw Error('routing.response');
+    out.task={...summary(s),...(reward?{sharedReward:{title:reward.title,description:reward.description}}:{}),assignmentMode:s.assignmentMode,policyVersion:s.policyVersion,agreementId:s.agreementId,agreementVersion:s.agreementVersion,agreementLabel:s.agreementLabel,epoch:s.epoch,safetyVersion:s.safetyVersion,eligible:s.eligible,events,nextEventCursor:s.nextEventCursor};
    }return out;
   }catch(error){if(error instanceof PartnerError)throw error;throw new PartnerError('unavailable');}
  }

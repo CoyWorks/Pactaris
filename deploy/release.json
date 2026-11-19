@@ -246,6 +246,13 @@
       "path": "migrations/instance/0021_personal_export.sql",
       "sha256": "906c2548474b23bda5141b80632d204850afb5c3f421e773d92730c78c295f75",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0022_task_catalog_rewards",
+      "path": "migrations/instance/0022_task_catalog_rewards.sql",
+      "sha256": "db63981ce7f5c9ae09b4f1776baad8c4a7a1b25fe6b00782b930f71287f6c6ba",
+      "backwardCompatible": true
     }
   ]
 }

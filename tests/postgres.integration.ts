@@ -1492,10 +1492,16 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       assert.equal(await inboxState(B),false);
     })();
     body={...await offerBody(A,B),policyId:active.policyId,policyVersion:active.version};
+    const reward=await api(base+'/catalog/catalogCreate','POST',{
+      operationId:randomUUID(),fields:{title:'Reward fixture',description:'Chosen reward terms',category:'',points:null,position:0}
+    },A.session);
+    assert.equal(reward.status,200,JSON.stringify(reward.data));
+    Object.assign(body.fields,{rewardSelection:{itemId:reward.data.itemId,version:'1'}});
     const direct=await post(A,'partnerAssign',body);assert.equal(direct.status,200,JSON.stringify(direct.data));
     assert.equal((await post(A,'partnerAssign',body)).status,200);
     assert.ok(!(await post(B,'partnerInbox',{})).data.inbox.some((notice:{taskId:string})=>notice.taskId===direct.data.taskId));
     const task=direct.data.taskId,d=await read(B,task);assert.equal(d.state,'assigned');assert.equal(d.assignmentMode,'direct');assert.equal(d.policyVersion,'2');assert.equal(d.events[0].action,'partnerAssign');assert.ok(!d.events.some((e:any)=>e.action==='partnerAccept'));
+    assert.deepEqual(d.sharedReward,{title:'Reward fixture',description:'Chosen reward terms'});assert.equal(d.rewardSelection,undefined);
     const todo=await post(B,'partnerList',{filter:'todo'});assert.equal(todo.status,200);assert.ok(todo.data.tasks.some((t:any)=>t.taskId===task));assert.ok(!(await post(A,'partnerList',{filter:'todo'})).data.tasks.some((t:any)=>t.taskId===task));assert.equal((await post(C,'partnerList',{filter:'todo'})).data.tasks.length,0);
     assert.ok((await post(B,'partnerList',{filter:'active'})).data.tasks.some((t:any)=>t.taskId===task&&t.state==='assigned'));
     await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','0') WHERE household_id=$1",[home.householdId]);
