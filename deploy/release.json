@@ -307,14 +307,14 @@
       "component": "instance",
       "id": "0028_task_notifications",
       "path": "migrations/instance/0028_task_notifications.sql",
-      "sha256": "73c76d33362cb3b85e922ab809ae1c9846205db4a82b46b08fec09529e0c1d25",
+      "sha256": "7d135581302dcf4d04b827b0f311ede19ab4f7381ad689a1f4432e94731d08ea",
       "backwardCompatible": true
     },
     {
       "component": "gateway",
       "id": "0017_task_push_queue",
       "path": "migrations/gateway/0017_task_push_queue.sql",
-      "sha256": "058374cf4768b306f5f537121a5f4956d9502326ac9742d8fc7c0183d0c2ff3b",
+      "sha256": "ef59cd8a9e17df9a3e040c2c2dcb4eb1d91d36c6f5c9fd9644da3724ad93f074",
       "backwardCompatible": true
     },
     {

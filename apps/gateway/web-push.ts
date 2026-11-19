@@ -118,25 +118,25 @@ export class WebPushDevices{
     await this.pool.query('UPDATE pactaris.push_devices SET scan_cursor=$3 WHERE endpoint_hash=$1 AND session_hash=$2',
       [device.endpoint_hash,device.session_hash,placement.householdId]);
     const previous=await this.pool.query<{last_seq:string}>(`SELECT last_seq::text FROM pactaris.task_push_scopes
-      WHERE endpoint_hash=$1 AND session_hash=$2 AND household_id=$3 AND instance_id=$4`,
-      [device.endpoint_hash,device.session_hash,placement.householdId,placement.instanceId]);
+      WHERE endpoint_hash=$1 AND session_hash=$2 AND household_id=$3 AND instance_id=$4 AND placement_version=$5`,
+      [device.endpoint_hash,device.session_hash,placement.householdId,placement.instanceId,placement.version]);
     let candidate;
     try{
       candidate=await partner.pushStatus(device.account_id,placement,previous.rows[0]?.last_seq??'0',device.consented_at.toISOString());
     }catch{return;}
     if(!candidate.pushSequence)return;
     await this.pool.query(`INSERT INTO pactaris.task_push_scopes AS q
-      (endpoint_hash,session_hash,household_id,instance_id,membership_id,pending_seq,next_attempt_at,expires_at)
-      SELECT $1,$2,$3,$4,$5,$6,now(),now()+interval '24 hours'
+      (endpoint_hash,session_hash,household_id,instance_id,placement_version,membership_id,pending_seq,next_attempt_at,expires_at)
+      SELECT $1,$2,$3,$4,$5,$6,$7,now(),now()+interval '24 hours'
       FROM pactaris.push_devices d WHERE d.endpoint_hash=$1 AND d.session_hash=$2
       ON CONFLICT(endpoint_hash,household_id) DO UPDATE SET
-        session_hash=EXCLUDED.session_hash,instance_id=EXCLUDED.instance_id,membership_id=EXCLUDED.membership_id,
+        session_hash=EXCLUDED.session_hash,instance_id=EXCLUDED.instance_id,placement_version=EXCLUDED.placement_version,membership_id=EXCLUDED.membership_id,
         last_seq=CASE WHEN q.session_hash=EXCLUDED.session_hash AND q.instance_id=EXCLUDED.instance_id
-          AND q.membership_id=EXCLUDED.membership_id THEN q.last_seq ELSE 0 END,
+          AND q.placement_version=EXCLUDED.placement_version AND q.membership_id=EXCLUDED.membership_id THEN q.last_seq ELSE 0 END,
         pending_seq=EXCLUDED.pending_seq,next_attempt_at=EXCLUDED.next_attempt_at,expires_at=EXCLUDED.expires_at,attempts=0
       WHERE q.session_hash<>EXCLUDED.session_hash OR q.instance_id<>EXCLUDED.instance_id
-        OR q.membership_id<>EXCLUDED.membership_id OR EXCLUDED.pending_seq>greatest(q.last_seq,coalesce(q.pending_seq,0))`,
-      [device.endpoint_hash,device.session_hash,placement.householdId,placement.instanceId,candidate.actorMembershipId,candidate.pushSequence]);
+        OR q.placement_version<>EXCLUDED.placement_version OR q.membership_id<>EXCLUDED.membership_id OR EXCLUDED.pending_seq>greatest(q.last_seq,coalesce(q.pending_seq,0))`,
+      [device.endpoint_hash,device.session_hash,placement.householdId,placement.instanceId,placement.version,candidate.actorMembershipId,candidate.pushSequence]);
   }
   async workTaskNotices(store:TaskNoticeStore,partner:TaskNoticeSource){
     for(let n=0;n<4;n++)await this.scanTaskDevice(store,partner);
@@ -146,10 +146,10 @@ export class WebPushDevices{
       await db.query(`UPDATE pactaris.task_push_scopes SET last_seq=pending_seq,pending_seq=NULL,next_attempt_at=NULL,expires_at=NULL
         WHERE pending_seq IS NOT NULL AND expires_at<=now()`);
       const due=await db.query<{
-        endpoint_hash:string;session_hash:string;household_id:string;instance_id:string;membership_id:string;
+        endpoint_hash:string;session_hash:string;household_id:string;instance_id:string;placement_version:string;membership_id:string;
         last_seq:string;pending_seq:string;ciphertext:Buffer;attempts:number;consented_at:Date;account_id:string;
       }>(`SELECT q.endpoint_hash,q.session_hash,q.household_id,q.instance_id,q.membership_id,
-          q.last_seq::text,q.pending_seq::text,q.attempts,d.ciphertext,d.consented_at,s.account_id
+          q.placement_version::text,q.last_seq::text,q.pending_seq::text,q.attempts,d.ciphertext,d.consented_at,s.account_id
         FROM pactaris.task_push_scopes q
         JOIN pactaris.push_devices d ON d.endpoint_hash=q.endpoint_hash AND d.session_hash=q.session_hash
         JOIN pactaris.sessions s ON s.token_hash=q.session_hash AND s.expires_at>now() AND s.idle_expires_at>now()
@@ -162,7 +162,7 @@ export class WebPushDevices{
         let outcome:'discard'|'defer'|'retry'|'gone'|'done'='discard';
         let sequence=row.pending_seq;
         const placement=await store.placement(row.account_id,row.household_id);
-        if(placement?.instanceId===row.instance_id){
+        if(placement?.instanceId===row.instance_id&&placement.version===row.placement_version){
           let status;
           try{status=await partner.pushStatus(row.account_id,placement,row.last_seq,row.consented_at.toISOString());}
           catch(error){if(!(error instanceof PartnerError)||error.kind!=='denied')outcome='defer';}

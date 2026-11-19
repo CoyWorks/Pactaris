@@ -8,6 +8,7 @@ CREATE INDEX task_inbox_push_candidates ON pactaris.task_inbox(household_id,reci
 CREATE TABLE pactaris.task_delivery_preferences (
  household_id uuid NOT NULL, member_id uuid NOT NULL,
  push_enabled boolean NOT NULL, reminders boolean NOT NULL,
+ enabled_at timestamptz,
  quiet_start time, quiet_end time, time_zone text NOT NULL,
  PRIMARY KEY(household_id,member_id),
  FOREIGN KEY(household_id,member_id) REFERENCES pactaris.memberships(household_id,id),
@@ -38,10 +39,14 @@ BEGIN
    OR settings->>'quietStart'=settings->>'quietEnd' THEN
    RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='partner.invalid';
   END IF;
-  INSERT INTO pactaris.task_delivery_preferences VALUES(target,m.id,(settings->>'push')::boolean,(settings->>'reminders')::boolean,
-   (settings->>'quietStart')::time,(settings->>'quietEnd')::time,settings->>'timeZone')
+  INSERT INTO pactaris.task_delivery_preferences AS p
+   (household_id,member_id,push_enabled,reminders,enabled_at,quiet_start,quiet_end,time_zone)
+   VALUES(target,m.id,(settings->>'push')::boolean,(settings->>'reminders')::boolean,
+    CASE WHEN (settings->>'push')::boolean THEN clock_timestamp() END,
+    (settings->>'quietStart')::time,(settings->>'quietEnd')::time,settings->>'timeZone')
   ON CONFLICT(household_id,member_id) DO UPDATE SET push_enabled=EXCLUDED.push_enabled,reminders=EXCLUDED.reminders,
-   quiet_start=EXCLUDED.quiet_start,quiet_end=EXCLUDED.quiet_end,time_zone=EXCLUDED.time_zone;
+   quiet_start=EXCLUDED.quiet_start,quiet_end=EXCLUDED.quiet_end,time_zone=EXCLUDED.time_zone,
+   enabled_at=CASE WHEN EXCLUDED.push_enabled AND p.push_enabled THEN p.enabled_at ELSE EXCLUDED.enabled_at END;
   response=response||jsonb_build_object('status','applied');
  END IF;
  SELECT * INTO pref FROM pactaris.task_delivery_preferences WHERE household_id=target AND member_id=m.id;
@@ -62,7 +67,7 @@ BEGIN
   FROM pactaris.task_inbox i JOIN pactaris.partner_tasks t ON t.household_id=i.household_id AND t.id=i.task_id
   LEFT JOIN pactaris.task_inbox_preferences p ON p.household_id=i.household_id AND p.membership_id=i.recipient
   WHERE i.household_id=target AND i.recipient=m.id AND NOT i.read AND i.push_seq>(payload->>'pushAfter')::bigint
-   AND i.pushed_eligible_since>=greatest((payload->>'pushSince')::timestamptz,now()-interval '24 hours')
+   AND i.pushed_eligible_since>=greatest((payload->>'pushSince')::timestamptz,pref.enabled_at,now()-interval '24 hours')
    AND t.state NOT IN ('declined','cancelled')
    AND CASE i.kind WHEN 'assigned' THEN coalesce(p.assigned,true) WHEN 'submitted' THEN coalesce(p.submitted,true)
     WHEN 'reviewed' THEN coalesce(p.reviewed,true) ELSE pref.reminders END

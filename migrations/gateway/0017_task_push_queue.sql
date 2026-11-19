@@ -7,6 +7,7 @@ CREATE TABLE pactaris.task_push_scopes (
  session_hash text NOT NULL REFERENCES pactaris.sessions(token_hash) ON DELETE CASCADE,
  household_id uuid NOT NULL REFERENCES pactaris.placements(household_id) ON DELETE CASCADE,
  instance_id uuid NOT NULL REFERENCES pactaris.instances(id),
+ placement_version bigint NOT NULL CHECK(placement_version>0),
  membership_id uuid NOT NULL,
  last_seq bigint NOT NULL DEFAULT 0 CHECK(last_seq>=0),
  pending_seq bigint CHECK(pending_seq>last_seq),
