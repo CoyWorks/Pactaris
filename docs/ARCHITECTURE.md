@@ -1,6 +1,6 @@
-# Hosted architecture proposal
+# Hosted architecture
 
-Status: proposed, 16 November 2026. Confirm the stack in [#1](https://github.com/CoyWorks/Pactaris/issues/1) before writing the scaffold.
+The hosted alpha uses the stack and component boundaries recorded in [ADR 0001](adr/0001-foundation-runtime.md#hosted-alpha-runtime-decision). The initial options below document the selection.
 
 ## Runtime options
 

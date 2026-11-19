@@ -13,3 +13,19 @@ The status service returns readiness 503 if PostgreSQL cannot be reached. Proxy 
 Alternatives considered in ARCHITECTURE.md remain background context. No new PHP/Python application backend is introduced; Python is used only for operational install/update tooling. Systemd is the host process supervisor; the authentik Compose runtime is the documented dependency exception.
 
 Pending evidence: real PostgreSQL, provider registration/recovery/MFA, Google/Apple callbacks, central OIDC session validation, actual CloudPanel/TLS, reboot, complete first-install/update recovery, media/off-host backups and capacity tests. No issue is completed solely by this ADR.
+
+## Hosted alpha runtime decision
+
+The foundation direction is accepted for the hosted alpha. The application uses Node.js 24, TypeScript, Express and React/Vite. PostgreSQL is the system of record. Drizzle describes the typed schema, and reviewed SQL migrations own database policies, privileged commands and the production upgrade history. Dedicated systemd workers process PostgreSQL-backed schedules and delivery queues. Authentik remains a separate Compose deployment.
+
+PostgreSQL 17 is the development and CI compatibility baseline for Gateway and Instance. Keep the installed major during application updates. Qualify any new major with CI, a matching backup client and a restore exercise before a separate database upgrade. Authentik’s database version follows its independently pinned Compose baseline.
+
+There are three application boundaries:
+
+- The public Gateway serves the PWA, completes OIDC against Authentik and owns public browser sessions and household selection.
+- Each Instance owns a separate PostgreSQL database, private household content, runtime credentials and workers. Its API authorizes exact membership and audience-bound Gateway commands. Household administration checks local membership and role.
+- Platform operations use an explicitly authorized operator entry point. The Gateway registry holds placement and operational metadata. It has no general access to the Instance content stores.
+
+The approved first deployment is the owner-managed OCI ARM64 host `srv-oci-web01`, with Identity, Gateway and the first Instance co-located behind CloudPanel. `pactaris.app` is the canonical browser origin and `identity.pactaris.app` is the Identity origin. Both are deployment settings. Alpha test, staging and live share this host by owner decision, so the normal deployment takes CI-verified main revisions. Fleet sizing and split-host validation are separate follow-ups.
+
+The runtime keeps PostgreSQL private. Current private draft attachments are bounded and stored on the owning Instance. Future expanded storage is an Instance concern. Account and workspace mail use operator-configured central SMTP, documented in [Central account email](../CENTRAL_SMTP.md). Provider credential verification remains part of operational acceptance.
