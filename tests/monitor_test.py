@@ -34,7 +34,11 @@ class MonitorTests(unittest.TestCase):
             (base / 'state.json').write_text(json.dumps({'release': '/fixture/private', 'revision': 'a' * 40}))
             (base / 'config.json').write_text('{}')
             heartbeat = base / 'worker.json'
-            heartbeat.write_text(json.dumps({'checkedAt': now.isoformat()}))
+            heartbeat.write_text(json.dumps({
+                'checkedAt': now.isoformat(), 'state': 'ready',
+                'invitationMail': {'queued': 3, 'due': 2, 'failed': 1,
+                                   'oldestDueAgeSeconds': 31, 'recipient': 'fixture-secret'},
+            }))
             config = {'worker': {'heartbeatFile': str(heartbeat)}, 'database': {'url': 'fixture-secret'}}
             def fail_with_output(*args):
                 print('fixture-secret')
@@ -44,6 +48,7 @@ class MonitorTests(unittest.TestCase):
             self.assertFalse(result['ready'])
             self.assertEqual(result['workerHeartbeatAgeSeconds'], 0)
             self.assertEqual(result['databaseCheckpointAgeSeconds'], 600)
+            self.assertEqual(result['invitationMail'], {'queued': 3, 'due': 2, 'failed': 1, 'oldestDueAgeSeconds': 31})
             self.assertEqual(stdout.getvalue(), '')
             self.assertNotIn('fixture-secret', json.dumps(result))
             self.assertNotIn('/fixture/private', json.dumps(result))

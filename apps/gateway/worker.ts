@@ -17,9 +17,10 @@ const invitationSigner=new DelegationSigner(config),invitations=new GatewayInvit
 const members=new GatewayMembers(db.pool,store,new PrivateHouseholdClient(invitationSigner),new PrivateMemberClient(invitationSigner));
 async function tick(){
   if(stopped)return;let state='ready';
-  try{await store.probe();await store.cleanup();await onboarding.reconcile();await invitations.reconcile();await members.reconcile();await InvitationMail.expire(db.pool);}catch{state='unavailable';}
+  let invitationMail:Awaited<ReturnType<typeof InvitationMail.metrics>>|null=null;
+  try{await store.probe();await store.cleanup();await onboarding.reconcile();await invitations.reconcile();await members.reconcile();await InvitationMail.expire(db.pool);if(config.invitationMailFile)invitationMail=await InvitationMail.metrics(db.pool);}catch{state='unavailable';}
   await mkdir(dirname(config.worker.heartbeatFile),{recursive:true,mode:0o700});
-  const file=config.worker.heartbeatFile+'.tmp';await writeFile(file,JSON.stringify({component:'worker',state,checkedAt:new Date().toISOString()}),{mode:0o600});await rename(file,config.worker.heartbeatFile);
+  const file=config.worker.heartbeatFile+'.tmp';await writeFile(file,JSON.stringify({component:'worker',state,checkedAt:new Date().toISOString(),invitationMail}),{mode:0o600});await rename(file,config.worker.heartbeatFile);
   if(!stopped)try{await invitations.deliverMail();}catch{process.stderr.write(JSON.stringify({code:'invitation.mail_deferred'})+'\n');}
   if(!stopped)setTimeout(()=>{void tick().catch(fail);},config.worker.intervalSeconds*1000);
 }
