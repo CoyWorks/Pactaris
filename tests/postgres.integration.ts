@@ -199,6 +199,29 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       assert.deepEqual(received,[endpoint]);
       assert.equal(await sender.subscribe(nextToken,subscription),true);
       assert.equal(await sender.queueTest(nextToken,endpoint),true);
+      await gatewayDb.owner.query("UPDATE pactaris.accounts SET status='suspended' WHERE id=$1",[other.id]);
+      try{
+        assert.equal(await sender.subscribe(nextToken,subscription),false);
+        await sender.work();
+        assert.equal(await sender.status(nextToken,endpoint),false);
+      }finally{await gatewayDb.owner.query("UPDATE pactaris.accounts SET status='active' WHERE id=$1",[other.id]);}
+      assert.equal(await sender.subscribe(nextToken,subscription),true);
+      assert.equal(await sender.queueTest(nextToken,endpoint),true);
+      const responses=[503,410],attempted:string[]=[];
+      const retryingSender=WebPushDevices.load(gatewayDb.pool,file,async subscription=>{
+        attempted.push(subscription.endpoint);
+        throw {statusCode:responses.shift()};
+      });
+      await retryingSender.work();
+      assert.equal(await sender.status(nextToken,endpoint),true);
+      await retryingSender.work();
+      assert.deepEqual(attempted,[endpoint]);
+      await gatewayDb.pool.query('UPDATE pactaris.push_devices SET next_attempt_at=now() WHERE session_hash=$1',[hash(nextToken)]);
+      await retryingSender.work();
+      assert.deepEqual(attempted,[endpoint,endpoint]);
+      assert.equal(await sender.status(nextToken,endpoint),false);
+      assert.equal(await sender.subscribe(nextToken,subscription),true);
+      assert.equal(await sender.queueTest(nextToken,endpoint),true);
       await store.logout(nextToken);
       await sender.work();
       assert.deepEqual(received,[endpoint]);

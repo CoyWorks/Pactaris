@@ -67,7 +67,9 @@ export class WebPushDevices{
     const sessionHash=hash(session),endpointHash=hash(subscription.endpoint),db=await this.pool.connect();
     try{
       await db.query('BEGIN');
-      const active=await db.query('SELECT 1 FROM pactaris.sessions WHERE token_hash=$1 AND expires_at>now() AND idle_expires_at>now() FOR UPDATE',[sessionHash]);
+      const active=await db.query(`SELECT 1 FROM pactaris.sessions s JOIN pactaris.accounts a ON a.id=s.account_id
+        WHERE s.token_hash=$1 AND s.expires_at>now() AND s.idle_expires_at>now() AND a.status='active'
+        FOR UPDATE OF s`,[sessionHash]);
       if(!active.rowCount){await db.query('ROLLBACK');return false;}
       await db.query('DELETE FROM pactaris.push_devices WHERE session_hash=$1 AND endpoint_hash<>$2',[sessionHash,endpointHash]);
       await db.query(`INSERT INTO pactaris.push_devices(endpoint_hash,session_hash,ciphertext) VALUES($1,$2,$3)
@@ -83,7 +85,9 @@ export class WebPushDevices{
   }
   async queueTest(session:string,endpoint:string){
     const r=await this.pool.query(`UPDATE pactaris.push_devices SET next_attempt_at=now(),queued_at=now(),last_requested_at=now(),attempts=0
-      WHERE session_hash=$1 AND endpoint_hash=$2 AND (last_requested_at IS NULL OR last_requested_at<now()-interval '1 minute')`,
+      WHERE session_hash=$1 AND endpoint_hash=$2 AND (last_requested_at IS NULL OR last_requested_at<now()-interval '1 minute')
+      AND EXISTS(SELECT 1 FROM pactaris.sessions s JOIN pactaris.accounts a ON a.id=s.account_id
+        WHERE s.token_hash=$1 AND s.expires_at>now() AND s.idle_expires_at>now() AND a.status='active')`,
       [hash(session),hash(endpoint)]);
     return !!r.rowCount;
   }
@@ -92,9 +96,13 @@ export class WebPushDevices{
     try{
       await db.query('BEGIN');
       await db.query("UPDATE pactaris.push_devices SET next_attempt_at=NULL WHERE next_attempt_at IS NOT NULL AND queued_at<now()-interval '5 minutes'");
+      await db.query(`DELETE FROM pactaris.push_devices d USING pactaris.sessions s,pactaris.accounts a
+        WHERE d.session_hash=s.token_hash AND a.id=s.account_id
+        AND (s.expires_at<=now() OR s.idle_expires_at<=now() OR a.status<>'active')`);
       const r=await db.query<{endpoint_hash:string;session_hash:string;ciphertext:Buffer;attempts:number}>(`
         SELECT d.endpoint_hash,d.session_hash,d.ciphertext,d.attempts FROM pactaris.push_devices d
         JOIN pactaris.sessions s ON s.token_hash=d.session_hash AND s.expires_at>now() AND s.idle_expires_at>now()
+        JOIN pactaris.accounts a ON a.id=s.account_id AND a.status='active'
         WHERE d.next_attempt_at<=now() ORDER BY d.next_attempt_at LIMIT 1 FOR UPDATE OF d SKIP LOCKED`);
       const row=r.rows[0];
       if(row){
