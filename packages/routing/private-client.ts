@@ -427,3 +427,18 @@ export class PrivatePartnerClient{
   }catch(error){if(error instanceof PartnerError)throw error;throw new PartnerError('unavailable');}
  }
 }
+
+export class PrivateExchangeClient{
+ constructor(private signer:DelegationSigner){}
+ async execute(accountId:string,placement:Placement,action:import('../auth/exchange.js').ExchangeAction,input:Record<string,unknown>&{operationId:string;membershipId:string}):Promise<import('../auth/exchange.js').ExchangeResult>{
+  const {ExchangeError,exchangeOutput}=await import('../auth/exchange.js');
+  try{
+   if(!uuid(input.operationId))throw new ExchangeError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new ExchangeError('invalid');
+   const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body);
+   const response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
+   if(response.status===403||response.status===404)throw new ExchangeError('denied');if(response.status===400)throw new ExchangeError('invalid');
+   if(response.status===409){const key=(response.data as {code?:string})?.code;throw new ExchangeError(key==='exchange_paused'?'paused':key==='exchange_capacity'?'capacity':'conflict');}
+   return exchangeOutput(action,input,placement.householdId,response.data);
+  }catch(error){if(error instanceof ExchangeError)throw error;throw new ExchangeError('unavailable');}
+ }
+}

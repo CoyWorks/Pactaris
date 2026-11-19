@@ -381,6 +381,13 @@
       "backwardCompatible": true
     },
     {
+      "component": "instance",
+      "id": "0036_dynamic_exchanges",
+      "path": "migrations/instance/0036_dynamic_exchanges.sql",
+      "sha256": "dfdbeeefc203a62dcab1c9e283298af5f7f0450c646697eb73760216a088f4f5",
+      "backwardCompatible": true
+    },
+    {
       "component": "gateway",
       "id": "0020_account_export",
       "path": "migrations/gateway/0020_account_export.sql",

@@ -19,6 +19,7 @@ Database triggers on the Instance append one entry when one of these transitions
 | `document.deleted` | Note text is deleted | documentId |
 | `attachment.deleted` | Draft attachment bytes are removed | documentId, version |
 | `checkin.withdrawn` | Shared check-in is withdrawn | checkinId |
+| `exchange.withdrawn` | Request, proposal, journal entry or breach record is withdrawn | exchangeId |
 
 Subjects contain identifiers, versions and fixed status codes only. They never contain names, titles, text, limits or other household-authored content. Clearing a pause or resuming a household is not recorded: those are not revocations, and replay stays conservative. The migration backfills entries for state that was already ended, revoked, paused or deleted.
 
@@ -65,6 +66,7 @@ Replay only moves state towards ended, paused, revoked or deleted:
 | `document.deleted` | Removes the note's saved text, acknowledgements and assignments |
 | `attachment.deleted` | Removes the draft attachment bytes |
 | `checkin.withdrawn` | Clears the check-in title and response |
+| `exchange.withdrawn` | Withdraws the exchange and clears its title, text and reply |
 
 Replay is deliberately conservative. A pause or stop that happened after the backup and was cleared again is applied again; members clear it themselves through the normal controls. Replay never resumes, accepts or restores anything.
 

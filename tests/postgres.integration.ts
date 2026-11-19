@@ -6,6 +6,7 @@ import {GatewayPartner} from '../apps/gateway/partner.js';
 import {GatewayCatalog} from '../apps/gateway/catalog.js';
 import {GatewayRoutines} from '../apps/gateway/routines.js';
 import {GatewayLibrary} from '../apps/gateway/library.js';
+import {GatewayExchange} from '../apps/gateway/exchange.js';
 import {GatewayWorkspace} from '../apps/gateway/workspace.js';
 import {GatewayConsent} from '../apps/gateway/consent.js';
 import {GatewayRelationships} from '../apps/gateway/relationships.js';
@@ -25,7 +26,7 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient,PrivateCatalogClient,PrivatePartnerClient } from '../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient,PrivateCatalogClient,PrivatePartnerClient,PrivateExchangeClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import { RevocationJournalSync } from '../apps/gateway/revocation-journal.js';
@@ -370,10 +371,11 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const consentService=new GatewayConsent(store,client,new PrivateConsentClient(signer));
   const workspaceService=new GatewayWorkspace(store,client,new PrivateWorkspaceClient(signer));
   const libraryService=new GatewayLibrary(store,client,new PrivateLibraryClient(signer));
+  const exchangeService=new GatewayExchange(store,client,new PrivateExchangeClient(signer));
   const routineService=new GatewayRoutines(store,client,new PrivateRoutineClient(signer));
   const catalogService=new GatewayCatalog(store,client,new PrivateCatalogClient(signer));
   const partnerService=new GatewayPartner(store,client,new PrivatePartnerClient(signer));
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService,partnerService);
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService,partnerService,undefined,undefined,undefined,undefined,undefined,undefined,undefined,exchangeService);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -528,7 +530,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const exported:string[]=[];await streamAccountExport((await store.session('doomed-export',60))!,gatewayDb.pool,signer,async chunk=>{exported.push(chunk);});
   const exportData=JSON.parse(exported.join(''));
   assert.equal(exportData.version,2);assert.equal(exportData.complete,true);assert.equal(exportData.unavailableSources,0);
-  assert.deepEqual(Object.keys(exportData.sections),['memberships','limits','tasks','documents','acknowledgements','routines','catalog','partnerTasks','series','personalSeries','checkins','relationships','agreements','redemptions','inbox']);
+  assert.deepEqual(Object.keys(exportData.sections),['memberships','limits','tasks','documents','acknowledgements','routines','catalog','partnerTasks','series','personalSeries','checkins','relationships','agreements','redemptions','inbox','exchanges']);
   assert.ok(exportData.sections.memberships.some((m:{householdId:string;household?:{name:string}})=>m.householdId===doomedHousehold&&m.household?.name==='Deletion fixture'));
   assert.ok(exportData.sections.tasks.some((t:{title:string})=>t.title==='Private deletion fixture'));
   assert.ok(!exported.join('').includes('Partner private fixture'));
@@ -1732,6 +1734,53 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
     assert.equal((await post(A,'partnerAssign',body)).status,404);
     assert.equal((await adopt(B,policy)).status,200);
     const active=(await policies(A)).find((p:any)=>p.policyId===policy.policyId);assert.equal(active.version,'2');
+    await (async function verifyExchanges(){
+     // Direction follows the adopted standing authority (A holds authority over B), never a role label.
+     const ex=(p:Person,action:string,input:Record<string,unknown>={})=>api(base+'/exchange/'+action,'POST',{operationId:randomUUID(),...input},p.session);
+     const list=async(p:Person,box='all')=>{const r=await api(base+'/exchange?box='+box,'GET',undefined,p.session);assert.equal(r.status,200,JSON.stringify(r.data));return r.data;};
+     const people=(await list(B)).people;assert.deepEqual(people.map((x:any)=>[x.membershipId,x.holder,x.subject]),[[A.member,true,false]]);
+     assert.deepEqual((await list(C)).people,[]);
+     const due=new Date(Date.now()+3600000).toISOString(),request={kind:'permission',recipientId:A.member,title:'May I go out tonight',body:'Back by midnight',dueAt:due};
+     assert.equal((await ex(C,'exchangeCreate',request)).status,404);
+     assert.equal((await ex(A,'exchangeCreate',{...request,recipientId:B.member})).status,404);
+     assert.equal((await ex(B,'exchangeCreate',{...request,kind:'journal'})).status,400);
+     const operationId=randomUUID(),created=await api(base+'/exchange/exchangeCreate','POST',{operationId,...request},B.session);
+     assert.equal(created.status,200,JSON.stringify(created.data));assert.ok(!created.body.includes('midnight'));
+     assert.equal((await api(base+'/exchange/exchangeCreate','POST',{operationId,...request},B.session)).status,200);
+     assert.equal((await api(base+'/exchange/exchangeCreate','POST',{operationId,...request,title:'Changed'},B.session)).status,409);
+     const inbox=(await list(A,'open')).exchanges;assert.equal(inbox.length,1);assert.equal(inbox[0].mine,false);assert.equal(inbox[0].state,'open');assert.equal(inbox[0].body,'Back by midnight');
+     assert.equal((await list(C)).exchanges.length,0);
+     assert.equal((await ex(B,'exchangeDecide',{exchangeId:operationId,version:'1',decision:'approve',response:''})).status,404);
+     assert.equal((await ex(A,'exchangeDecide',{exchangeId:operationId,version:'1',decision:'acknowledge',response:''})).status,400);
+     assert.equal((await ex(A,'exchangeDecide',{exchangeId:operationId,version:'1',decision:'approve',response:'Yes, text me when home'})).status,200);
+     assert.equal((await ex(A,'exchangeDecide',{exchangeId:operationId,version:'2',decision:'decline',response:''})).status,409);
+     assert.equal((await ex(B,'exchangeWithdraw',{exchangeId:operationId,version:'2'})).status,409);
+     const mine=(await list(B)).exchanges.find((x:any)=>x.id===operationId);assert.equal(mine.state,'approved');assert.equal(mine.response,'Yes, text me when home');
+     const journal=await ex(B,'exchangeCreate',{kind:'journal',recipientId:A.member,title:'Today',body:'Private reflection fixture',dueAt:null});assert.equal(journal.status,200);
+     const breach=await ex(A,'exchangeCreate',{kind:'breach',recipientId:B.member,title:'Late check-in',body:'',dueAt:null});assert.equal(breach.status,200);
+     assert.equal((await ex(A,'exchangeDecide',{exchangeId:breach.data.exchangeId,version:'1',decision:'acknowledge',response:''})).status,404);
+     assert.equal((await ex(B,'exchangeDecide',{exchangeId:breach.data.exchangeId,version:'1',decision:'acknowledge',response:'Understood'})).status,200);
+     assert.equal((await ex(A,'exchangeDecide',{exchangeId:journal.data.exchangeId,version:'1',decision:'acknowledge',response:'Thank you'})).status,200);
+     assert.equal((await ex(B,'exchangeWithdraw',{exchangeId:journal.data.exchangeId,version:'2'})).status,200);
+     const withdrawn=(await db.owner.query('SELECT state,title,body,response FROM pactaris.exchanges WHERE id=$1',[journal.data.exchangeId])).rows[0];
+     assert.deepEqual(withdrawn,{state:'withdrawn',title:'',body:'',response:null});
+     assert.equal((await db.owner.query("SELECT count(*)::int n FROM pactaris.revocation_journal WHERE kind='exchange.withdrawn' AND subject->>'exchangeId'=$1",[journal.data.exchangeId])).rows[0].n,1);
+     for(const table of ['exchanges','exchange_receipts','agreement_reviews','household_terms'])await assert.rejects(db.pool.query('SELECT * FROM pactaris.'+table),{code:'42501'});
+     // Household words: owners and admins only, optimistic version.
+     assert.equal((await ex(B,'termsSet',{terms:{tasks:'Duties'},version:'0'})).status,404);
+     assert.equal((await ex(A,'termsSet',{terms:{tasks:'Duties',bogus:'x'},version:'0'})).status,400);
+     assert.equal((await ex(A,'termsSet',{terms:{tasks:'Duties'},version:'0'})).status,200);
+     assert.equal((await ex(A,'termsSet',{terms:{},version:'0'})).status,409);
+     const terms=(await api(base+'/exchange/terms','GET',undefined,B.session)).data;assert.deepEqual(terms.terms,{tasks:'Duties'});assert.equal(terms.canEdit,false);
+     // Agreement review rhythm: accepted participants of the active relationship only.
+     const reviews=(await api(base+'/exchange/reviews','GET',undefined,A.session)).data.reviews,review=reviews.find((x:any)=>x.agreementId===pair.agreementId);
+     assert.ok(review);assert.equal(review.version,'0');assert.equal(review.intervalMonths,null);
+     assert.equal((await ex(C,'reviewSet',{agreementId:pair.agreementId,version:'0',intervalMonths:3})).status,404);
+     assert.equal((await ex(B,'reviewSet',{agreementId:pair.agreementId,version:'0',intervalMonths:3})).status,200);
+     const scheduled=(await api(base+'/exchange/reviews','GET',undefined,A.session)).data.reviews.find((x:any)=>x.agreementId===pair.agreementId);
+     assert.equal(scheduled.intervalMonths,3);assert.ok(scheduled.nextReview);assert.equal(scheduled.due,false);
+     assert.equal((await ex(A,'reviewDone',{agreementId:pair.agreementId,version:'1'})).status,200);
+    })();
     assert.equal((await read(B,legacy)).state,'offered');assert.equal((await read(B,legacy)).assignmentMode,'offer');assert.equal((await move(B,'partnerDecline',legacy)).status,200);
     const defaultPrefs={assigned:true,submitted:true,reviewed:true},quietPrefs={...defaultPrefs,assigned:false};
     await (async()=>{

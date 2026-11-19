@@ -15,11 +15,12 @@ import {Hint,Icon,Layer,Link,Sheet,navigate,useLocation,type IconName} from './n
 import {QuickAdd,type QuickKind} from './quick-add.js';
 import {Skeleton,TodayCheckins,TodayHabits} from './today-habits.js';
 import {SwipeRow,UndoToast,useUndoable} from './swipe.js';
-type View='home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety';
+import {Attention,ExchangeView,Overview,ReviewsView,TermsForm,useExchange,useTerms} from './exchange.js';
+type View='home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews';
 type Tab='home'|'tasks'|'routines'|'library'|'dynamic';
 type Draft={action:string;body:Record<string,unknown>};
-const views:readonly View[]=['home','habits','checkins','rewards','participantTasks','rules','notes','tasks','dynamic','members','settings','relationships','safety'];
-const labels:Record<View,MessageKey>={home:'workspace.home',tasks:'workspace.mine',habits:'routines.habits',checkins:'routines.checkinsTitle',rewards:'catalog.title',participantTasks:'partner.title',rules:'library.guidance',notes:'library.notes',dynamic:'workspace.dynamic',members:'workspace.invite',settings:'workspace.settings',relationships:'workspace.relationships',safety:'workspace.safety'};
+const views:readonly View[]=['home','habits','checkins','rewards','participantTasks','rules','notes','tasks','dynamic','members','settings','relationships','safety','exchange','overview','reviews'];
+const labels:Record<View,MessageKey>={home:'workspace.home',tasks:'workspace.mine',habits:'routines.habits',checkins:'routines.checkinsTitle',rewards:'catalog.title',participantTasks:'partner.title',rules:'library.guidance',notes:'library.notes',dynamic:'workspace.dynamic',members:'workspace.invite',settings:'workspace.settings',relationships:'workspace.relationships',safety:'workspace.safety',exchange:'exchange.title',overview:'overview.title',reviews:'reviews.title'};
 const tabs:{tab:Tab;view:View;label:MessageKey;icon:IconName}[]=[
  {tab:'home',view:'home',label:'workspace.home',icon:'today'},
  {tab:'tasks',view:'tasks',label:'workspace.tasks',icon:'tasks'},
@@ -29,14 +30,16 @@ const tabs:{tab:Tab;view:View;label:MessageKey;icon:IconName}[]=[
 ];
 const tabOf=(view:View):Tab=>view==='tasks'||view==='participantTasks'?'tasks':view==='habits'||view==='checkins'?'routines':view==='rules'||view==='notes'?'library':view==='home'?'home':'dynamic';
 const segments:Partial<Record<Tab,View[]>>={tasks:['tasks','participantTasks'],routines:['habits','checkins'],library:['rules','notes']};
-const menu:View[]=['members','relationships','rewards','safety','settings'];
-const additions:{view:View;label:MessageKey;quick?:QuickKind}[]=[{view:'tasks',label:'workspace.addPrivateTask',quick:'task'},{view:'participantTasks',label:'workspace.addSharedTask'},{view:'habits',label:'routines.habits',quick:'habit'},{view:'checkins',label:'routines.checkinsTitle'},{view:'notes',label:'library.notes',quick:'note'},{view:'rules',label:'library.guidance'},{view:'rewards',label:'catalog.title'}];
+const menu:View[]=['overview','exchange','members','relationships','rewards','reviews','safety','settings'];
+const additions:{view:View;label:MessageKey;quick?:QuickKind}[]=[{view:'tasks',label:'workspace.addPrivateTask',quick:'task'},{view:'participantTasks',label:'workspace.addSharedTask'},{view:'habits',label:'routines.habits',quick:'habit'},{view:'checkins',label:'routines.checkinsTitle'},{view:'notes',label:'library.notes',quick:'note'},{view:'rules',label:'library.guidance'},{view:'rewards',label:'catalog.title'},{view:'exchange',label:'exchange.new'}];
 const priorities:Record<TaskFields['priority'],MessageKey>={low:'workspace.priorityLow',normal:'workspace.priorityNormal',high:'workspace.priorityHigh'};
 const filters:Record<string,MessageKey>={open:'workspace.open',done:'workspace.done',archived:'workspace.archived'};
 const errorKey=(key:unknown):MessageKey=>(['workspace.invalid','workspace.denied','workspace.conflict','workspace.capacity','workspace.paused','workspace.unavailable','errors.rateLimited','errors.request'] as unknown[]).includes(key)?key as MessageKey:'workspace.unavailable';
 const blank=():TaskFields=>({title:'',description:'',priority:'normal',dueAt:null,assignment:'unassigned'});
 export function HouseholdWorkspace({householdId,session,language,format,avatar,onLeave,children}:{householdId:string;session:{account:{id:string;displayName:string};csrfToken:string};language:string;format:string;avatar:React.ReactNode;onLeave:()=>void;children:React.ReactNode}){
  const {search}=useLocation(),requested=new URLSearchParams(search).get('view') as View|null,view:View=requested&&views.includes(requested)?requested:'home';
+ const [exchangeReload,setExchangeReload]=useState(0),[termsReload,setTermsReload]=useState(0);
+ const exchange=useExchange(householdId,exchangeReload),terms=useTerms(householdId,termsReload);
  const [adding,setAdding]=useState<QuickKind|'menu'>(),[habitsReload,setHabitsReload]=useState(0),pendingEditor=useRef<{fields:TaskFields}|undefined>(undefined);
  const t=createTranslator(language),[data,setData]=useState<WorkspaceResult>(),[filter,setFilter]=useState('open'),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[draft,setDraft]=useState<Draft>(),[editor,setEditor]=useState<{fields:TaskFields;taskId?:string;version?:string}>(),[settings,setSettings]=useState<{name:string;timeZone:string;version:string}>();
  const [pointsDraft,setPointsDraft]=useState<PointsSettings & {version:string}>();
@@ -138,6 +141,8 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
   }catch{setNotice('workspace.unknown');}finally{clearTimeout(deadline);activeWrite.current=false;setBusy(false);}
  }
  const h=data?.household,blocked=busy||!!draft,safety=h?{epoch:h.epoch,memberEpoch:h.memberEpoch}:{};
+ const tabLabel=(item:{tab:Tab;label:MessageKey})=>(item.tab!=='home'&&terms?.terms?.[item.tab])||t(item.label);
+ const subjects=(exchange.data?.people??[]).some(p=>p.subject);
  function go(value:View){navigate('/households/'+householdId+(value==='home'?'':'?view='+value));}
  useEffect(()=>{setEditor(pendingEditor.current);pendingEditor.current=undefined;setSettings(undefined);setCursor(undefined);if(view==='home')setFilter('open');},[view]);
  function back(){if(window.history.length>1)window.history.back();else go('dynamic');}
@@ -179,6 +184,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
     <p className="muted">{new Intl.DateTimeFormat(format,{weekday:'long',day:'numeric',month:'long',timeZone:h.timeZone}).format(new Date())}</p>
     {h.status==='paused'&&<p className="notice" role="status">{t('consent.householdPaused')}</p>}
     {data?.hasUnreadTaskInbox&&<button type="button" className="row-button" onClick={()=>go('participantTasks')}><span className="dot" aria-hidden="true"/><span className="grow">{t('workspace.unreadShared')}</span><Icon name="chevron"/></button>}
+    <Attention householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} reload={exchangeReload} onChanged={message=>{setNotice(message);setExchangeReload(v=>v+1);}} onReviews={()=>go('reviews')}/>
     <div className="section-head"><h2>{t('workspace.todo')}</h2><button type="button" className="link-button" onClick={()=>go('tasks')}>{t('workspace.allTasks')}</button></div>
     {today.length?<ul className="card-list">{today.map(task=>row(task,true))}</ul>:<div className="empty-card"><p>{t('workspace.nothingDue')}</p><button type="button" onClick={()=>setAdding('task')}><Icon name="plus"/>{t('today.addTask')}</button></div>}
     <TodayHabits householdId={householdId} csrfToken={session.csrfToken} language={language} reload={habitsReload} onAdd={()=>setAdding('habit')} onOpen={()=>go('habits')}/>
@@ -186,9 +192,12 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
     <div className="workspace-stats">{(['open','overdue','done'] as const).map(k=><div key={k}><strong>{data?.counts?.[k]??0}</strong><span>{t(({open:'workspace.open',done:'workspace.done',overdue:'workspace.overdue'} as const)[k])}</span></div>)}</div>
     <div className="tiles"><button type="button" onClick={()=>go('checkins')}><Icon name="routines"/>{t('routines.checkinsTitle')}</button><button type="button" onClick={()=>go('rules')}><Icon name="library"/>{t('library.guidance')}</button><button type="button" onClick={()=>go('notes')}><Icon name="library"/>{t('library.notes')}</button><button type="button" onClick={()=>go('members')}><Icon name="dynamic"/>{t('workspace.invite')}</button></div>
    </section>}
+   {view==='exchange'&&h&&<ExchangeView householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} people={exchange.data?.people??[]} onChanged={()=>setExchangeReload(v=>v+1)}/>}
+   {view==='overview'&&h&&<Overview householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} onAssign={()=>go('participantTasks')} onChanged={message=>{setNotice(message);setExchangeReload(v=>v+1);}}/>}
+   {view==='reviews'&&h&&<ReviewsView householdId={householdId} session={session} language={language} format={format}/>}
    {view==='dynamic'&&h&&<section className="plain">
     <div className="dynamic-card"><span className="badge-letter" aria-hidden="true">{h.name.trim().slice(0,1).toUpperCase()}</span><span className="grow"><strong>{h.name}</strong><span className="muted">{t('workspace.memberCount')} {h.memberCount}</span></span></div>
-    <ul className="menu">{menu.map(v=><li key={v}><button type="button" onClick={()=>go(v)}><span className="grow">{t(labels[v])}</span><Icon name="chevron"/></button></li>)}</ul>
+    <ul className="menu">{menu.filter(v=>v!=='overview'||subjects).map(v=><li key={v}><button type="button" onClick={()=>go(v)}><span className="grow">{t(labels[v])}</span><Icon name="chevron"/></button></li>)}</ul>
    </section>}
    {view==='tasks'&&data&&<section className="plain"><Hint label={t('hint.more')}>{t('workspace.privateTasks')}</Hint><div className="chips">{Object.keys(filters).map(f=><button type="button" key={f} aria-pressed={filter===f} onClick={()=>{setFilter(f);setCursor(undefined);}}>{t(filters[f]??'workspace.open')}</button>)}</div>
     {!data.tasks?.length&&!editor&&<div className="empty-card"><p>{t('workspace.emptyTitle')}</p><button type="button" disabled={blocked} onClick={()=>setAdding('task')}><Icon name="plus"/>{t('today.addTask')}</button></div>}
@@ -224,6 +233,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
      onChange={event=>setPointsDraft({...pointsDraft??data.pointsSettings!,version:pointsDraft?.version??h.version,label:event.target.value})}/></label>
     <button type="submit" disabled={blocked||!pointsDraft}>{t('workspace.saveSettings')}</button>
    </form>}
+   <TermsForm householdId={householdId} session={session} language={language} terms={terms} onSaved={()=>setTermsReload(v=>v+1)}/>
    <button type="button" className="danger" onClick={onLeave}>{t('onboarding.leave')}</button>{children}</section>}
   </SafetyProvider>
   {editor&&<Layer title={t(editor.taskId?'workspace.taskDetails':'workspace.addPrivateTask')} backLabel={t('nav.back')} onClose={()=>setEditor(undefined)} status={<>{error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}</>}>
@@ -232,7 +242,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
   </Layer>}
   {pending&&<UndoToast message={pending.message} undoLabel={t('tasks.undo')} onUndo={undo}/>}
   {tab!=='dynamic'&&<button type="button" className="fab" aria-label={t('workspace.add')} onClick={()=>setAdding('menu')}><Icon name="plus"/></button>}
-  <nav className="bottom-nav" aria-label={t('workspace.navigation')}>{tabs.map(item=><button type="button" key={item.tab} aria-current={tab===item.tab?'page':undefined} onClick={()=>go(item.view)}><Icon name={item.icon}/><span>{t(item.label)}</span>{item.tab==='tasks'&&data?.hasUnreadTaskInbox&&<span className="dot" aria-label={t('inbox.unreadBadge')}/>}</button>)}</nav>
+  <nav className="bottom-nav" aria-label={t('workspace.navigation')}>{tabs.map(item=><button type="button" key={item.tab} aria-current={tab===item.tab?'page':undefined} onClick={()=>go(item.view)}><Icon name={item.icon}/><span>{tabLabel(item)}</span>{item.tab==='tasks'&&data?.hasUnreadTaskInbox&&<span className="dot" aria-label={t('inbox.unreadBadge')}/>}</button>)}</nav>
   {adding&&<Sheet title={t(adding==='menu'?'workspace.add':adding==='task'?'workspace.addPrivateTask':adding==='habit'?'quick.newHabit':'quick.newNote')} closeLabel={t('onboarding.cancel')} onClose={()=>setAdding(undefined)}>
    {adding==='menu'?<ul className="menu">{additions.map(item=><li key={item.label}><button type="button" onClick={()=>{if(item.quick){setAdding(item.quick);return;}setAdding(undefined);go(item.view);}}><span className="grow">{t(item.label)}</span><Icon name="chevron"/></button></li>)}</ul>
    :h&&<QuickAdd key={adding} kind={adding} householdId={householdId} csrfToken={session.csrfToken} language={language} timeZone={h.timeZone} safety={safety}
