@@ -5,7 +5,7 @@ import manifest from '../../locales/manifest.json' with { type: 'json' };
 export type MessageKey = keyof typeof messages;
 const catalogs: Record<string, typeof messages> = generated;
 const cache = new Map<string, IntlMessageFormat>();
-type Parameters = { 'inbox.namedBalance': { label: string }; 'mail.invitation.body': { link: string }; 'partner.direction': { creator: string; assignee: string }; 'catalog.pointCost': { count: string }; 'errors.config': { field: string }; 'cli.preflight': { check: string } };
+type Parameters = { 'catalog.pointCredit': { count: string }; 'inbox.namedBalance': { label: string }; 'mail.invitation.body': { link: string }; 'partner.direction': { creator: string; assignee: string }; 'catalog.pointCost': { count: string }; 'errors.config': { field: string }; 'cli.preflight': { check: string } };
 export function t<K extends MessageKey>(key: K, ...args: K extends keyof Parameters ? [Parameters[K]] : [Record<string, never>?]): string {
   return translate(manifest.defaultLanguage, key, args[0] ?? {});
 }

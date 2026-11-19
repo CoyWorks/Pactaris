@@ -325,8 +325,8 @@ export class PrivateCatalogClient{
    if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['catalogRead','catalogList','redemptionList','redemptionOptions'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/catalog.js').CatalogResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
    const summary=(s:import('../auth/catalog.js').CatalogSummary)=>{
-    if(!s||!uuid(s.itemId)||!documentVersion(s.version)||!['draft','archived'].includes(s.state)||!documentText(s.title,120)||!documentText(s.description,500,true,true)||!documentText(s.category,60,true)||!Number.isInteger(s.position)||s.position<0||s.position>999999||(s.points!==null&&(!Number.isInteger(s.points)||s.points<0||s.points>1000000)))throw Error('routing.response');
-    return {itemId:s.itemId,version:s.version,state:s.state,title:s.title,description:s.description,category:s.category,points:s.points,position:s.position};
+    if(!s||!uuid(s.itemId)||!documentVersion(s.version)||!['draft','archived'].includes(s.state)||!documentText(s.title,120)||!documentText(s.description,500,true,true)||!documentText(s.category,60,true)||(s.kind!==undefined&&!['reward','grant','consequence'].includes(s.kind))||!Number.isInteger(s.position)||s.position<0||s.position>999999||(s.points!==null&&(!Number.isInteger(s.points)||s.points<0||s.points>1000000)))throw Error('routing.response');
+    return {itemId:s.itemId,version:s.version,state:s.state,title:s.title,description:s.description,category:s.category,points:s.points,position:s.position,kind:s.kind};
    };
    if(r.itemId!==undefined){if(!uuid(r.itemId))throw Error('routing.response');out.itemId=r.itemId;}
    if(action==='catalogList'){if(!Array.isArray(r.items)||r.items.length>10||(r.nextCursor!==null&&(typeof r.nextCursor!=='string'||!/^\d{1,6}:[a-f0-9-]{36}$/.test(r.nextCursor))))throw Error('routing.response');out.items=r.items.map(summary);out.nextCursor=r.nextCursor;}
@@ -335,8 +335,8 @@ export class PrivateCatalogClient{
     out.redemptions=r.redemptions.map(x=>{
      if(!uuid(x.redemptionId)||!documentVersion(x.version)||!['issuer','recipient'].includes(x.role)||
       !['offered','requested','fulfilled','declined','cancelled','reversed','expired'].includes(x.state)||
-      !documentText(x.title,120)||!documentText(x.description,500,true,true)||!Number.isInteger(x.points)||x.points<0||x.points>1000000)throw Error('routing.response');
-     return {redemptionId:x.redemptionId,version:x.version,role:x.role,state:x.state,title:x.title,description:x.description,points:x.points};
+      !['reward','grant','consequence'].includes(x.kind)||!documentText(x.title,120)||!documentText(x.description,500,true,true)||!Number.isInteger(x.points)||x.points<0||x.points>1000000)throw Error('routing.response');
+     return {redemptionId:x.redemptionId,version:x.version,role:x.role,state:x.state,title:x.title,description:x.description,points:x.points,kind:x.kind};
     });
     out.nextCursor=r.nextCursor;
    }

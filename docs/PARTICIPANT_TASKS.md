@@ -71,3 +71,5 @@ Offers expire at the earlier of seven days or the agreement expiry. Paused, depa
 
 
 The household selector checks unread status for up to eight currently listed households per visible refresh. Larger lists rotate through bounded groups. The Gateway independently resolves each current placement and membership, and returns only the listed household IDs with unread notices and whether a lookup was unavailable. No notification bodies, counts, or private Instance addresses are exposed by that endpoint.
+
+The catalog also supports manual point grants and optional consequence records. A grant uses current reward authority and requires the individual recipient's acceptance before the issuer can post a credit. A consequence requires separate consequence authority and explicit individual acceptance. It records only an outcome, never debits points, and never runs a task, device action, or automatic penalty. Either participant can cancel an open proposal or request. The issuer can correct a completed record. Grant and consequence entries are unavailable as automatic task reward selections.

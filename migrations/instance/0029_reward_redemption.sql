@@ -13,7 +13,7 @@ CREATE TABLE pactaris.reward_redemptions (
 CREATE INDEX reward_redemptions_recipient ON pactaris.reward_redemptions(household_id,recipient_id,id);
 CREATE INDEX reward_redemptions_issuer ON pactaris.reward_redemptions(household_id,issuer_id,id);
 CREATE TABLE pactaris.reward_point_entries (
- household_id uuid NOT NULL,redemption_id uuid NOT NULL,kind text NOT NULL CHECK(kind IN ('debit','reversal')),
+ household_id uuid NOT NULL,redemption_id uuid NOT NULL,kind text NOT NULL CHECK(kind IN ('debit','credit','reversal')),
  operation_id uuid NOT NULL UNIQUE,created_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(household_id,redemption_id,kind),
  FOREIGN KEY(household_id,redemption_id) REFERENCES pactaris.reward_redemptions(household_id,id)
@@ -33,12 +33,16 @@ BEGIN
  SELECT coalesce(sum(g.points),0) INTO earned FROM pactaris.task_points g
   WHERE g.household_id=target AND g.recipient=member AND NOT EXISTS(SELECT 1 FROM pactaris.task_point_reversals x
    WHERE x.household_id=g.household_id AND x.task_id=g.task_id);
+ SELECT earned+coalesce(sum(r.points),0) INTO earned FROM pactaris.reward_redemptions r
+  JOIN pactaris.reward_point_entries e ON e.household_id=r.household_id AND e.redemption_id=r.id AND e.kind='credit'
+  WHERE r.household_id=target AND r.recipient_id=member AND NOT EXISTS(SELECT 1 FROM pactaris.reward_point_entries x
+    WHERE x.household_id=e.household_id AND x.redemption_id=e.redemption_id AND x.kind='reversal');
  SELECT coalesce(sum(r.points),0) INTO spent FROM pactaris.reward_redemptions r
   JOIN pactaris.reward_point_entries e ON e.household_id=r.household_id AND e.redemption_id=r.id AND e.kind='debit'
   WHERE r.household_id=target AND r.recipient_id=member AND NOT EXISTS(SELECT 1 FROM pactaris.reward_point_entries x
    WHERE x.household_id=e.household_id AND x.redemption_id=e.redemption_id AND x.kind='reversal');
  reserved=0;
- FOR entry IN SELECT * FROM pactaris.reward_redemptions WHERE household_id=target AND recipient_id=member AND state='requested' AND expires_at>now() LOOP
+ FOR entry IN SELECT * FROM pactaris.reward_redemptions WHERE household_id=target AND recipient_id=member AND state='requested' AND expires_at>now() AND coalesce(terms->>'kind','reward')='reward' LOOP
   IF pactaris.activity_guard(target,instance,actor,member,entry.agreement_id,entry.agreement_version,'reward',entry.household_epoch) THEN
    reserved=reserved+entry.points;
   END IF;
@@ -51,7 +55,7 @@ CREATE FUNCTION pactaris.reward_redemption_command(target uuid,instance uuid,act
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pactaris,pg_temp AS $$
 DECLARE h pactaris.households; m pactaris.memberships; r pactaris.reward_redemptions; saved pactaris.catalog_receipts;
  opt record; options jsonb:='[]'; rows jsonb; response jsonb; item_terms jsonb; next_id uuid;
- next_state text; redemption_id uuid; cost integer; agreed_expiry timestamptz; other_member uuid;
+ next_state text; redemption_id uuid; cost integer; agreed_expiry timestamptz; other_member uuid; item_kind text; activity text;
 BEGIN
  IF action IS NULL OR action NOT IN ('redemptionOptions','redemptionList','redemptionOffer','redemptionRequest','redemptionFulfill',
    'redemptionDecline','redemptionCancel','redemptionReverse') OR operation IS NULL OR fingerprint IS NULL OR fingerprint!~'^[a-f0-9]{64}$' THEN
@@ -64,14 +68,16 @@ BEGIN
  IF h.id IS NULL OR m.id IS NULL THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='catalog.denied';END IF;
  response=jsonb_build_object('householdId',target,'operationId',operation,'actorMembershipId',m.id,'status','listed');
  IF action='redemptionOptions' THEN
+  activity=body->>'activity';
+  IF activity IS NULL OR activity NOT IN ('reward','consequence') THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='catalog.invalid'; END IF;
   FOR opt IN SELECT a.id,a.version,rel.label,p.membership_id,other.display_name
    FROM pactaris.agreements a JOIN pactaris.agreement_versions v ON v.household_id=a.household_id AND v.agreement_id=a.id AND v.version=a.version
    JOIN pactaris.relationships rel ON rel.household_id=a.household_id AND rel.id=a.relationship_id AND rel.status='active'
    JOIN pactaris.relationship_participants own ON own.household_id=rel.household_id AND own.relationship_id=rel.id AND own.membership_id=m.id
    JOIN pactaris.relationship_participants p ON p.household_id=rel.household_id AND p.relationship_id=rel.id AND p.membership_id<>m.id
    JOIN pactaris.memberships other ON other.household_id=p.household_id AND other.id=p.membership_id AND other.status='active'
-   WHERE a.household_id=target AND v.terms->'activities'?'reward' AND v.expires_at>now() AND NOT v.revoked
-    AND pactaris.activity_guard(target,instance,actor,m.id,a.id,a.version,'reward',h.safety_version)
+   WHERE a.household_id=target AND v.terms->'activities'?activity AND v.expires_at>now() AND NOT v.revoked
+    AND pactaris.activity_guard(target,instance,actor,m.id,a.id,a.version,activity,h.safety_version)
     AND (body->>'after' IS NULL OR (a.id,p.membership_id)>(split_part(body->>'after',':',1)::uuid,split_part(body->>'after',':',2)::uuid))
    ORDER BY a.id,p.membership_id LIMIT 11
   LOOP
@@ -85,7 +91,7 @@ BEGIN
   SELECT coalesce(jsonb_agg(jsonb_build_object('redemptionId',v.id,'version',v.version::text,'state',
    CASE WHEN v.expires_at<=now() AND v.state IN ('offered','requested') THEN 'expired' ELSE v.state END,
    'role',CASE WHEN v.issuer_id=m.id THEN 'issuer' ELSE 'recipient' END,'title',v.terms->>'title',
-   'description',v.terms->>'description','points',v.points) ORDER BY v.id),'[]') INTO rows
+   'description',v.terms->>'description','points',v.points,'kind',coalesce(v.terms->>'kind','reward')) ORDER BY v.id),'[]') INTO rows
    FROM (SELECT * FROM pactaris.reward_redemptions WHERE household_id=target AND m.id IN (issuer_id,recipient_id)
     AND (body->>'after' IS NULL OR id>(body->>'after')::uuid) ORDER BY id LIMIT 11) v;
   IF jsonb_array_length(rows)=11 THEN next_id=(rows->9->>'redemptionId')::uuid;rows=rows-10;END IF;
@@ -105,7 +111,10 @@ BEGIN
      AND i.version=(body->>'itemVersion')::bigint AND i.state='draft';
   IF item_terms IS NULL THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='catalog.denied';END IF;
   cost=(item_terms->>'points')::integer;
-  IF cost IS NULL OR (cost>0 AND NOT h.points_enabled) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='catalog.conflict';END IF;
+  item_kind=coalesce(item_terms->>'kind','reward');
+  activity=CASE WHEN item_kind='consequence' THEN 'consequence' ELSE 'reward' END;
+  IF cost IS NULL OR (cost>0 AND NOT h.points_enabled) OR item_kind NOT IN ('reward','grant','consequence')
+   OR (item_kind='grant' AND cost NOT BETWEEN 1 AND 10000) OR (item_kind='consequence' AND cost<>0) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='catalog.conflict';END IF;
   SELECT v.expires_at,p.membership_id INTO agreed_expiry,other_member
    FROM pactaris.agreements a JOIN pactaris.agreement_versions v ON v.household_id=a.household_id AND v.agreement_id=a.id AND v.version=a.version
    JOIN pactaris.relationship_participants p ON p.household_id=a.household_id AND p.relationship_id=a.relationship_id
@@ -113,7 +122,7 @@ BEGIN
    WHERE a.household_id=target AND a.id=(body->>'agreementId')::uuid AND a.version=(body->>'agreementVersion')::bigint
     AND p.membership_id=(body->>'recipientId')::uuid AND p.membership_id<>m.id;
   IF other_member IS NULL OR NOT pactaris.activity_guard(target,instance,actor,m.id,(body->>'agreementId')::uuid,
-   (body->>'agreementVersion')::bigint,'reward',h.safety_version) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='catalog.denied';END IF;
+   (body->>'agreementVersion')::bigint,activity,h.safety_version) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='catalog.denied';END IF;
   IF (SELECT count(*) FROM pactaris.reward_redemptions WHERE household_id=target AND issuer_id=m.id
       AND state IN ('offered','requested') AND expires_at>now())>=25 THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='catalog.conflict';END IF;
   INSERT INTO pactaris.reward_redemptions(household_id,id,issuer_id,recipient_id,agreement_id,agreement_version,household_epoch,item_id,item_version,terms,points,expires_at)
@@ -131,24 +140,26 @@ BEGIN
    WHEN action='redemptionCancel' AND r.state IN ('offered','requested') THEN 'cancelled'
    WHEN action='redemptionReverse' AND r.state='fulfilled' AND m.id=r.issuer_id THEN 'reversed'
   END;
+  item_kind=coalesce(r.terms->>'kind','reward');
+  activity=CASE WHEN item_kind='consequence' THEN 'consequence' ELSE 'reward' END;
   IF next_state IS NULL THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='catalog.conflict';END IF;
   IF next_state IN ('requested','fulfilled') AND (r.expires_at<=now()
-   OR NOT pactaris.activity_guard(target,instance,actor,m.id,r.agreement_id,r.agreement_version,'reward',r.household_epoch)) THEN
+   OR NOT pactaris.activity_guard(target,instance,actor,m.id,r.agreement_id,r.agreement_version,activity,r.household_epoch)) THEN
    RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='catalog.denied';
   END IF;
-  IF next_state='requested' AND r.points>0 AND pactaris.available_reward_points(target,instance,actor,m.id)<r.points THEN
+  IF next_state='requested' AND item_kind='reward' AND r.points>0 AND pactaris.available_reward_points(target,instance,actor,m.id)<r.points THEN
    RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='catalog.conflict';
   END IF;
-  IF next_state='fulfilled' THEN
+  IF next_state='fulfilled' AND item_kind='reward' THEN
    -- The current reservation is already subtracted from the recipient's available balance.
    SELECT account_id INTO other_member FROM pactaris.memberships WHERE household_id=target AND id=r.recipient_id AND status='active';
    IF other_member IS NULL OR (r.points>0 AND pactaris.available_reward_points(target,instance,other_member,r.recipient_id)<0) THEN
     RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='catalog.conflict';
    END IF;
   END IF;
-  IF next_state IN ('fulfilled','reversed') THEN
+  IF next_state IN ('fulfilled','reversed') AND item_kind<>'consequence' THEN
    INSERT INTO pactaris.reward_point_entries(household_id,redemption_id,kind,operation_id)
-    VALUES(target,r.id,CASE WHEN next_state='fulfilled' THEN 'debit' ELSE 'reversal' END,operation);
+    VALUES(target,r.id,CASE WHEN next_state='reversed' THEN 'reversal' WHEN item_kind='grant' THEN 'credit' ELSE 'debit' END,operation);
   END IF;
   UPDATE pactaris.reward_redemptions SET state=next_state,version=version+1 WHERE household_id=target AND id=r.id;
   redemption_id=r.id;
@@ -173,3 +184,26 @@ BEGIN
  RETURN greatest(0,pactaris.available_reward_points(target,instance,actor,member))::text;
 END $$;
 REVOKE ALL ON FUNCTION pactaris.reward_balance(uuid,uuid,uuid,uuid) FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION pactaris.prepare_task_catalog_reward(target uuid, instance uuid, actor uuid, operation uuid,
+ member uuid, item uuid, version_id bigint)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pactaris,pg_temp AS $$
+DECLARE reward jsonb;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('pactaris.partner.operation.'||operation::text,0));
+  PERFORM pg_advisory_xact_lock(hashtextextended('pactaris.household.'||target::text,0));
+  IF EXISTS(SELECT 1 FROM pactaris.partner_receipts WHERE operation_id=operation) THEN
+    -- The normal command checks the existing receipt's actor, membership and fingerprint.
+    RETURN '{}'::jsonb;
+  END IF;
+  SELECT jsonb_build_object('title',v.fields->>'title','description',v.fields->>'description') INTO reward
+  FROM pactaris.catalog_items c JOIN pactaris.catalog_versions v
+    ON v.household_id=c.household_id AND v.item_id=c.id AND v.version=c.version
+  JOIN pactaris.memberships m ON m.household_id=c.household_id AND m.id=c.creator_membership_id
+  JOIN pactaris.households h ON h.id=m.household_id
+  WHERE c.household_id=target AND c.id=item AND c.version=version_id AND c.state='draft' AND coalesce(v.fields->>'kind','reward')='reward'
+    AND m.id=member AND m.account_id=actor AND m.status='active' AND h.instance_id=instance AND h.status<>'closed';
+  IF reward IS NULL THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='partner.denied'; END IF;
+  RETURN jsonb_build_object('rewardSelection',jsonb_build_object('itemId',item,'version',version_id::text),'sharedReward',reward);
+END $$;
+REVOKE ALL ON FUNCTION pactaris.prepare_task_catalog_reward(uuid,uuid,uuid,uuid,uuid,uuid,bigint) FROM PUBLIC;

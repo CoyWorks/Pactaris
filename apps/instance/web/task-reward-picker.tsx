@@ -29,7 +29,7 @@ export function TaskRewardPicker({householdId,csrfToken,language,value,change,di
   {failed&&<p role="alert">{t('errors.unavailable')}</p>}
   {cursor!==null&&<button type="button" onClick={()=>void load()}>{t(cursor?'portal.more':'partner.loadCatalogRewards')}</button>}
   {cursor===null&&!items.length&&<p>{t('partner.catalogRewardEmpty')}</p>}
-  {items.map(item=><label key={item.itemId}>
+  {items.filter(item=>!item.kind||item.kind==='reward').map(item=><label key={item.itemId}>
     <input type="radio" name="task-catalog-reward" value={item.itemId}
       checked={value?.itemId===item.itemId&&value.version===item.version}
       onChange={()=>change({itemId:item.itemId,version:item.version})}/> {item.title}
