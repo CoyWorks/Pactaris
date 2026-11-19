@@ -634,5 +634,5 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
   });
   app.use('/api',(_req,res)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});});
   const pwaHead=publicPwa(app,webRoot,config.locale.language,!!webPush);
-  frontend(app,webRoot,['/','/households/:householdId','/join','/operator'],pwaHead);errors(app);return app;
+  frontend(app,webRoot,['/','/households/:householdId','/join','/profile','/operator'],pwaHead);errors(app);return app;
 }
