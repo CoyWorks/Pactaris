@@ -1,0 +1,10 @@
+[Unit]
+Description=Check GitHub for a Pactaris live deployment request
+
+[Timer]
+OnBootSec=45s
+OnUnitInactiveSec=60s
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

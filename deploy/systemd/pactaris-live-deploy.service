@@ -1,0 +1,15 @@
+[Unit]
+Description=Apply the released Pactaris revision on the live host
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PACTARIS_DEPLOY_MODE=plan
+EnvironmentFile=-/etc/pactaris/deploy-live.env
+LoadCredential=github-token:/etc/pactaris/deploy-live.github-token
+StateDirectory=pactaris-live-deploy
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/bin/python3 /usr/local/lib/pactaris/live_deploy.py --mode ${PACTARIS_DEPLOY_MODE} --state /var/lib/pactaris-live-deploy/state.json
+TimeoutStartSec=60min

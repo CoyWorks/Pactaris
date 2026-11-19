@@ -104,3 +104,5 @@ Full production backup/security gates remain #28/#29/#31. Manager automation lat
 ## Split deployment acceptance
 
 Install Identity on one host, Instance on another and a separate proxy in front. Configure public identity/instance origins, external issuer/client/callback, private bind endpoint and backend TLS identity independently. Verify private DNS avoids public-proxy recursion, correct cert verification for loopback/remote targets and host-scoped sessions. Run an Identity-only update and Instance-only update without restarting or altering the other application. Check compatible protocol versions and data preservation. See docs/INFRASTRUCTURE.md for the example proxy map.
+
+For the single alpha host's GitHub-triggered update service, see [Live deployment](LIVE_DEPLOY.md).
