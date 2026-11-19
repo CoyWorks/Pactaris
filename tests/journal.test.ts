@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { journalInput, journalEntries, journalBatch } from '../packages/auth/journal.js';
+import { journalInput, journalEntries, journalBatch, journalPending, replayResult } from '../packages/auth/journal.js';
 
 const entry=(changes:Record<string,unknown>={})=>({id:randomUUID(),householdId:randomUUID(),kind:'membership.ended',
   subject:{membershipId:randomUUID(),accountId:randomUUID(),status:'left'},occurredAt:'2026-11-19T10:52:36.123456Z',...changes});
@@ -23,4 +23,17 @@ test('journal responses are content-free and strictly validated before central s
   assert.throws(()=>journalEntries({entries:[entry(),entry()]},1));
   for(const bad of [{kind:'note.text'},{id:'nope'},{occurredAt:'yesterday'},{subject:[]},{subject:{title:'Private note title'}},
     {subject:{membershipId:'<script>'}},{subject:{count:3}},{extra:'field'}])assert.throws(()=>journalEntries({entries:[entry(bad)]},50));
+});
+
+test('replay batches and fence reports are strictly shaped',()=>{
+  const operationId=randomUUID(),entries=[entry()];
+  assert.deepEqual(journalInput('journalReplay',{operationId,entries,final:true}),{operationId,entries,final:true});
+  assert.deepEqual(journalInput('journalReplay',{operationId,entries:[],final:false}),{operationId,entries:[],final:false});
+  for(const value of [{operationId,entries,final:'yes'},{operationId,entries},{operationId,entries:[entry({kind:'note.text'})],final:true},
+    {operationId,entries:Array.from({length:journalBatch+1},()=>entry()),final:true}])assert.throws(()=>journalInput('journalReplay',value));
+  assert.equal(journalPending({fenced:true,entries:[]},50).fenced,true);
+  assert.throws(()=>journalPending({entries:[]},50));
+  assert.deepEqual(replayResult({fenced:true,applied:2,skipped:1,released:false}),{fenced:true,applied:2,skipped:1,released:false});
+  for(const value of [null,{fenced:true,applied:1,skipped:0},{fenced:'true',applied:1,skipped:0,released:false},{fenced:true,applied:1.5,skipped:0,released:false}])
+    assert.throws(()=>replayResult(value));
 });

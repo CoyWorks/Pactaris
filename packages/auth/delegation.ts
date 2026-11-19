@@ -22,7 +22,9 @@ export const commandPath=(id:string,action:HouseholdAction)=>`/internal/househol
 export const digest=(body:string|Buffer)=>createHash('sha256').update(body).digest('hex');
 export const uuid=(value:unknown):value is string=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
 /** Instance-scoped revocation journal transfer. Not bound to any account or household. */
-export const journalActions=['journalPending','journalAck'] as const;
+export const journalActions=['journalPending','journalAck','journalReplay'] as const;
+/** Replay batches carry central entries, so the journal body bound exceeds the household command bound. */
+export const journalBodyLimit=32768;
 export type JournalAction=typeof journalActions[number];
 export const isJournalAction=(value:unknown):value is JournalAction=>typeof value==='string'&&(journalActions as readonly string[]).includes(value);
 export const journalPath=(action:JournalAction)=>`/internal/journal/${action}`;
@@ -56,7 +58,7 @@ export class JournalVerifier {
   private keys=new Map<string,Promise<CryptoKey>>();
   constructor(private config:InstanceConfig) {}
   async verify(token:string,action:JournalAction,body:Buffer) {
-    if(!this.config.delegation||token.length>8192||body.length>4096||!isJournalAction(action))throw new DelegationError('journal.disabled');
+    if(!this.config.delegation||token.length>8192||body.length>journalBodyLimit||!isJournalAction(action))throw new DelegationError('journal.disabled');
     try {
       const {payload}=await jwtVerify(token,async header=>{
         if(header.alg!=='EdDSA'||header.typ!=='pactaris-journal+jwt'||!header.kid)throw Error('journal.header');

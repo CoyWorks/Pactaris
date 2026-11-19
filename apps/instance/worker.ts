@@ -10,6 +10,9 @@ const db = database(config); let stopped = false;
 async function tick() {
   if (stopped) return;
   let state = 'ready'; try { await db.probe(); if(config.delegation){await requireSchema(db.pool,'instance');await db.pool.query('DELETE FROM pactaris.delegation_uses WHERE expires_at<=now()');
+    // No scheduled effects run on a restored database before its revocations are replayed.
+    const fence=await db.pool.query("SELECT 1 FROM pactaris_meta.migrations WHERE component='instance' AND id='0033_restore_fence'");
+    if(fence.rowCount&&(await db.pool.query('SELECT pactaris.restore_fenced() AS fenced')).rows[0].fenced!==false)throw Error('worker.restore_fenced');
     const schema=await db.pool.query("SELECT 1 FROM pactaris_meta.migrations WHERE component='instance' AND id='0016_task_scheduling'");
     if(schema.rowCount){for(let n=0;n<16&&!stopped;n++){const result=await db.pool.query('SELECT pactaris.run_task_scheduler($1) AS state',[config.instanceId]);if(result.rows[0].state==='idle')break;if(result.rows[0].state==='failed')state='unavailable';}}
     const personal=await db.pool.query("SELECT 1 FROM pactaris_meta.migrations WHERE component='instance' AND id='0027_personal_task_series'");

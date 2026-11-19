@@ -301,6 +301,17 @@ def postgres_environment(url, directory):
         env['PGPASSFILE'] = str(path)
         yield env
 
+# Appended to every Instance dump: a restored database serves nothing until the
+# gateway has replayed the revocation journal (docs/REVOCATION_JOURNAL.md).
+RESTORE_FENCE_SQL = b"""
+-- Pactaris restore fence
+DO $pactaris_fence$ BEGIN
+ IF to_regclass('pactaris.restore_fence') IS NOT NULL THEN
+  UPDATE pactaris.restore_fence SET fenced=true,fenced_at=now(),released_at=NULL;
+ END IF;
+END $pactaris_fence$;
+"""
+
 def checkpoint(base, cfg, previous):
     backup = base / 'backups' / str(time.time_ns())
     backup.mkdir(mode=0o700, parents=True)
@@ -324,6 +335,9 @@ def checkpoint(base, cfg, previous):
             os.chmod(output.name, 0o600)
             run(['pg_dump', '--no-owner', '--no-password'], env=env, output=output,
                 error_file=backup / 'pg_dump.stderr.log')
+            if base.name == 'instance':
+                output.seek(0, os.SEEK_END)
+                output.write(RESTORE_FENCE_SQL)
             output.flush()
             os.fsync(output.fileno())
     if partial.is_file():

@@ -473,7 +473,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.deepEqual(copied.filter(row=>row.kind==='household.stopped').map(row=>row.subject.status),['paused','closed']);
   assert.ok(copied.every(row=>Object.values(row.subject).every(value=>typeof value==='string'&&/^[a-zA-Z0-9-]+$/.test(value as string))));
   assert.equal((await a.owner.query('SELECT count(*)::int n FROM pactaris.revocation_journal WHERE exported_at IS NULL')).rows[0].n,0);
-  assert.deepEqual(await journal.sync(),{received:0,failedInstances:0});
+  assert.deepEqual(await journal.sync(),{received:0,replayed:0,failedInstances:0});
   // A lost acknowledgement re-sends the same entries; the central copy stays idempotent.
   const centralCount=(await gatewayDb.pool.query('SELECT count(*)::int n FROM pactaris.revocation_journal')).rows[0].n;
   await a.owner.query('UPDATE pactaris.revocation_journal SET exported_at=NULL');
@@ -482,6 +482,34 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await assert.rejects(a.pool.query('SELECT * FROM pactaris.revocation_journal'));
   await assert.rejects(gatewayDb.pool.query('DELETE FROM pactaris.revocation_journal'));
   await assert.rejects(services[0]!.journal(await signer.signCommand(account.id,created,ids[0]!,'create',operation,'{}'),'journalPending',Buffer.from('{}')));
+  // Restore gate: emulate a checkpoint taken before a member left. The restored Instance
+  // starts fenced, serves nothing, and the gateway replays the departure before release.
+  const restoredHousehold=randomUUID(),restoredOwner=randomUUID(),departed=randomUUID(),departedMembership=randomUUID();
+  const restoredDestination={...destination,householdId:restoredHousehold};
+  assert.equal((await commands.execute(restoredOwner,restoredDestination,'create',randomUUID(),'Restore fixture')).status,'created');
+  await a.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[restoredHousehold,departedMembership,departed]);
+  assert.equal((await commands.execute(departed,restoredDestination,'leave',randomUUID())).status,'left');
+  assert.equal((await journal.sync()).failedInstances,0);
+  await a.owner.query('ALTER TABLE pactaris.memberships DISABLE TRIGGER USER');
+  await a.owner.query("UPDATE pactaris.memberships SET status='active',ended_at=NULL WHERE household_id=$1 AND id=$2",[restoredHousehold,departedMembership]);
+  await a.owner.query('ALTER TABLE pactaris.memberships ENABLE TRIGGER USER');
+  await a.owner.query('DELETE FROM pactaris.membership_endings WHERE household_id=$1 AND membership_id=$2',[restoredHousehold,departedMembership]);
+  await a.owner.query("DELETE FROM pactaris.revocation_journal WHERE household_id=$1 AND kind='membership.ended'",[restoredHousehold]);
+  await a.owner.query('UPDATE pactaris.restore_fence SET fenced=true,fenced_at=now(),released_at=NULL');
+  await assert.rejects(client.summary(restoredOwner,restoredDestination));
+  await assert.rejects(client.summary(departed,restoredDestination));
+  const restored=await journal.sync();assert.equal(restored.failedInstances,0);assert.ok(restored.replayed>=1);
+  assert.equal((await a.owner.query('SELECT fenced FROM pactaris.restore_fence')).rows[0].fenced,false);
+  assert.equal((await a.owner.query('SELECT status FROM pactaris.memberships WHERE household_id=$1 AND id=$2',[restoredHousehold,departedMembership])).rows[0].status,'left');
+  assert.equal(await client.summary(departed,restoredDestination),undefined);
+  assert.equal((await client.summary(restoredOwner,restoredDestination))?.name,'Restore fixture');
+  // Replay is recorded locally, so the same central copy never applies twice.
+  assert.equal((await journal.sync()).replayed,0);
+  await a.owner.query('UPDATE pactaris.restore_fence SET fenced=true');
+  assert.equal((await journal.sync()).replayed,0);
+  assert.equal((await a.owner.query('SELECT fenced FROM pactaris.restore_fence')).rows[0].fenced,false);
+  await assert.rejects(a.pool.query('UPDATE pactaris.restore_fence SET fenced=false'));
+  await assert.rejects(a.pool.query("SELECT pactaris.journal_apply($1,'member.paused','{}'::jsonb)",[restoredHousehold]));
   for(const table of ['audit_events','household_outbox','household_command_receipts'])assert.equal((await a.owner.query(`SELECT count(*)::int AS count FROM pactaris.${table} WHERE household_id=$1`,[created])).rows[0].count,5);
   const audit=(await a.owner.query('SELECT parameters FROM pactaris.audit_events WHERE household_id=$1',[created])).rows;
   assert.ok(audit.every(row=>Object.keys(row.parameters).join(',')==='operationId'));

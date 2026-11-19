@@ -7,6 +7,10 @@ import { journalInput, JournalError } from '../../packages/auth/journal.js';
 export class InstanceJournal {
   private verifier:JournalVerifier;
   constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new JournalVerifier(config);}
+  /** Any failure to read the fence counts as fenced: a restored database must not serve early. */
+  async fenced():Promise<boolean>{
+    try{return (await this.pool.query('SELECT pactaris.restore_fenced() AS fenced')).rows[0].fenced!==false;}catch{return true;}
+  }
   async execute(token:string,action:JournalAction,body:Buffer):Promise<unknown> {
     const verified=await this.verifier.verify(token,action,body);
     let input:ReturnType<typeof journalInput>;
@@ -19,6 +23,8 @@ export class InstanceJournal {
       if(!used.rowCount)throw new DelegationError('journal.replay');
       const result='limit' in input
         ?(await db.query('SELECT pactaris.revocation_journal_pending($1,$2) AS result',[this.config.instanceId,input.limit])).rows[0].result
+        :'entries' in input
+        ?(await db.query('SELECT pactaris.revocation_journal_replay($1,$2::jsonb,$3) AS result',[this.config.instanceId,JSON.stringify(input.entries),input.final])).rows[0].result
         :{operationId:input.operationId,acknowledged:(await db.query('SELECT pactaris.revocation_journal_ack($1,$2::uuid[]) AS marked',[this.config.instanceId,input.entryIds])).rows[0].marked};
       await db.query('COMMIT');
       return result;
