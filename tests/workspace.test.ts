@@ -21,3 +21,16 @@ test('the initial workspace opens on Today with bottom tabs, a safety shield and
  assert.match(html,/aria-label="Safety and my limits"/);assert.match(html,/<details open="" hidden="" class="safety-drawer"/);
  assert.doesNotMatch(html,/Create proposal|Create agreement proposal|Transfer ownership/);
 });
+test('quick add forms stay short, private by default and explicit about self-assignment and starting',async()=>{
+ const {QuickAdd}=await import('../apps/instance/web/quick-add.js');
+ const {TodayHabits}=await import('../apps/instance/web/today-habits.js');
+ const props={householdId:randomUUID(),csrfToken:'fixture',language:'en',timeZone:'UTC',safety:{epoch:'1',memberEpoch:'1'},onDone:()=>{},onMore:()=>{}};
+ const task=renderToStaticMarkup(React.createElement(QuickAdd,{...props,kind:'task'}));
+ assert.match(task,/I&#x27;ll do this myself/);assert.match(task,/More options/);assert.doesNotMatch(task,/assignee|relationship|partner/i);
+ const habit=renderToStaticMarkup(React.createElement(QuickAdd,{...props,kind:'habit'}));
+ assert.match(habit,/Times per day/);assert.match(habit,/Start tracking now/);
+ const note=renderToStaticMarkup(React.createElement(QuickAdd,{...props,kind:'note'}));
+ assert.match(note,/Save private note/);assert.doesNotMatch(note,/household|participants/i);
+ const habits=renderToStaticMarkup(React.createElement(TodayHabits,{householdId:randomUUID(),csrfToken:'fixture',language:'en',reload:0,onAdd:()=>{},onOpen:()=>{}}));
+ assert.match(habits,/Habits today/);assert.match(habits,/aria-busy="true"/);
+});

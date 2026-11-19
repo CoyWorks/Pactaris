@@ -13,6 +13,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import {InvitationJoin} from './invitations.js';
 import {Hint,Icon,Link,navigate,useLocation} from './navigation.js';
+import {Skeleton} from './today-habits.js';
 type Session={account:{id:string;displayName:string};csrfToken:string;presentation?:Presentation;preferredName?:string};
 type Summary={id:string;name:string};
 type Listing={households:Summary[];partial:boolean;nextCursor:string|null};
@@ -113,7 +114,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
     {loadError==='errors.unavailable'&&<button type="button" onClick={()=>{setLoading(true);setRefresh(value=>value+1);}}>{t('portal.retryLoad')}</button>}
     {loadError==='portal.notFound'&&<Link to="/?all">{t('portal.back')}</Link>}
   </section>;
-  if(loading||autoOpen)return <main className="page"><p role="status" className="loading">{t('portal.loading')}</p></main>;
+  if(loading||autoOpen)return <main className="page"><div className="app-bar"><span className="skeleton-title" aria-hidden="true"/></div><Skeleton count={4} label={t('portal.loading')}/></main>;
   if(!session)return <main className="page sign-in"><span className="eyebrow">{t('app.title')}</span>{problem}
     {!loadError&&<section><h1>{t('portal.signInTitle')}</h1><p>{t('portal.signInDescription')}</p><a className="button" href="/auth/login">{t('portal.signIn')}</a></section>}</main>;
   if(profile)return <main className="page profile">

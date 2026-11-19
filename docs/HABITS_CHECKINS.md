@@ -4,6 +4,8 @@ First owner-only slice of #63 and #19. It adds everyday content to the existing 
 
 ## Available behavior
 
+Today shows up to four active habits with a **+1** button, and the add sheet can create and start a daily habit in one step (two explicit commands: create, then activate). Both use the same commands, checks and privacy as the Routines section; see [MOBILE_LAYOUT.md](MOBILE_LAYOUT.md).
+
 - Habits: private draft definitions with title, description, category, IANA timezone, daily/weekly periods and a minimum/maximum target count. Explicitly activate a draft before recording personal progress. Multiple timestamped entries contribute to each period's total.
 - Rituals: private daily/weekly or single-date definitions with an explicit personal completion confirmation. Check-ins: the same calendar periods with text, 1–5 rating or yes/no response. A period accepts one unreversed ritual/check-in response; reverse it before replacing it.
 - Editing creates a saved configuration revision and returns to draft. Prior revisions retain their own progress/history; lifecycle pause/resume does not reset a revision's totals. Archive, restore to draft and manual pause are available. There is no automatic reactivation or missed-period backlog.
