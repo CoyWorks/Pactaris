@@ -21,15 +21,65 @@ export function HouseholdWorkspace({householdId,session,language,format,onLeave,
  const t=createTranslator(language),[view,setView]=useState<View>('home'),[data,setData]=useState<WorkspaceResult>(),[filter,setFilter]=useState('open'),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[draft,setDraft]=useState<Draft>(),[editor,setEditor]=useState<{fields:TaskFields;taskId?:string;version?:string}>(),[settings,setSettings]=useState<{name:string;timeZone:string;version:string}>();
  const activeWrite=useRef(false),base='/api/households/'+householdId+'/workspace';
  useEffect(()=>{
-  let gone=false,active:AbortController|undefined,timer:ReturnType<typeof setTimeout>|undefined;
-  async function load(){
-   if(gone||active||document.hidden||!navigator.onLine)return;active=new AbortController();const deadline=setTimeout(()=>active?.abort(),12000);
-   try{const r=await fetch(base+'?filter='+filter+(cursor?'&after='+cursor:''),{cache:'no-store',signal:active.signal}),result=await r.json();if(!r.ok)throw result;if(!gone){setData(result);setError(undefined);}}
-   catch(e){if(!gone){setData(undefined);setError(errorKey((e as {messageKey?:string})?.messageKey));}}
-   finally{clearTimeout(deadline);active=undefined;if(!gone){setLoading(false);timer=setTimeout(()=>{void load();},60000);}}
+  let stopped=false,active:AbortController|undefined,timer:ReturnType<typeof setTimeout>|undefined;
+
+  function suspend(){
+   clearTimeout(timer);
+   const controller=active;
+   active=undefined;
+   controller?.abort();
   }
-  const resume=()=>{if(timer)clearTimeout(timer);if(document.hidden)active?.abort();else void load();};void load();document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);
-  return()=>{gone=true;if(timer)clearTimeout(timer);active?.abort();document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);};
+
+  async function load(){
+   if(stopped||document.hidden||active)return;
+   if(!navigator.onLine){
+    setLoading(false);
+    setData(undefined);
+    setError('workspace.offline');
+    return;
+   }
+   const controller=new AbortController();
+   active=controller;
+   const deadline=setTimeout(()=>controller.abort(),12000);
+   try{
+    const response=await fetch(base+'?filter='+filter+(cursor?'&after='+cursor:''),{cache:'no-store',signal:controller.signal});
+    const result=await response.json();
+    if(!response.ok)throw result;
+    if(active===controller){
+     setData(result);
+     setError(undefined);
+    }
+   }catch(error){
+    if(active===controller){
+     setData(undefined);
+     setError(errorKey((error as {messageKey?:string})?.messageKey));
+    }
+   }finally{
+    clearTimeout(deadline);
+    if(active===controller){
+     active=undefined;
+     setLoading(false);
+     timer=setTimeout(()=>void load(),60000);
+    }
+   }
+  }
+  function connectionChanged(){
+   if(document.hidden||!navigator.onLine)suspend();
+   else clearTimeout(timer);
+   void load();
+  }
+
+  void load();
+  document.addEventListener('visibilitychange',connectionChanged);
+  window.addEventListener('online',connectionChanged);
+  window.addEventListener('offline',connectionChanged);
+  return()=>{
+   stopped=true;
+   suspend();
+   document.removeEventListener('visibilitychange',connectionChanged);
+   window.removeEventListener('online',connectionChanged);
+   window.removeEventListener('offline',connectionChanged);
+  };
  },[base,filter,cursor,refresh]);
  async function readTask(id:string){
   setBusy(true);const controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),12000);
