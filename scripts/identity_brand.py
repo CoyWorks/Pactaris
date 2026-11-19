@@ -2,14 +2,16 @@
 
 import argparse
 import getpass
+from hashlib import sha256
 import json
 import os
 import re
 from pathlib import Path
 import sys
 from urllib.error import HTTPError
+from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from deploy import MESSAGES, DeployError, emit, public_origin, read_json
 
@@ -34,6 +36,45 @@ def request(endpoint, token, patch=None):
     req = Request(endpoint, data=data, headers=headers, method='GET' if patch is None else 'PATCH')
     with build_opener(NoRedirect()).open(req, timeout=10) as response:
         return json.loads(response.read(1_048_577))
+
+
+def release_assets():
+    assets = {}
+    for field, name in MEDIA.items():
+        path = BRANDING / Path(name).name
+        content = path.read_bytes()
+        remote = f'pactaris/{path.stem}-{sha256(content).hexdigest()[:20]}{path.suffix}'
+        assets[field] = (remote, content)
+    return assets
+
+
+def asset_exists(origin, token, name):
+    query = urlencode({'usage': 'media', 'search': name})
+    files = request(f'{origin}/api/v3/admin/file/?{query}', token)
+    if not isinstance(files, list) or any(not isinstance(item, dict) for item in files):
+        raise ValueError('brand.invalid_file_response')
+    return any(item.get('name') == name for item in files)
+
+
+def upload_asset(origin, token, name, content):
+    boundary = uuid4().hex
+    filename = Path(name).name
+    mime = 'image/svg+xml' if filename.endswith('.svg') else 'image/jpeg'
+    form = (
+        f'--{boundary}\r\nContent-Disposition: form-data; name="usage"\r\n\r\nmedia\r\n'
+        f'--{boundary}\r\nContent-Disposition: form-data; name="name"\r\n\r\n{name}\r\n'
+        f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+        f'Content-Type: {mime}\r\n\r\n'
+    ).encode('ascii') + content + f'\r\n--{boundary}--\r\n'.encode('ascii')
+    req = Request(f'{origin}/api/v3/admin/file/', data=form, method='POST', headers={
+        'Authorization': f'Bearer {token}', 'Content-Type': f'multipart/form-data; boundary={boundary}',
+    })
+    try:
+        with build_opener(NoRedirect()).open(req, timeout=10):
+            pass
+    except HTTPError as error:
+        if error.code != 400 or not asset_exists(origin, token, name):
+            raise
 
 
 def messages(language):
@@ -62,7 +103,7 @@ def write_backup(backup, value):
         os.fsync(file.fileno())
 
 
-def change_brand(origin, brand_id, domain, language, token, apply, backup=None, restore=None):
+def change_brand(origin, brand_id, domain, language, token, apply, backup=None, restore=None, assets=False):
     endpoint = f'{origin}/api/v3/core/brands/{brand_id}/'
     current = request(endpoint, token)
     if current.get('brand_uuid') != brand_id or current.get('domain') != domain:
@@ -80,13 +121,24 @@ def change_brand(origin, brand_id, domain, language, token, apply, backup=None, 
         desired = brand_fields(previous['branding'])
         if len(desired) != len(FIELDS):
             raise ValueError('brand.invalid_backup')
+    missing = []
+    if assets:
+        for field, (name, content) in release_assets().items():
+            desired[field] = name
+            if not asset_exists(origin, token, name):
+                missing.append((name, content))
+        emit('cli.brandAssets', files=[name for name, _ in missing])
     changes = {key: value for key, value in desired.items() if old[key] != value}
-    if not changes or not apply:
+    if not apply or (not changes and not missing):
         emit('cli.brandPlan', origin=origin, domain=domain, fields=sorted(changes))
         return
 
     write_backup(backup, {'target': identity, 'branding': old})
-    updated = request(endpoint, token, changes)
+    for name, content in missing:
+        upload_asset(origin, token, name, content)
+        if not asset_exists(origin, token, name):
+            raise ValueError('brand.upload_missing')
+    updated = request(endpoint, token, changes) if changes else request(endpoint, token)
     preserved = {'web_certificate', 'default', 'client_certificates', 'attributes'}
     preserved.update(key for key in current if key.startswith('flow_'))
     if (updated.get('domain') != domain or updated.get('brand_uuid') != brand_id
@@ -136,6 +188,7 @@ def main(argv=None):
     target.add_argument('--flow', type=UUID)
     parser.add_argument('--domain')
     parser.add_argument('--flow-slug')
+    parser.add_argument('--upload-assets', action='store_true')
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--backup', type=Path)
     parser.add_argument('--restore', type=Path)
@@ -144,6 +197,8 @@ def main(argv=None):
         parser.error('--brand requires --domain')
     if args.flow is not None and (not args.flow_slug or args.domain is not None):
         parser.error('--flow requires --flow-slug')
+    if args.upload_assets and (args.brand is None or args.restore is not None):
+        parser.error('--upload-assets requires --brand and cannot be combined with --restore')
     try:
         if args.apply and args.backup is None:
             raise DeployError('cli.brandBackupRequired')
@@ -156,7 +211,7 @@ def main(argv=None):
             raise ValueError('brand.missing_token')
         shared = (config['locale']['language'], token, args.apply, args.backup, args.restore)
         if args.brand is not None:
-            change_brand(origin, str(args.brand), args.domain, *shared)
+            change_brand(origin, str(args.brand), args.domain, *shared, assets=args.upload_assets)
         else:
             change_flow(origin, args.flow_slug, str(args.flow), *shared)
         return 0

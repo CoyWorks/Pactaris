@@ -615,6 +615,7 @@
   "cli.brandFlowPlan": "Sign-in flow preview for {slug}. Fields to change: {fields}.",
   "cli.brandFlowApplied": "Updated sign-in flow {slug}. Fields changed: {fields}.",
   "cli.brandVerify": "Identity did not return the expected Brand settings. Review the protected backup.",
+  "cli.brandAssets": "Versioned Authentik media files to upload: {files}.",
   "cli.brandPlan": "Brand preview for {domain}. Fields to change: {fields}.",
   "cli.brandApplied": "Cosmetic Brand changes applied to {domain}.",
   "cli.brandFailed": "The Identity Brand request could not be completed.",
