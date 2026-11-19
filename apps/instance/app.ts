@@ -1,6 +1,7 @@
 import { readDeploymentInfo } from '../../packages/http/deployment-info.js';
 import {isPartnerAction,PartnerError} from '../../packages/auth/partner.js';
 import {JournalError} from '../../packages/auth/journal.js';
+import {AccountDeletionError} from '../../packages/auth/account-deletion.js';
 import {isCatalogAction,CatalogError} from '../../packages/auth/catalog.js';
 import {isRoutineAction,RoutineError} from '../../packages/auth/routines.js';
 import {isLibraryAction,LibraryError} from '../../packages/auth/library.js';
@@ -11,14 +12,14 @@ import express from 'express';
 import { join } from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 import type { InstanceConfig } from '../../packages/config/index.js';
-import { uuid, DelegationError,commandPath,isHouseholdAction,type InvitationAction,isMembershipAction,isJournalAction,journalPath,journalBodyLimit } from '../../packages/auth/delegation.js';
+import { uuid, DelegationError,commandPath,isHouseholdAction,type InvitationAction,isMembershipAction,isJournalAction,journalPath,journalBodyLimit,isAccountAction,accountPath } from '../../packages/auth/delegation.js';
 import type { InstanceHouseholds } from './households.js';
 import {MemberError} from './members.js';
 import { InvitationError } from './invitations.js';
 import { CommandError } from './commands.js';
 import manifest from '../../package.json' with { type: 'json' };
 
-export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web'), households?: Pick<InstanceHouseholds,'summary'> & Partial<Pick<InstanceHouseholds,'command'|'invitation'|'membership'|'relationship'|'consent'|'workspace'|'library'|'routine'|'catalog'|'partner'|'personalExport'|'journal'|'fenced'>>) {
+export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web'), households?: Pick<InstanceHouseholds,'summary'> & Partial<Pick<InstanceHouseholds,'command'|'invitation'|'membership'|'relationship'|'consent'|'workspace'|'library'|'routine'|'catalog'|'partner'|'personalExport'|'journal'|'fenced'|'account'>>) {
   const app = express();
   app.disable('x-powered-by');
   // Identity always comes from the future verified OIDC session, never proxy identity headers.
@@ -36,6 +37,19 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
   app.get('/api/status', async (_req, res) => {
     let ready = false; try { await probe(); ready = true; } catch { /* no driver details in response */ }
     res.json({ component: 'instance', version: manifest.version, readiness: ready ? 'ready' : 'unavailable', authentication: 'not_enabled', locale: config.locale, deployment: await readDeploymentInfo() });
+  });
+  // Account-wide erasure check and execution for the gateway deletion worker.
+  app.post('/internal/account/:action',express.raw({type:'application/json',limit:4096,inflate:false}),async(req,res)=>{
+    const action=req.params.action,authorization=req.get('authorization');
+    if(!config.delegation||!households?.account||!isAccountAction(action)||req.originalUrl!==accountPath(action)||!authorization?.startsWith('Bearer ')||!Buffer.isBuffer(req.body)){
+      res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;
+    }
+    try{res.json(await households.account(authorization.slice(7),action,req.body));}
+    catch(error){
+      if(error instanceof AccountDeletionError&&error.kind==='invalid'){res.status(400).json({code:'account_invalid',messageKey:'errors.request'});return;}
+      if(error instanceof DelegationError){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+      res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});
+    }
   });
   // A restored database serves no household data until the gateway has replayed revocations.
   app.use('/internal/households',async(_req,res,next)=>{

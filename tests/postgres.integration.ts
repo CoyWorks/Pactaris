@@ -29,6 +29,7 @@ import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,Pri
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import { RevocationJournalSync } from '../apps/gateway/revocation-journal.js';
+import { AccountDeletion } from '../apps/gateway/account-deletion.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
 import {InvitationMail} from '../apps/gateway/invitation-mail.js';
 import { GatewayInvitations } from '../apps/gateway/invitations.js';
@@ -510,6 +511,37 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await a.owner.query('SELECT fenced FROM pactaris.restore_fence')).rows[0].fenced,false);
   await assert.rejects(a.pool.query('UPDATE pactaris.restore_fence SET fenced=false'));
   await assert.rejects(a.pool.query("SELECT pactaris.journal_apply($1,'member.paused','{}'::jsonb)",[restoredHousehold]));
+  // Account deletion: blocked while sole owner with other members, then erased on every
+  // Instance and reduced to an unlinkable gateway marker.
+  const deletions=new AccountDeletion(gatewayDb.pool,signer);
+  const doomed=await store.account('https://idp.fixture.invalid/','doomed-subject','Doomed fixture');
+  const doomedHousehold=randomUUID(),doomedDestination={...destination,householdId:doomedHousehold},partnerMembership=randomUUID();
+  assert.equal((await commands.execute(doomed.id,doomedDestination,'create',randomUUID(),'Deletion fixture')).status,'created');
+  await a.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[doomedHousehold,partnerMembership,randomUUID()]);
+  const doomedMembership=(await a.owner.query('SELECT id FROM pactaris.memberships WHERE household_id=$1 AND account_id=$2',[doomedHousehold,doomed.id])).rows[0].id;
+  await a.owner.query("INSERT INTO pactaris.tasks(household_id,id,creator_membership_id,title,priority) VALUES($1,$2,$3,'Private deletion fixture','normal')",[doomedHousehold,randomUUID(),doomedMembership]);
+  assert.deepEqual(await deletions.request(doomed.id,randomUUID()),{status:'blocked',blockedHouseholds:[doomedHousehold]});
+  assert.equal((await gatewayDb.pool.query('SELECT status FROM pactaris.accounts WHERE id=$1',[doomed.id])).rows[0].status,'active');
+  await a.owner.query("UPDATE pactaris.memberships SET technical_role='owner' WHERE household_id=$1 AND id=$2",[doomedHousehold,partnerMembership]);
+  await store.createSession('doomed-session',doomed,'csrf',60,120);
+  const deletionOperation=randomUUID();
+  assert.deepEqual(await deletions.request(doomed.id,deletionOperation),{status:'pending'});
+  assert.deepEqual(await deletions.request(doomed.id,randomUUID()),{status:'pending'});
+  assert.equal(await store.session('doomed-session',60),undefined);
+  await assert.rejects(store.account('https://idp.fixture.invalid/','doomed-subject','Doomed fixture'));
+  assert.deepEqual(await deletions.work(),{completed:1,pending:0});
+  const deleted=(await gatewayDb.owner.query('SELECT status,subject,display_name FROM pactaris.accounts WHERE id=$1',[doomed.id])).rows[0];
+  assert.deepEqual(deleted,{status:'deleted',subject:'deleted:'+doomed.id,display_name:''});
+  assert.equal((await gatewayDb.owner.query('SELECT count(*)::int n FROM pactaris.account_deletion_instances WHERE account_id=$1',[doomed.id])).rows[0].n,2);
+  const erasedMember=(await a.owner.query('SELECT status,account_erased_at IS NOT NULL AS erased FROM pactaris.memberships WHERE id=$1',[doomedMembership])).rows[0];
+  assert.deepEqual(erasedMember,{status:'left',erased:true});
+  assert.equal((await a.owner.query("SELECT count(*)::int n FROM pactaris.tasks WHERE title='Private deletion fixture'")).rows[0].n,0);
+  assert.equal((await a.owner.query('SELECT status FROM pactaris.households WHERE id=$1',[doomedHousehold])).rows[0].status,'active');
+  assert.equal((await a.owner.query("SELECT count(*)::int n FROM pactaris.revocation_journal WHERE household_id=$1 AND kind='account.erased'",[doomedHousehold])).rows[0].n,1);
+  assert.deepEqual(await deletions.work(),{completed:0,pending:0});
+  // The same provider identity can register again, as a new account without old access.
+  assert.notEqual((await store.account('https://idp.fixture.invalid/','doomed-subject','Doomed fixture')).id,doomed.id);
+  await assert.rejects(services[0]!.account(await signer.signJournal(ids[0]!,'journalPending',deletionOperation,JSON.stringify({operationId:deletionOperation})),'accountErase',Buffer.from(JSON.stringify({operationId:deletionOperation}))));
   for(const table of ['audit_events','household_outbox','household_command_receipts'])assert.equal((await a.owner.query(`SELECT count(*)::int AS count FROM pactaris.${table} WHERE household_id=$1`,[created])).rows[0].count,5);
   const audit=(await a.owner.query('SELECT parameters FROM pactaris.audit_events WHERE household_id=$1',[created])).rows;
   assert.ok(audit.every(row=>Object.keys(row.parameters).join(',')==='operationId'));

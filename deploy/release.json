@@ -358,6 +358,20 @@
       "path": "migrations/instance/0033_restore_fence.sql",
       "sha256": "ba8edcbbe547495698bcce2b86cf177eca084a41a5bcffe82cf5239f91bef2d2",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0034_account_erasure",
+      "path": "migrations/instance/0034_account_erasure.sql",
+      "sha256": "f166d120053441a264c59d255d081e1d834cdd7450ed815f05df7b7661fea188",
+      "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0019_account_deletion",
+      "path": "migrations/gateway/0019_account_deletion.sql",
+      "sha256": "a6743d2ce4d20ebf3b67bf579617571c1ada718192b2106e880741f1258e578d",
+      "backwardCompatible": true
     }
   ]
 }
