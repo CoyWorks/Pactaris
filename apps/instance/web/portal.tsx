@@ -14,6 +14,7 @@ import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js'
 import {InvitationJoin} from './invitations.js';
 import {Hint,Icon,Link,navigate,useLocation} from './navigation.js';
 import {Skeleton} from './today-habits.js';
+import {AppearancePanel} from './appearance.js';
 type Session={account:{id:string;displayName:string};csrfToken:string;presentation?:Presentation;preferredName?:string};
 type Summary={id:string;name:string};
 // Per-browser convenience only: which dynamic this account opened last. Cleared on sign-out.
@@ -136,6 +137,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
       saved={session.presentation} defaults={{format,timeZone}} onSave={value=>setSession(current=>
         current?.account.id===session.account.id?{...current,presentation:value??undefined}:current)}/>
     <PushDevices key={'push:'+session.account.id} csrfToken={session.csrfToken} language={language}/>
+    <AppearancePanel language={language}/>
     <h2 className="group-title">{t('profile.privacy')}</h2>
     <AccountSessions key={'sessions:'+session.account.id} csrfToken={session.csrfToken} language={language} format={displayFormat} timeZone={displayZone}/>
     <ExportPanel csrfToken={session.csrfToken} language={language}/>

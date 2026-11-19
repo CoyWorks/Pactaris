@@ -4,9 +4,11 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createTranslator, formatTime } from '../../../packages/i18n/index.js';
 import './style.css';
+import {applyTheme,readTheme} from './appearance.js';
 import {Portal} from './portal.js';
 import type { DeploymentInfo } from '../../../packages/http/deployment-info.js';
 type Status = { component: 'instance' | 'gateway'; version: string; deployment?: DeploymentInfo | null; readiness: 'ready' | 'unavailable'; locale: { language: string; format: string; timeZone: string } };
+applyTheme(readTheme());
 function App() {
   const [status, setStatus] = useState<Status>(), [failed, setFailed] = useState(false), [checked, setChecked] = useState<Date>();
   useEffect(() => {

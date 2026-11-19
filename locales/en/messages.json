@@ -854,5 +854,9 @@
   "tasks.completed": "Task completed",
   "tasks.archived": "Task archived",
   "tasks.undo": "Undo",
-  "tasks.completeNamed": "Complete {title}"
+  "tasks.completeNamed": "Complete {title}",
+  "theme.title": "Appearance",
+  "theme.system": "System",
+  "theme.light": "Light",
+  "theme.dark": "Dark"
 }
