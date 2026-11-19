@@ -228,19 +228,20 @@ export class PrivateWorkspaceClient{
 export class PrivateLibraryClient{
  constructor(private signer:DelegationSigner){}
  async execute(accountId:string,placement:Placement,action:import('../auth/library.js').LibraryAction,input:Record<string,unknown>):Promise<import('../auth/library.js').LibraryResult>{
-  const {LibraryError,documentText,documentVersion}=await import('../auth/library.js');
+  const {LibraryError,documentText,documentVersion,validDraftAttachment}=await import('../auth/library.js');
   try{
    if(!uuid(input.operationId))throw new LibraryError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new LibraryError('invalid');
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body);
    if(response.status===403||response.status===404)throw new LibraryError('denied');if(response.status===400)throw new LibraryError('invalid');if(response.status===409)throw new LibraryError('conflict');
    const r=response.data as import('../auth/library.js').LibraryResult;
-   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['documentRead','documentList'].includes(action)?'listed':'applied'))throw Error('routing.response');
+   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['documentRead','documentList','documentAttachmentGet'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/library.js').LibraryResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
    const summary=(v:import('../auth/library.js').DocumentSummary)=>{
     if(!v||!uuid(v.documentId)||!uuid(v.creatorMembershipId)||!documentVersion(v.version)||!documentText(v.title,120)||!documentText(v.category,60,true)||!Number.isInteger(v.position)||v.position<0||v.position>999999||!['rule','protocol','note'].includes(v.kind)||!['draft','published','archived'].includes(v.state)||!['private','participants','household'].includes(v.visibility)||typeof v.canEdit!=='boolean'||typeof v.acknowledged!=='boolean'||v.canEdit!==(v.creatorMembershipId===input.membershipId))throw Error('routing.response');
     return {documentId:v.documentId,creatorMembershipId:v.creatorMembershipId,version:v.version,title:v.title,category:v.category,position:v.position,kind:v.kind,state:v.state,visibility:v.visibility,canEdit:v.canEdit,acknowledged:v.acknowledged};
    };
    if(r.documentId!==undefined){if(!uuid(r.documentId))throw Error('routing.response');out.documentId=r.documentId;}
+   if(action==='documentAttachmentGet'){if(!validDraftAttachment(r.attachment))throw Error('routing.response');out.attachment=r.attachment;}
    if(action==='documentList'){
     if(!Array.isArray(r.documents)||r.documents.length>10||(r.nextCursor!==null&&(typeof r.nextCursor!=='string'||!/^\d{1,6}:[a-f0-9-]{36}$/.test(r.nextCursor))))throw Error('routing.response');
     out.documents=r.documents.map(summary);out.nextCursor=r.nextCursor;

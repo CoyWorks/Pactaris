@@ -5,17 +5,25 @@ export type DocumentKind='rule'|'protocol'|'note';
 export type DocumentFields={title:string;body:string;category:string;position:number;visibility:'private'|'participants'|'household';recipients:string[]};
 export type DocumentSummary={documentId:string;kind:DocumentKind;title:string;category:string;position:number;version:string;state:'draft'|'published'|'archived';visibility:DocumentFields['visibility'];canEdit:boolean;creatorMembershipId:string;acknowledged:boolean};
 export type DocumentDetail=DocumentSummary&{body:string;recipients:string[];assignedRecipients?:string[];historical:boolean;acknowledgements:{membershipId:string;acknowledgedAt:string}[];moreAcknowledgements:boolean};
-export type LibraryResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';documentId?:string;documents?:DocumentSummary[];document?:DocumentDetail;nextCursor?:string|null};
+export type LibraryResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';documentId?:string;attachment?:string;documents?:DocumentSummary[];document?:DocumentDetail;nextCursor?:string|null};
 export class LibraryError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'unavailable'){super('library.'+kind);}}
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 export const documentText=(v:unknown,max:number,empty=false,multiline=false):v is string=>typeof v==='string'&&(empty||v.length>0)&&[...v].length<=max&&v===v.trim()&&!(multiline?/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u:/[\u0000-\u001f\u007f\uD800-\uDFFF]/u).test(v);
 export const documentVersion=(v:unknown):v is string=>typeof v==='string'&&/^[1-9][0-9]{0,14}$/.test(v);
+export function validDraftAttachment(value:unknown):value is string{
+ if(typeof value!=='string'||value.length>2048||!/^[A-Za-z0-9+/]+={0,2}$/.test(value))return false;
+ const bytes=Buffer.from(value,'base64');
+ if(!bytes.length||bytes.toString('base64')!==value)return false;
+ try{return !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}
+ catch{return false;}
+}
 export function libraryInput(action:LibraryAction,value:unknown):Record<string,unknown>&{operationId:string}{
  if(!record(value)||!uuid(value.operationId))throw new LibraryError('invalid');const names=['operationId'];
  if(action==='documentList')names.push('kind','filter','query',...('after'in value?['after']:[]));
  else if(action==='documentCreate')names.push('kind','fields');
- else {names.push('documentId');if(action!=='documentRead'||'version'in value)names.push('version');if(action==='documentUpdate')names.push('fields');if(action==='documentAssign'||action==='documentUnassign')names.push('recipientId');}
+ else {names.push('documentId');if(action!=='documentRead'||'version'in value)names.push('version');if(action==='documentUpdate')names.push('fields');if(action==='documentAttachmentPut')names.push('attachment');if(action==='documentAssign'||action==='documentUnassign')names.push('recipientId');}
  if(Object.keys(value).sort().join(',')!==names.sort().join(',')||('documentId'in value&&!uuid(value.documentId))||('version'in value&&!documentVersion(value.version))||('recipientId'in value&&!uuid(value.recipientId)))throw new LibraryError('invalid');
+ if('attachment'in value&&!validDraftAttachment(value.attachment))throw new LibraryError('invalid');
  if('kind'in value&&!(typeof value.kind==='string'&&['rule','protocol','note'].includes(value.kind)))throw new LibraryError('invalid');
  if(action==='documentList'&&(!(typeof value.filter==='string'&&['active','archived'].includes(value.filter))||!documentText(value.query,80,true)||('after'in value&&(typeof value.after!=='string'||!/^\d{1,6}:[a-f0-9-]{36}$/i.test(value.after)||!uuid(value.after.split(':')[1])))))throw new LibraryError('invalid');
  if('fields'in value){const f=value.fields;

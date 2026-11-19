@@ -274,6 +274,13 @@
       "path": "migrations/instance/0023_document_assignments.sql",
       "sha256": "7ec54b4df56de050106b25fc069d1db6f34d33570552a9c86adb2ef036ce3e6a",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0024_draft_attachments",
+      "path": "migrations/instance/0024_draft_attachments.sql",
+      "sha256": "56be6aec287461e8e952c1c39c54b6586a02db1871afafd8d0600bcb87990bb5",
+      "backwardCompatible": true
     }
   ]
 }

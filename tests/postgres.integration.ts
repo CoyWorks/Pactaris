@@ -442,11 +442,11 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await backupPool.query('SELECT count(*)::int AS count FROM pactaris.household_outbox WHERE household_id=$1',[created])).rows[0].count,5);
   // Full public gateway -> private Instance -> central placement flow. No
   // browser sees routing destinations or supplies account/Instance authority.
-  const api=async(path:string,method='GET',body?:unknown,session='r'.repeat(43),extra:Record<string,string>={})=>new Promise<{status:number;data:any;body:string}>((resolve,reject)=>{
+  const api=async(path:string,method='GET',body?:unknown,session='r'.repeat(43),extra:Record<string,string>={})=>new Promise<{status:number;data:any;body:string;headers:Record<string,string|string[]|undefined>}>((resolve,reject)=>{
     const encoded=body===undefined?undefined:JSON.stringify(body);
     const request=https.request({hostname:'127.0.0.1',port:gatewayAddress.port,path,method,servername:'backend.fixture.invalid',ca:readFileSyncFixture,
       headers:{host:'pactaris.app',cookie:'__Host-pactaris-session='+session,origin:'https://pactaris.app','x-csrf-token':'registration-csrf',...(encoded?{'Content-Type':'application/json','Content-Length':Buffer.byteLength(encoded)}:{}),...extra}},r=>{
-      let text='';r.setEncoding('utf8');r.on('data',chunk=>{text+=chunk;});r.on('error',reject);r.on('end',()=>{try{resolve({status:r.statusCode!,data:JSON.parse(text),body:text});}catch(error){reject(error);}});
+      let text='';r.setEncoding('utf8');r.on('data',chunk=>{text+=chunk;});r.on('error',reject);r.on('end',()=>{try{resolve({status:r.statusCode!,data:r.headers['content-type']?.startsWith('application/json')?JSON.parse(text):undefined,body:text,headers:r.headers});}catch(error){reject(error);}});
     });request.on('error',reject);request.end(encoded);
   });
   const registrant=await store.account('https://idp.fixture.invalid/','registration-account','Registration fixture');
@@ -1239,6 +1239,22 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    assert.deepEqual((await libList('rule',session,{query:'Private original'})).data.documents,[]);
   }
   assert.equal((await libPost('documentUpdate',{documentId:noteId,version:'1',fields:libFields},libAdmin.session)).status,404);
+  const attachmentDoc=randomUUID();
+  assert.equal((await libPost('documentCreate',{operationId:attachmentDoc,kind:'note',fields:libFields})).status,200);
+  const attachmentInput={documentId:attachmentDoc,version:'1'},fileText='Private fixture attachment';
+  assert.equal((await libPost('documentAttachmentPut',{...attachmentInput,attachment:'////'})).status,400);
+  assert.equal((await libPost('documentAttachmentPut',{...attachmentInput,attachment:Buffer.from(fileText).toString('base64')})).status,200);
+  assert.equal((await libPost('documentAttachmentGet',attachmentInput,libAdmin.session)).status,404);
+  const fileReply=await libPost('documentAttachmentGet',attachmentInput);
+  assert.equal(fileReply.body,fileText);
+  assert.match(String(fileReply.headers['content-disposition']),/^attachment;/);
+  assert.equal(fileReply.headers['x-content-type-options'],'nosniff');
+  assert.equal(fileReply.headers['cache-control'],'no-store');
+  assert.equal((await libPost('documentUpdate',{...attachmentInput,fields:libFields})).status,200);
+  assert.equal((await libPost('documentAttachmentGet',attachmentInput)).status,409);
+  assert.equal((await libPost('documentAttachmentGet',{...attachmentInput,version:'2'})).status,404);
+  assert.equal((await libDb.owner.query('SELECT count(*)::int n FROM pactaris.draft_attachments WHERE document_id=$1',[attachmentDoc])).rows[0].n,0);
+  assert.equal((await libPost('documentDelete',{...attachmentInput,version:'2'})).status,200);
   // A selected-member publication never exposes older author-only snapshots.
   const selected={...libFields,title:'Selected guidance',body:'Selected published text',visibility:'participants',recipients:[libAdmin.member.toUpperCase()]};
   assert.equal((await libPost('documentUpdate',{documentId:ruleId,version:'2',fields:selected})).status,200);

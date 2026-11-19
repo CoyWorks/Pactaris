@@ -1,3 +1,4 @@
+import {DraftAttachment} from './draft-attachment.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {DocumentFields,DocumentKind,DocumentSummary,DocumentDetail,LibraryResult} from '../../../packages/auth/library.js';
@@ -97,6 +98,8 @@ export function LibraryPanel({householdId,session,language,format,timeZone,secti
     </fieldset>:!!detail.assignedRecipients?.length&&<p>{t('library.assignedToYou')}</p>
    )}
    {!!detail.acknowledgements.length&&<><h4>{t('library.acknowledgements')}</h4><ul>{detail.acknowledgements.map(a=><li key={a.membershipId}>{alias(a.membershipId)} <time dateTime={a.acknowledgedAt}>{formatTime(new Date(a.acknowledgedAt),format,timeZone)}</time></li>)}</ul>{detail.moreAcknowledgements&&<p>{t('library.moreAcknowledgements')}</p>}</>}
+   {detail.canEdit&&!detail.historical&&detail.state==='draft'&&<DraftAttachment key={detail.documentId+':'+detail.version}
+    base={base} documentId={detail.documentId} version={detail.version} csrfToken={session.csrfToken} language={language} disabled={blocked}/>}
    <button type="button" onClick={()=>setDetail(undefined)}>{t('library.close')}</button>
   </article>}
   {confirmation&&<div className="notice" role="group"><h3>{t(confirmation.action==='documentPublish'?'library.confirmPublish':confirmation.action==='documentDelete'?'library.confirmDelete':'library.confirmArchive')}</h3><p>{confirmation.document.title}</p><p>{t(visibilities[confirmation.document.visibility])}</p>

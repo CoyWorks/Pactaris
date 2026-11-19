@@ -54,3 +54,7 @@ Next everyday work is habits (#63) and ritual/check-in definitions (#19), follow
 ## Reading assignments
 
 Authors can assign the currently published rule or protocol to up to eight current members who can already read it. Members see only their own assignment. The author can remove an assignment, and publishing a new version requires a fresh assignment. Archival and membership changes end active visibility. Reading assignments do not grant access or record acknowledgement, and no external notification or task is created.
+
+## Private draft attachments
+
+An author can upload, download or remove one UTF-8 text file of up to 1,536 bytes on the current private draft version. The file lives in the Instance database outside the web root. Its authenticated download is a text attachment with a fixed filename. The Gateway rechecks the exact membership and draft version for every request. Another member, including an administrator, cannot download it. Editing, publishing, archiving, departing or deleting removes the live bytes in the same transaction. There is no public link or file content in the audit. Backups can retain older copies. Export of file bytes and larger or shared media are still open.

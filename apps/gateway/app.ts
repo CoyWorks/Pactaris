@@ -479,7 +479,12 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       const action=req.params.action;if(!uuid(req.params.householdId)||!isLibraryAction(action))throw new LibraryError('invalid');
       const input=libraryInput(action,req.body);if(!library)throw new LibraryError('unavailable');
       if(!['documentRead','documentList'].includes(action)&&!await store.throttle('library:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
-      res.json(await library.execute(session.account.id,req.params.householdId,action,input));
+      const result=await library.execute(session.account.id,req.params.householdId,action,input);
+      if(action==='documentAttachmentGet'){
+        if(result.attachment===undefined)throw new LibraryError('unavailable');
+        res.attachment('attachment.txt').type('text/plain').send(Buffer.from(result.attachment,'base64'));return;
+      }
+      res.json(result);
     }catch(error){libraryFailure(res,error);}
   });
   function routineFailure(res:express.Response,error:unknown){

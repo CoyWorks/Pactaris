@@ -21,7 +21,8 @@ export class InstanceLibrary{
    await db.query('BEGIN');
    const used=await db.query('INSERT INTO pactaris.delegation_uses(jti,expires_at) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING jti',[verified.jti,verified.expiresAt]);
    if(!used.rowCount)throw new DelegationError('library.replay');
-   const query=action==='documentRead'||action==='documentAssign'||action==='documentUnassign'
+   const query=action.startsWith('documentAttachment')?'SELECT pactaris.draft_attachment_command($1,$2,$3,$4,$5,$6,$7) AS result'
+    :action==='documentRead'||action==='documentAssign'||action==='documentUnassign'
     ?'SELECT pactaris.document_assignment_command($1,$2,$3,$4,$5,$6,$7) AS result'
     :'SELECT pactaris.document_command($1,$2,$3,$4,$5,$6,$7) AS result';
    const result=await db.query(query,[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint]);

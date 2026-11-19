@@ -1,3 +1,3 @@
-export const libraryActions=['documentList','documentRead','documentCreate','documentUpdate','documentPublish','documentArchive','documentRestore','documentDelete','documentAcknowledge','documentAssign','documentUnassign'] as const;
+export const libraryActions=['documentList','documentRead','documentCreate','documentUpdate','documentPublish','documentArchive','documentRestore','documentDelete','documentAcknowledge','documentAssign','documentUnassign','documentAttachmentGet','documentAttachmentPut','documentAttachmentDelete'] as const;
 export type LibraryAction=typeof libraryActions[number];
 export const isLibraryAction=(v:unknown):v is LibraryAction=>typeof v==='string'&&(libraryActions as readonly string[]).includes(v);

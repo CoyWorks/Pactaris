@@ -697,5 +697,15 @@
   "library.assignmentDescription": "Assign this published version to members who can view it. Each member decides whether to acknowledge it.",
   "library.assign": "Assign reading",
   "library.unassign": "Remove assignment",
-  "library.assignedToYou": "This version is assigned to you for reading."
+  "library.assignedToYou": "This version is assigned to you for reading.",
+  "library.attachmentTitle": "Private draft attachment",
+  "library.attachmentDescription": "Add one plain-text file up to 1,536 bytes. Saving a new version, publishing or archiving this draft removes its attachment.",
+  "library.attachmentFile": "Text file",
+  "library.attachmentUpload": "Save attachment",
+  "library.attachmentDownload": "Download attachment",
+  "library.attachmentDelete": "Remove attachment",
+  "library.attachmentInvalid": "Choose a valid UTF-8 text file up to 1,536 bytes.",
+  "library.attachmentMissing": "This attachment is unavailable.",
+  "library.attachmentSaved": "Attachment saved.",
+  "library.attachmentRemoved": "Attachment removed."
 }
