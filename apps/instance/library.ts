@@ -21,7 +21,10 @@ export class InstanceLibrary{
    await db.query('BEGIN');
    const used=await db.query('INSERT INTO pactaris.delegation_uses(jti,expires_at) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING jti',[verified.jti,verified.expiresAt]);
    if(!used.rowCount)throw new DelegationError('library.replay');
-   const result=await db.query('SELECT pactaris.document_command($1,$2,$3,$4,$5,$6,$7) AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint]);
+   const query=action==='documentRead'||action==='documentAssign'||action==='documentUnassign'
+    ?'SELECT pactaris.document_assignment_command($1,$2,$3,$4,$5,$6,$7) AS result'
+    :'SELECT pactaris.document_command($1,$2,$3,$4,$5,$6,$7) AS result';
+   const result=await db.query(query,[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint]);
    await db.query('COMMIT');return result.rows[0].result as LibraryResult;
   }catch(error){
    await db.query('ROLLBACK');

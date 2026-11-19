@@ -692,5 +692,10 @@
   "account.displayNameLabel": "Preferred display name",
   "account.displayNameInvalid": "Enter a display name of up to 80 characters.",
   "account.displayNameReset": "Use sign-in name",
-  "account.displayNameSaved": "Display name saved."
+  "account.displayNameSaved": "Display name saved.",
+  "library.assignmentTitle": "Reading assignments",
+  "library.assignmentDescription": "Assign this published version to members who can view it. Each member decides whether to acknowledge it.",
+  "library.assign": "Assign reading",
+  "library.unassign": "Remove assignment",
+  "library.assignedToYou": "This version is assigned to you for reading."
 }

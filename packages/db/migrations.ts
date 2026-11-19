@@ -74,6 +74,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0013_participant_tasks'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.partner_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0012_reward_catalog'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.catalog_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0011_routines'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.routine_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
+      if(entries.some(m=>m.id==='0023_document_assignments'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.document_assignment_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0010_library_notes'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.document_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0009_workspace_tasks'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.workspace_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0008_consent_safety'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.consent_command(uuid,uuid,uuid,uuid,text,jsonb,text),pactaris.activity_guard(uuid,uuid,uuid,uuid,uuid,bigint,text,bigint) TO ${role}`);

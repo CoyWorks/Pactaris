@@ -82,6 +82,20 @@ export function LibraryPanel({householdId,session,language,format,timeZone,secti
   {detail&&<article className="document-detail"><h3>{detail.title}</h3><p>{t('relationships.version')} <span>{detail.version}</span></p>{detail.historical&&<p>{t('library.historical')}</p>}<div className="document-body">{detail.body}</div>
    {detail.canEdit&&<div className="workspace-actions">{BigInt(detail.version)>1n&&<button type="button" disabled={busy} onClick={()=>{void read(detail.documentId,(BigInt(detail.version)-1n).toString()).then(d=>{if(d)setDetail(d);});}}>{t('library.previousVersion')}</button>}<button type="button" disabled={busy} onClick={()=>{void read(detail.documentId).then(d=>{if(d)setDetail(d);});}}>{t('library.currentVersion')}</button></div>}
    {detail.kind!=='note'&&!detail.historical&&detail.state==='published'&&<><p>{t('library.ackNotice')}</p>{detail.acknowledged?<p>{t('library.acknowledged')}</p>:<button type="button" disabled={blocked} onClick={()=>{void change('documentAcknowledge',{documentId:detail.documentId,version:detail.version});}}>{t('library.acknowledge')}</button>}</>}
+   {detail.kind!=='note'&&!detail.historical&&detail.state==='published'&&(
+    detail.canEdit&&detail.visibility!=='private'?<fieldset disabled={blocked}>
+     <legend>{t('library.assignmentTitle')}</legend><p>{t('library.assignmentDescription')}</p>
+     {members.filter(member=>!member.isSelf&&(detail.visibility==='household'||detail.recipients.includes(member.membershipId))).map(member=>{
+      const assigned=detail.assignedRecipients?.includes(member.membershipId);
+      return <div key={member.membershipId}><span>{member.displayName}</span>{' '}
+       <button type="button" aria-pressed={!!assigned} onClick={()=>void change(assigned?'documentUnassign':'documentAssign',{
+        documentId:detail.documentId,version:detail.version,recipientId:member.membershipId
+       })}>{t(assigned?'library.unassign':'library.assign')}</button>
+      </div>;
+     })}
+     {memberCursor&&<button type="button" onClick={()=>void moreMembers()}>{t('portal.more')}</button>}
+    </fieldset>:!!detail.assignedRecipients?.length&&<p>{t('library.assignedToYou')}</p>
+   )}
    {!!detail.acknowledgements.length&&<><h4>{t('library.acknowledgements')}</h4><ul>{detail.acknowledgements.map(a=><li key={a.membershipId}>{alias(a.membershipId)} <time dateTime={a.acknowledgedAt}>{formatTime(new Date(a.acknowledgedAt),format,timeZone)}</time></li>)}</ul>{detail.moreAcknowledgements&&<p>{t('library.moreAcknowledgements')}</p>}</>}
    <button type="button" onClick={()=>setDetail(undefined)}>{t('library.close')}</button>
   </article>}

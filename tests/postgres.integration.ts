@@ -1246,6 +1246,16 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await libRead(ruleId,libAdmin.session)).data.document.body,selected.body);assert.equal((await libRead(ruleId,libPeer.session)).status,404);
   assert.equal((await libRead(ruleId,libAdmin.session,'1')).status,404);assert.equal((await libRead(ruleId,libSession,'1')).data.document.body,libFields.body);
   assert.deepEqual((await libRead(ruleId,libAdmin.session)).data.document.recipients,[]);
+  const assignment={documentId:ruleId,version:'4',recipientId:libAdmin.member,operationId:randomUUID()};
+  assert.equal((await libPost('documentAssign',assignment,libAdmin.session)).status,404);
+  assert.equal((await libPost('documentAssign',{...assignment,recipientId:libPeer.member})).status,404);
+  assert.equal((await libPost('documentAssign',assignment)).status,200);
+  assert.equal((await libPost('documentAssign',assignment)).status,200);
+  assert.deepEqual((await libRead(ruleId,libAdmin.session)).data.document.assignedRecipients,[libAdmin.member]);
+  assert.equal((await libRead(ruleId,libAdmin.session)).data.document.acknowledged,false);
+  assert.equal((await libPost('documentUnassign',{...assignment,operationId:randomUUID()})).status,200);
+  assert.equal((await libPost('documentAssign',assignment)).status,200);
+  assert.deepEqual((await libRead(ruleId,libAdmin.session)).data.document.assignedRecipients,[]);
   const ackId=randomUUID();assert.equal((await libPost('documentAcknowledge',{operationId:ackId,documentId:ruleId,version:'4'},libAdmin.session)).status,200);
   assert.equal((await libPost('documentAcknowledge',{operationId:ackId,documentId:ruleId,version:'4'},libAdmin.session)).status,200);
   assert.equal((await libRead(ruleId)).data.document.acknowledgements.length,1);assert.equal((await libRead(ruleId,libAdmin.session)).data.document.acknowledged,true);
@@ -1257,6 +1267,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await libPost('documentAcknowledge',{documentId:ruleId,version:'4'},libAdmin.session)).status,404);
   assert.equal((await libPost('documentPublish',{documentId:ruleId,version:'5'})).status,200);
   assert.equal((await libRead(ruleId,libPeer.session)).status,200);assert.equal((await libRead(ruleId,libAdmin.session)).data.document.acknowledged,false);
+  assert.equal((await libPost('documentAssign',{...assignment,operationId:randomUUID()})).status,409);
+  assert.deepEqual((await libRead(ruleId,libPeer.session)).data.document.assignedRecipients,[]);
   assert.equal((await libRead(ruleId,libSession,'4')).data.document.acknowledgements[0].membershipId,libAdmin.member);
   assert.equal((await libPost('documentDelete',{documentId:ruleId,version:'6'})).status,404);
   const protocol=randomUUID();assert.equal((await libPost('documentCreate',{operationId:protocol,kind:'protocol',fields:libFields})).status,200);assert.equal((await libList('protocol')).data.documents[0].documentId,protocol);

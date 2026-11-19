@@ -247,7 +247,9 @@ export class PrivateLibraryClient{
    }
    if(action==='documentRead'){
     const v=r.document;if(!v||!documentText(v.body,2000,true,true)||typeof v.historical!=='boolean'||typeof v.moreAcknowledgements!=='boolean'||!Array.isArray(v.recipients)||v.recipients.length>8||v.recipients.some(id=>!uuid(id))||!Array.isArray(v.acknowledgements)||v.acknowledgements.length>20||v.acknowledgements.some(a=>!uuid(a.membershipId)||!Number.isFinite(Date.parse(a.acknowledgedAt)))||(!v.canEdit&&(v.recipients.length>0||v.acknowledgements.some(a=>a.membershipId!==input.membershipId))))throw Error('routing.response');
-    out.document={...summary(v),body:v.body,recipients:[...v.recipients],historical:v.historical,acknowledgements:v.acknowledgements.map(a=>({membershipId:a.membershipId,acknowledgedAt:a.acknowledgedAt})),moreAcknowledgements:v.moreAcknowledgements};
+    const assigned=v.assignedRecipients??[];
+    if(!Array.isArray(assigned)||assigned.length>8||assigned.some(id=>!uuid(id)||(!v.canEdit&&id!==input.membershipId)))throw Error('routing.response');
+    out.document={...summary(v),assignedRecipients:[...assigned],body:v.body,recipients:[...v.recipients],historical:v.historical,acknowledgements:v.acknowledgements.map(a=>({membershipId:a.membershipId,acknowledgedAt:a.acknowledgedAt})),moreAcknowledgements:v.moreAcknowledgements};
    }return out;
   }catch(error){if(error instanceof LibraryError)throw error;throw new LibraryError('unavailable');}
  }

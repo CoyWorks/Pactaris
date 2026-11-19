@@ -267,6 +267,13 @@
       "path": "migrations/gateway/0016_preferred_display_name.sql",
       "sha256": "02920643495d77e0b2eb4df124ef47799bf1db8afe126efa15fc04c93afd887b",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0023_document_assignments",
+      "path": "migrations/instance/0023_document_assignments.sql",
+      "sha256": "7ec54b4df56de050106b25fc069d1db6f34d33570552a9c86adb2ef036ce3e6a",
+      "backwardCompatible": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 # Rules/protocol library and notes — 0.9.0-alpha.1
 
-Connected everyday slices of #16/#66. A sole owner can prepare rules, protocols and notes before inviting anybody. This does not implement automatic protocol assignment, tasks for another person, activity consent, attachment handling, full personal export or off-host deletion replay.
+Connected everyday slices of #16/#66. A sole owner can prepare rules, protocols and notes before inviting anybody. It also supports explicit reading assignments on a published rule or protocol.
 
 ## Authoring and explicit publication
 
@@ -50,3 +50,7 @@ Targeted tests cover strict keys/versions/audience, UUID normalization, multilin
 Migration `instance/0010_library_notes` is additive. Preserve prior checksums, independent schemas/config/secrets, runtime/migrator/read-only backup separation and Identity issuer/client/flows/Brand/web certificate/TLS/domain/proxy settings. The normal updater installs Instance before gateway; no extra operator configuration is required. Application fallback does not undo migrations or legitimately restore deleted/sharing-revoked data. Native CI and live operator/mobile visual acceptance are separate evidence; a source push does not deploy the server or certify full export/restore/attachment paths.
 
 Next everyday work is habits (#63) and ritual/check-in definitions (#19), followed by reward catalog preparation (#64). Broader task sharing/review, reminders/notifications, files, complete audit/export filtering and privacy/operations launch gates remain open; do not describe a completed library slice as a completed broad parent issue.
+
+## Reading assignments
+
+Authors can assign the currently published rule or protocol to up to eight current members who can already read it. Members see only their own assignment. The author can remove an assignment, and publishing a new version requires a fresh assignment. Archival and membership changes end active visibility. Reading assignments do not grant access or record acknowledgement, and no external notification or task is created.
