@@ -105,6 +105,8 @@ Versioned consent, private limits and safety (0.7.0-alpha.1): [CONSENT_SAFETY.md
 
 Everyday owner-only workspace (0.8.0-alpha.1): [WORKSPACE_TASKS.md](docs/WORKSPACE_TASKS.md) covers the dashboard, household name/timezone, private unassigned/self-directed tasks, safety/capacity boundaries and remaining feature scope.
 
+Doms and subs, one-time consent per link, delegation, ranking, points and punishments: [HOUSEHOLD_AUTHORITY.md](docs/HOUSEHOLD_AUTHORITY.md).
+
 Requests, journal, breach records, agreement reviews and household words: [DYNAMIC_EXCHANGES.md](docs/DYNAMIC_EXCHANGES.md).
 
 Mobile navigation and layout: [MOBILE_LAYOUT.md](docs/MOBILE_LAYOUT.md) covers the start page (a single dynamic opens directly), bottom tabs, Profile and collapsed help text.

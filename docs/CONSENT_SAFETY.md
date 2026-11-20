@@ -2,6 +2,10 @@
 
 This is the connected #10/#11 alpha slice. It does not implement task execution, a reminder queue, play/session delivery, emergency delivery, personal export/deletion or complete restore revocation protection.
 
+## Household authority
+
+Dom links (docs/HOUSEHOLD_AUTHORITY.md) replace per-version acceptance for everything a Dom does within a link. Their backing agreements never expire and are checked against live authority, pauses, relationship holds and blocked activities instead of acceptance epochs. The agreement rules below apply to agreements people propose themselves.
+
 ## Agreements and visibility
 
 An active relationship's exact participants can propose agreements containing scope, hard/soft limits, safeword/non-verbal signal, aftercare preferences, covered activity categories and validity (1–720 hours). Proposals and revisions preaccept nobody. Every participant must explicitly accept their own current version. Revisions increment the agreement version and immediately make earlier acceptance insufficient for future protected activity. All versions and decisions remain on the home Instance; this UI lists the current version, while a complete historical browsing/export interface remains open.

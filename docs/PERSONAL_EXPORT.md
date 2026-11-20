@@ -22,6 +22,7 @@ The gateway streams the file directly into the response and never stores it. It 
 | `agreements` | Agreement versions in those relationships, with the person's own decisions |
 | `redemptions` | Reward offers and redemptions as issuer or recipient, with ledger kinds |
 | `inbox` | Own task inbox notices |
+| `authority` | Dom links, delegations and point adjustments the person takes part in |
 | `exchanges` | Requests, proposals, journal entries and breach records the person wrote or received, except withdrawn ones |
 
 Inclusion follows authorship, participation or receipt. A technical owner or administrator role never adds other members' private content. Each section pages through the Instance by a stable key in bounded batches.

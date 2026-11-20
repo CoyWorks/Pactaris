@@ -26,6 +26,7 @@ Placement hints do not list historical memberships, so the gateway worker asks e
 | Shared check-ins the person wrote | Withdrawn; title and response removed |
 | Requests, proposals, journal entries and breach records the person wrote | Withdrawn; title, text and reply removed |
 | Replies the person gave on exchanges they received | Reply text removed |
+| Dom link names and point-change reasons the person wrote | Text removed |
 | Shared records: partner tasks and series they created, their task notes, agreement terms they proposed, relationship names/scope they proposed, their contextual role context, reward terms they issued | The records stay for the other participants; only this person's own text is blanked |
 
 Text is blanked by `erase_text`, which empties user-authored string fields in JSON content while keeping structure, states, dates, numbers and identifiers. The Instance records one `account.erased` journal entry per household. If an older backup is restored, the [revocation journal](REVOCATION_JOURNAL.md) replays the erasure before the Instance serves traffic again. A fenced Instance refuses direct erasure calls until replay has released it.
