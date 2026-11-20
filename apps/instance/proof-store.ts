@@ -31,7 +31,8 @@ function stripJpeg(bytes:Buffer):Buffer{
  out.push(bytes.subarray(0,2));i=2;
  while(i+1<bytes.length){
   if(bytes[i]!==0xff){throw new ProofError('type');}
-  let marker=bytes[i+1];while(marker===0xff&&i+2<bytes.length){i++;marker=bytes[i+1];}
+  let marker=bytes[i+1];if(marker===undefined)throw new ProofError('type');
+  while(marker===0xff&&i+2<bytes.length){i++;marker=bytes[i+1];}
   if(marker===0xd9){out.push(bytes.subarray(i,i+2));break;}
   if(marker===0xda){out.push(bytes.subarray(i));break;} // start of scan: copy the rest verbatim
   if(i+4>bytes.length)throw new ProofError('type');
@@ -106,7 +107,7 @@ export class ProofStore{
   try{
    const decipher=createDecipheriv('aes-256-gcm',this.key,iv);decipher.setAuthTag(tag);
    const plain=Buffer.concat([decipher.update(body),decipher.final()]);
-   const type=proofTypes[plain[0]];if(!type)throw new ProofError('corrupt');
+   const type=plain[0]===undefined?undefined:proofTypes[plain[0]];if(!type)throw new ProofError('corrupt');
    return {type,bytes:plain.subarray(1)};
   }catch{throw new ProofError('corrupt');}
  }

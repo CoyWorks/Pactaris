@@ -69,7 +69,7 @@ test('proof store: sniffing, stripping, round-trip, access and tamper',async()=>
   // A different key cannot decrypt; tampering is detected.
   const other=new ProofStore(root,randomBytes(32).toString('hex'));
   await assert.rejects(other.get(hh,id),(e:unknown)=>e instanceof ProofError&&e.kind==='corrupt');
-  const corrupt=await readFile(join(root,hh,id));corrupt[20]^=0xff;await writeFile(join(root,hh,id),corrupt);
+  const corrupt=await readFile(join(root,hh,id));corrupt[20]=(corrupt[20]??0)^0xff;await writeFile(join(root,hh,id),corrupt);
   await assert.rejects(store.get(hh,id),(e:unknown)=>e instanceof ProofError&&e.kind==='corrupt');
 
   // Missing reads and household-wide deletion.
