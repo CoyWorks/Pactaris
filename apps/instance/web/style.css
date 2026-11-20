@@ -186,3 +186,6 @@ button.secondary{background:none;border-color:var(--outline);color:var(--accent)
 .habit-row{align-items:flex-start}.row-actions{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:flex-end}
 .ranking li{gap:.75rem}
 .bell{position:relative}.bell .dot{position:absolute;top:9px;right:10px}
+.settings-group{background:var(--surface);border-radius:var(--radius);padding:0 1rem;margin:.6rem 0}.settings-group[open]{padding-bottom:1rem}
+.settings-group>summary{font-weight:600;color:var(--text)}
+fieldset.kinds{border:0;padding:0;margin:.25rem 0 0}fieldset.kinds legend{font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.25rem}

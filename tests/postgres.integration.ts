@@ -1784,6 +1784,13 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await ex(B,'exchangeCreate',{kind:'proposal',recipientId:A.member,title:'Push me',body:'',dueAt:null})).status,200);
      const after=await pushStatus();assert.ok(after&&(!before||BigInt(after)>BigInt(before)),JSON.stringify({before,after}));
      assert.equal((await ex(A,'noticeRead',{ids:null})).status,200);
+     // Muted kinds create no notice (and so no push); unmuting restores them.
+     assert.equal((await ex(A,'noticeConfigure',{muted:['proposal','bogus']})).status,400);
+     const muted=await ex(A,'noticeConfigure',{muted:['proposal']});assert.equal(muted.status,200);assert.deepEqual(muted.data.muted,['proposal']);
+     assert.deepEqual((await api(base+'/exchange/notice-preferences','GET',undefined,A.session)).data.muted,['proposal']);
+     assert.equal((await ex(B,'exchangeCreate',{kind:'proposal',recipientId:A.member,title:'Quiet one',body:'',dueAt:null})).status,200);
+     assert.equal((await notices(A)).unread,0);
+     assert.equal((await ex(A,'noticeConfigure',{muted:[]})).status,200);
      // Household words: owners and admins only, optimistic version.
      assert.equal((await ex(B,'termsSet',{terms:{tasks:'Duties'},version:'0'})).status,404);
      assert.equal((await ex(A,'termsSet',{terms:{tasks:'Duties',bogus:'x'},version:'0'})).status,400);

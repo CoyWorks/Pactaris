@@ -409,6 +409,13 @@
       "backwardCompatible": true
     },
     {
+      "component": "instance",
+      "id": "0040_notice_preferences",
+      "path": "migrations/instance/0040_notice_preferences.sql",
+      "sha256": "84bc4817efd455dcf8260355834a296574c1953e0f166d4c0fd53544a224bc32",
+      "backwardCompatible": true
+    },
+    {
       "component": "gateway",
       "id": "0020_account_export",
       "path": "migrations/gateway/0020_account_export.sql",

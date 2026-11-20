@@ -15,6 +15,15 @@ Every member has a notice list per dynamic (bell in the top bar). Notices are cr
 
 Task notices (assigned, submitted, reviewed, reminders) stay in the existing task inbox and appear on the same page. A withdrawn exchange removes its notices; leaving a dynamic or erasing an account removes the person's notices. Opening the page marks notices read. Notices have no actor for automatic outcomes.
 
+## Settings
+
+**Profile → Notifications** (`/profile/notifications`) holds every notification setting in one place:
+
+- **This device:** allow or stop notifications in this browser (Web Push enrolment).
+- **Per dynamic:** whether the dynamic may notify you, which kinds you receive, and quiet hours in your time zone. Kinds are grouped as tasks (assigned, submitted for review, reviewed, reminders), requests/journal/breaches, Doms and subs, and points and habits.
+
+A turned-off notice kind (`notice_preferences.muted`, migration `0040_notice_preferences`) creates no notice and therefore no push; the item itself still shows on Today and in its section. Task kinds keep their existing inbox preferences. The Notifications page in a dynamic links to these settings.
+
 ## Push delivery
 
 Notices take their `push_seq` from the same sequence as the task inbox. The gateway push worker (docs/WEB_PUSH.md) asks the Instance for the highest eligible sequence per device and dynamic; `task_delivery_command` now returns the highest of the eligible task notice and the newest unread notice. Eligibility is unchanged: notifications enabled on the device (Profile) and for the dynamic (Notifications → How you are notified), quiet hours, an active household and no personal pause. One push covers everything newer; it carries no names or content and opens the app, which checks the session.

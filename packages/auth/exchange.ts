@@ -17,7 +17,7 @@ export type AgreementReview={agreementId:string;relationshipLabel:string;interva
 export const noticeKinds=['permission','proposal','journal','breach','answered','invited','accepted','ended','delegated','points','habit'] as const;
 export type Notice={id:string;kind:typeof noticeKinds[number];resourceId:string;actorName:string|null;read:boolean;createdAt:string};
 export type ExchangeResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';exchangeId?:string|null;
- exchanges?:ExchangeItem[];people?:ExchangePerson[];nextCursor?:string|null;reviews?:AgreementReview[];terms?:Terms;termsVersion?:string;canEdit?:boolean;notices?:Notice[];unread?:number};
+ exchanges?:ExchangeItem[];people?:ExchangePerson[];nextCursor?:string|null;reviews?:AgreementReview[];terms?:Terms;termsVersion?:string;canEdit?:boolean;notices?:Notice[];unread?:number;muted?:Notice['kind'][]};
 export class ExchangeError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'unavailable'){super('exchange.'+kind);}}
 export const exchangePage=8;
 export const exchangeCursor=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z\|[a-f0-9-]{36}$/;
@@ -38,6 +38,7 @@ export function exchangeInput(action:ExchangeAction,value:unknown):Record<string
  else if(action==='reviewDone')names.push('agreementId','version');
  else if(action==='termsSet')names.push('terms','version');
  else if(action==='noticeRead')names.push('ids');
+ else if(action==='noticeConfigure')names.push('muted');
  if(Object.keys(value).sort().join(',')!==names.sort().join(','))throw new ExchangeError('invalid');
  const v=value;
  if(action==='exchangeList'&&(!['open','all'].includes(v.box as string)||('before'in v&&(typeof v.before!=='string'||!exchangeCursor.test(v.before)))))throw new ExchangeError('invalid');
@@ -47,6 +48,7 @@ export function exchangeInput(action:ExchangeAction,value:unknown):Record<string
  if(action==='exchangeDecide'&&(!['approve','decline','acknowledge'].includes(v.decision as string)||!documentText(v.response,500,true,true)))throw new ExchangeError('invalid');
  if((action==='reviewSet'||action==='reviewDone')&&(!uuid(v.agreementId)||typeof v.version!=='string'||!/^(0|[1-9][0-9]{0,14})$/.test(v.version)))throw new ExchangeError('invalid');
  if(action==='reviewSet'&&v.intervalMonths!==null&&(!Number.isInteger(v.intervalMonths)||(v.intervalMonths as number)<1||(v.intervalMonths as number)>24))throw new ExchangeError('invalid');
+ if(action==='noticeConfigure'&&(!Array.isArray(v.muted)||v.muted.length>noticeKinds.length||new Set(v.muted).size!==v.muted.length||!v.muted.every(k=>(noticeKinds as readonly unknown[]).includes(k))))throw new ExchangeError('invalid');
  if(action==='noticeRead'&&v.ids!==null&&(!Array.isArray(v.ids)||!v.ids.length||v.ids.length>30||!v.ids.every(uuid)))throw new ExchangeError('invalid');
  if(action==='termsSet'&&(!validTerms(v.terms)||typeof v.version!=='string'||!/^(0|[1-9][0-9]{0,14})$/.test(v.version)))throw new ExchangeError('invalid');
  return {...value,operationId:(value.operationId as string).toLowerCase(),
@@ -58,6 +60,11 @@ export function exchangeInput(action:ExchangeAction,value:unknown):Record<string
 export function exchangeOutput(action:ExchangeAction,input:Record<string,unknown>&{operationId:string;membershipId:string},householdId:string,r:unknown):ExchangeResult{
  const bad=()=>{throw Error('routing.response');};
  if(!record(r)||r.householdId!==householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId)bad();
+ if(action==='noticePreferences'||action==='noticeConfigure'){
+  const n=r as ExchangeResult;
+  if(n.status!==(action==='noticePreferences'?'listed':'applied')||!Array.isArray(n.muted)||n.muted.length>noticeKinds.length||!n.muted.every(k=>(noticeKinds as readonly unknown[]).includes(k)))bad();
+  return {householdId:n.householdId,operationId:n.operationId,actorMembershipId:n.actorMembershipId,status:n.status,muted:[...n.muted!]};
+ }
  if(action==='noticeList'||action==='noticeRead'){
   const n=r as ExchangeResult;
   if(n.status!==(action==='noticeList'?'listed':'applied')||!Array.isArray(n.notices)||n.notices.length>30||!Number.isInteger(n.unread)||(n.unread as number)<0)bad();

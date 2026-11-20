@@ -1,7 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {ExchangeResult,Notice} from '../../../packages/auth/exchange.js';
-import {Hint,Icon} from './navigation.js';
+import {Icon,Link} from './navigation.js';
 import {Skeleton} from './today-habits.js';
 import {TaskInbox} from './task-inbox.js';
 const kindKeys:Record<Notice['kind'],MessageKey>={permission:'notices.permission',proposal:'notices.proposal',journal:'notices.journal',breach:'notices.breach',
@@ -39,8 +39,8 @@ export function NoticesView({householdId,session,language,format,timeZone,data,o
    <ul className="menu">{shown.map(n=><li key={n.id}><button type="button" onClick={()=>onOpen(targets[n.kind])}>
     {!n.read&&<span className="dot" aria-label={t('notices.unread')}/>}
     <span className="grow"><span>{t(kindKeys[n.kind])}</span><span className="muted">{[n.actorName,formatTime(new Date(n.createdAt),format,timeZone)].filter(Boolean).join(t('catalog.separator'))}</span></span><Icon name="chevron"/></button></li>)}</ul>}
-  <h2 className="group-title">{t('notices.settings')}</h2>
-  <Hint label={t('hint.more')}>{t('notices.settingsHelp')}</Hint>
+  <ul className="menu"><li><Link to="/profile/notifications"><span className="grow"><span>{t('notices.settings')}</span><span className="muted">{t('notifySettings.summary')}</span></span><Icon name="chevron"/></Link></li></ul>
+  <h2 className="group-title">{t('inbox.title')}</h2>
   <TaskInbox householdId={householdId} csrfToken={session.csrfToken} language={language} onRead={onRead}/>
  </section>;
 }

@@ -1023,7 +1023,6 @@
   "notices.unread": "Unread",
   "notices.empty": "Nothing new.",
   "notices.settings": "How you are notified",
-  "notices.settingsHelp": "Turn on notifications for this device under Profile first. Here you choose whether this dynamic may notify you, and when it should stay quiet. A notification never shows names or content; it only opens Pactaris.",
   "notices.permission": "New permission request",
   "notices.proposal": "New proposal",
   "notices.journal": "New journal entry",
@@ -1034,5 +1033,15 @@
   "notices.ended": "A Dom link was ended",
   "notices.delegated": "Authority was delegated to you",
   "notices.points": "Your points changed",
-  "notices.habit": "A habit period was checked"
+  "notices.habit": "A habit period was checked",
+  "notifySettings.summary": "This device, and what each dynamic may send you",
+  "notifySettings.device": "This device",
+  "notifySettings.perDynamic": "Per dynamic",
+  "notifySettings.help": "First allow notifications on this device. Then choose per dynamic whether it may notify you, which kinds you want and when it should stay quiet. A notification never shows names or content; it only opens Pactaris. Turned-off kinds still appear on Today.",
+  "notifySettings.push": "Send notifications from this dynamic",
+  "notifySettings.tasks": "Tasks",
+  "notifySettings.requests": "Requests, journal and breaches",
+  "notifySettings.links": "Doms and subs",
+  "notifySettings.pointsHabits": "Points and habits",
+  "notifySettings.quiet": "Quiet hours"
 }
