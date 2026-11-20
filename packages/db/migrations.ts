@@ -98,6 +98,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0032_revocation_journal'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.revocation_journal_pending(uuid,integer),pactaris.revocation_journal_ack(uuid,uuid[]) TO ${role}`);
       if(entries.some(m=>m.id==='0033_restore_fence'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.restore_fenced(),pactaris.revocation_journal_replay(uuid,jsonb,boolean) TO ${role}`);
       if(entries.some(m=>m.id==='0034_account_erasure'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.account_erasure(uuid,uuid,text) TO ${role}`);
+      if(entries.some(m=>m.id==='0037_household_authority'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.authority_command(uuid,uuid,uuid,uuid,text,jsonb,text),pactaris.authority_export_page(uuid,uuid,text,integer) TO ${role}`);
       if(entries.some(m=>m.id==='0036_dynamic_exchanges'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.exchange_command(uuid,uuid,uuid,uuid,text,jsonb,text),pactaris.exchange_export_page(uuid,uuid,text,integer) TO ${role}`);
       if(entries.some(m=>m.id==='0035_account_export'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.account_export_page(uuid,uuid,text,text,integer) TO ${role}`);
       if(entries.some(m=>m.id==='0003_receipt'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.household_receipt_command(uuid,uuid,uuid,uuid) TO ${role}`);

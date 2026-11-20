@@ -4,7 +4,7 @@ import type {ExchangeAction} from './exchange-actions.js';
 export {exchangeActions,isExchangeAction,type ExchangeAction} from './exchange-actions.js';
 export const exchangeKinds=['permission','proposal','journal','breach'] as const;
 export type ExchangeKind=typeof exchangeKinds[number];
-export const exchangeStates=['open','expired','approved','declined','acknowledged'] as const;
+export const exchangeStates=['open','expired','recorded','approved','declined','acknowledged'] as const;
 export type ExchangeState=typeof exchangeStates[number];
 export const termKeys=['tasks','routines','library','dynamic'] as const;
 export type TermKey=typeof termKeys[number];

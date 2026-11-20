@@ -13,7 +13,7 @@ export function accountInput(value:unknown):{operationId:string} {
 
 /** Sections of the complete personal export, with page sizes that keep each private response bounded. */
 export const exportSections={memberships:25,limits:25,tasks:25,documents:4,acknowledgements:25,routines:4,catalog:10,partnerTasks:8,
-  series:10,personalSeries:10,checkins:25,relationships:10,agreements:10,redemptions:10,inbox:25,exchanges:10} as const;
+  series:10,personalSeries:10,checkins:25,relationships:10,agreements:10,redemptions:10,inbox:25,exchanges:10,authority:25} as const;
 export type ExportSection=keyof typeof exportSections;
 const cursor=/^[0-9a-f:-]{36,200}$/;
 export function exportInput(value:unknown):{operationId:string;section:ExportSection;after:string|null} {

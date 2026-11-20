@@ -18,6 +18,7 @@ Build a public, mobile-first BDSM/SM/kink platform for consenting adults, Dom/su
 ## Consent and privacy
 
 - Make participation explicit and reversible. Never autoaccept invitations or agreements.
+- Consent model (owner decision, 20 November 2026; docs/HOUSEHOLD_AUTHORITY.md): a sub consents once per Dom link. Within it the Dom acts directly (tasks, points, punishments, breach records) without per-item acceptance; Pactaris does not take over people's responsibility for consent. Pause, stop, blocked activities and ending a link always win. A household can hold several Doms and subs with delegation, manual sub ranking and owner-controlled visibility.
 - Every participant can pause, stop, revoke consent and leave. An administrator cannot override another person's withdrawal or personal pause.
 - Separate global identity, household membership, permissions, standing and relationships.
 - Enforce tenant/resource authorization in API reads/writes, jobs, files, search, notifications and exports. Household role names are not permissions.

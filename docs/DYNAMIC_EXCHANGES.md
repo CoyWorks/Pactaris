@@ -4,16 +4,16 @@ Pactaris supports long-term dynamics in which the people involved agree on thing
 
 ## Who can exchange with whom
 
-Only an **active, adopted standing task authority** connects two people (see [STANDING_TASK_AUTHORITY.md](STANDING_TASK_AUTHORITY.md)): an assignment policy that the person under authority adopted, in an active relationship that neither participant has paused. Household roles, dynamic role labels and relationship labels grant nothing.
+Only an **active standing task authority** connects two people: a Dom link, a delegation or a sub rank (see [HOUSEHOLD_AUTHORITY.md](HOUSEHOLD_AUTHORITY.md)), or an adopted assignment policy (see [STANDING_TASK_AUTHORITY.md](STANDING_TASK_AUTHORITY.md)): an assignment policy that the person under authority adopted, in an active relationship that neither participant has paused. Household roles, dynamic role labels and relationship labels grant nothing.
 
 | Kind | From | To | Answer |
 | --- | --- | --- | --- |
 | Permission request | person under authority | holder | approve or decline, optional reply; optional "answer needed by" time after which it shows as *no answer in time* and can no longer be answered |
 | Proposal | either | the other | accept or decline, optional reply |
 | Journal entry | person under authority | holder | acknowledge, optional comment |
-| Rule breach | holder | person under authority | acknowledge, optional reply |
+| Rule breach | holder | person under authority | none: recorded at once and shown to them for 7 days on Today; can come with a punishment task |
 
-An approved request or accepted proposal records the answer only. Acting on it (a new rule, task or change) stays a separate, explicit step in the relevant module. A breach record never runs a consequence; any follow-up is agreed together.
+An approved request or accepted proposal records the answer only. Acting on it (a new rule, task or change) stays a separate, explicit step in the relevant module. A breach record never runs a consequence by itself; the Dom can give a punishment with it.
 
 Creating or answering is refused while the household is paused or stopped, or either person or their relationship is paused. Withdrawing always works: requests and proposals while still open, journal entries and breach records by their author at any time. Withdrawing blanks the text for both people and is recorded in the revocation journal as `exchange.withdrawn`, so a restored backup cannot bring the text back. If the authority ends later, existing records stay readable to both people but open items can no longer be answered.
 

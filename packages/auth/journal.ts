@@ -2,7 +2,7 @@ import { uuid, type JournalAction } from './delegation.js';
 
 /** Content-free revocation kinds. Subjects carry identifiers and versions only. */
 export const journalKinds=['membership.ended','member.paused','household.stopped','relationship.paused','relationship.ended',
-  'agreement.revoked','consent.withdrawn','taskAuthority.revoked','document.deleted','attachment.deleted','checkin.withdrawn','account.erased','exchange.withdrawn'] as const;
+  'agreement.revoked','consent.withdrawn','taskAuthority.revoked','document.deleted','attachment.deleted','checkin.withdrawn','account.erased','exchange.withdrawn','authority.ended','delegation.revoked'] as const;
 export type JournalKind=typeof journalKinds[number];
 export const journalBatch=50;
 export type JournalEntry={id:string;householdId:string;kind:JournalKind;subject:Record<string,string>;occurredAt:string};

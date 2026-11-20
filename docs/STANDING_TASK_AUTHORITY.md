@@ -2,6 +2,8 @@
 
 This implements the next #17 priority from [TASK_PLANNING.md](TASK_PLANNING.md). It adds one-off direct assignment and optional per-task acceptance to the existing participant lifecycle. Scheduling, series, rewards and broader #17 criteria remain open.
 
+> Dom links (docs/HOUSEHOLD_AUTHORITY.md) now create and manage direct policies automatically. Proposing and adopting a policy by hand remains available for relationships that are not set up as Dom links.
+
 ## Explicit scoped authority
 
 A current participant selects an accepted task agreement, one recipient and either direct assignment or explicit per-task acceptance. Proposing a policy records the creator's exact directional grant request; it grants no authority until the recipient explicitly adopts that same policy version. The agreement must currently pass the activity guard at both proposal and adoption. Authority is an explicit technical resource grant separate from contextual role labels, household administration, billing and agreement participation. A contextual Dom/sub pair can use it without making labels into permissions; a switch can grant/receive different directions in separate relationships.

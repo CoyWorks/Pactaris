@@ -16,11 +16,12 @@ import {QuickAdd,type QuickKind} from './quick-add.js';
 import {Skeleton,TodayCheckins,TodayHabits} from './today-habits.js';
 import {SwipeRow,UndoToast,useUndoable} from './swipe.js';
 import {Attention,ExchangeView,Overview,ReviewsView,TermsForm,useExchange,useTerms} from './exchange.js';
-type View='home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews';
+import {AuthorityView,useAuthority} from './authority.js';
+type View='home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews'|'authority';
 type Tab='home'|'tasks'|'routines'|'library'|'dynamic';
 type Draft={action:string;body:Record<string,unknown>};
-const views:readonly View[]=['home','habits','checkins','rewards','participantTasks','rules','notes','tasks','dynamic','members','settings','relationships','safety','exchange','overview','reviews'];
-const labels:Record<View,MessageKey>={home:'workspace.home',tasks:'workspace.mine',habits:'routines.habits',checkins:'routines.checkinsTitle',rewards:'catalog.title',participantTasks:'partner.title',rules:'library.guidance',notes:'library.notes',dynamic:'workspace.dynamic',members:'workspace.invite',settings:'workspace.settings',relationships:'workspace.relationships',safety:'workspace.safety',exchange:'exchange.title',overview:'overview.title',reviews:'reviews.title'};
+const views:readonly View[]=['home','habits','checkins','rewards','participantTasks','rules','notes','tasks','dynamic','members','settings','relationships','safety','exchange','overview','reviews','authority'];
+const labels:Record<View,MessageKey>={home:'workspace.home',tasks:'workspace.mine',habits:'routines.habits',checkins:'routines.checkinsTitle',rewards:'catalog.title',participantTasks:'partner.title',rules:'library.guidance',notes:'library.notes',dynamic:'workspace.dynamic',members:'workspace.invite',settings:'workspace.settings',relationships:'workspace.relationships',safety:'workspace.safety',exchange:'exchange.title',overview:'overview.title',reviews:'reviews.title',authority:'authority.title'};
 const tabs:{tab:Tab;view:View;label:MessageKey;icon:IconName}[]=[
  {tab:'home',view:'home',label:'workspace.home',icon:'today'},
  {tab:'tasks',view:'tasks',label:'workspace.tasks',icon:'tasks'},
@@ -30,7 +31,7 @@ const tabs:{tab:Tab;view:View;label:MessageKey;icon:IconName}[]=[
 ];
 const tabOf=(view:View):Tab=>view==='tasks'||view==='participantTasks'?'tasks':view==='habits'||view==='checkins'?'routines':view==='rules'||view==='notes'?'library':view==='home'?'home':'dynamic';
 const segments:Partial<Record<Tab,View[]>>={tasks:['tasks','participantTasks'],routines:['habits','checkins'],library:['rules','notes']};
-const menu:View[]=['overview','exchange','members','relationships','rewards','reviews','safety','settings'];
+const menu:View[]=['authority','overview','exchange','members','relationships','rewards','reviews','safety','settings'];
 const additions:{view:View;label:MessageKey;quick?:QuickKind}[]=[{view:'tasks',label:'workspace.addPrivateTask',quick:'task'},{view:'participantTasks',label:'workspace.addSharedTask'},{view:'habits',label:'routines.habits',quick:'habit'},{view:'checkins',label:'routines.checkinsTitle'},{view:'notes',label:'library.notes',quick:'note'},{view:'rules',label:'library.guidance'},{view:'rewards',label:'catalog.title'},{view:'exchange',label:'exchange.new'}];
 const priorities:Record<TaskFields['priority'],MessageKey>={low:'workspace.priorityLow',normal:'workspace.priorityNormal',high:'workspace.priorityHigh'};
 const filters:Record<string,MessageKey>={open:'workspace.open',done:'workspace.done',archived:'workspace.archived'};
@@ -39,7 +40,9 @@ const blank=():TaskFields=>({title:'',description:'',priority:'normal',dueAt:nul
 export function HouseholdWorkspace({householdId,session,language,format,avatar,onLeave,children}:{householdId:string;session:{account:{id:string;displayName:string};csrfToken:string};language:string;format:string;avatar:React.ReactNode;onLeave:()=>void;children:React.ReactNode}){
  const {search}=useLocation(),requested=new URLSearchParams(search).get('view') as View|null,view:View=requested&&views.includes(requested)?requested:'home';
  const [exchangeReload,setExchangeReload]=useState(0),[termsReload,setTermsReload]=useState(0);
- const exchange=useExchange(householdId,exchangeReload),terms=useTerms(householdId,termsReload);
+ const [authorityReload,setAuthorityReload]=useState(0);
+ const exchange=useExchange(householdId,exchangeReload),terms=useTerms(householdId,termsReload),authority=useAuthority(householdId,authorityReload);
+ const refreshAll=()=>{setExchangeReload(v=>v+1);setAuthorityReload(v=>v+1);setRefresh(v=>v+1);};
  const [adding,setAdding]=useState<QuickKind|'menu'>(),[habitsReload,setHabitsReload]=useState(0),pendingEditor=useRef<{fields:TaskFields}|undefined>(undefined);
  const t=createTranslator(language),[data,setData]=useState<WorkspaceResult>(),[filter,setFilter]=useState('open'),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[draft,setDraft]=useState<Draft>(),[editor,setEditor]=useState<{fields:TaskFields;taskId?:string;version?:string}>(),[settings,setSettings]=useState<{name:string;timeZone:string;version:string}>();
  const [pointsDraft,setPointsDraft]=useState<PointsSettings & {version:string}>();
@@ -142,7 +145,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
  }
  const h=data?.household,blocked=busy||!!draft,safety=h?{epoch:h.epoch,memberEpoch:h.memberEpoch}:{};
  const tabLabel=(item:{tab:Tab;label:MessageKey})=>(item.tab!=='home'&&terms?.terms?.[item.tab])||t(item.label);
- const subjects=(exchange.data?.people??[]).some(p=>p.subject);
+ const subjects=(authority.data?.powers??[]).length>0||(exchange.data?.people??[]).some(p=>p.subject);
  function go(value:View){navigate('/households/'+householdId+(value==='home'?'':'?view='+value));}
  useEffect(()=>{setEditor(pendingEditor.current);pendingEditor.current=undefined;setSettings(undefined);setCursor(undefined);if(view==='home')setFilter('open');},[view]);
  function back(){if(window.history.length>1)window.history.back();else go('dynamic');}
@@ -184,7 +187,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
     <p className="muted">{new Intl.DateTimeFormat(format,{weekday:'long',day:'numeric',month:'long',timeZone:h.timeZone}).format(new Date())}</p>
     {h.status==='paused'&&<p className="notice" role="status">{t('consent.householdPaused')}</p>}
     {data?.hasUnreadTaskInbox&&<button type="button" className="row-button" onClick={()=>go('participantTasks')}><span className="dot" aria-hidden="true"/><span className="grow">{t('workspace.unreadShared')}</span><Icon name="chevron"/></button>}
-    <Attention householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} reload={exchangeReload} onChanged={message=>{setNotice(message);setExchangeReload(v=>v+1);}} onReviews={()=>go('reviews')}/>
+    <Attention householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} authority={authority.data} reload={exchangeReload} onChanged={message=>{setNotice(message);refreshAll();}} onReviews={()=>go('reviews')}/>
     <div className="section-head"><h2>{t('workspace.todo')}</h2><button type="button" className="link-button" onClick={()=>go('tasks')}>{t('workspace.allTasks')}</button></div>
     {today.length?<ul className="card-list">{today.map(task=>row(task,true))}</ul>:<div className="empty-card"><p>{t('workspace.nothingDue')}</p><button type="button" onClick={()=>setAdding('task')}><Icon name="plus"/>{t('today.addTask')}</button></div>}
     <TodayHabits householdId={householdId} csrfToken={session.csrfToken} language={language} reload={habitsReload} onAdd={()=>setAdding('habit')} onOpen={()=>go('habits')}/>
@@ -193,7 +196,8 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
     <div className="tiles"><button type="button" onClick={()=>go('checkins')}><Icon name="routines"/>{t('routines.checkinsTitle')}</button><button type="button" onClick={()=>go('rules')}><Icon name="library"/>{t('library.guidance')}</button><button type="button" onClick={()=>go('notes')}><Icon name="library"/>{t('library.notes')}</button><button type="button" onClick={()=>go('members')}><Icon name="dynamic"/>{t('workspace.invite')}</button></div>
    </section>}
    {view==='exchange'&&h&&<ExchangeView householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} people={exchange.data?.people??[]} onChanged={()=>setExchangeReload(v=>v+1)}/>}
-   {view==='overview'&&h&&<Overview householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} onAssign={()=>go('participantTasks')} onChanged={message=>{setNotice(message);setExchangeReload(v=>v+1);}}/>}
+   {view==='overview'&&h&&<Overview householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} authority={authority.data} onAssign={()=>go('participantTasks')} onChanged={message=>{setNotice(message);refreshAll();}}/>}
+   {view==='authority'&&h&&<AuthorityView householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={authority.data} onChanged={refreshAll}/>}
    {view==='reviews'&&h&&<ReviewsView householdId={householdId} session={session} language={language} format={format}/>}
    {view==='dynamic'&&h&&<section className="plain">
     <div className="dynamic-card"><span className="badge-letter" aria-hidden="true">{h.name.trim().slice(0,1).toUpperCase()}</span><span className="grow"><strong>{h.name}</strong><span className="muted">{t('workspace.memberCount')} {h.memberCount}</span></span></div>

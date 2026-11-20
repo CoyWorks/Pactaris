@@ -4,8 +4,10 @@ import type {AgreementReview,ExchangeItem,ExchangeKind,ExchangePerson,ExchangeRe
 import type {PartnerSummary} from '../../../packages/auth/partner.js';
 import {Hint,Icon,Layer} from './navigation.js';
 import {Skeleton} from './today-habits.js';
+import type {AuthorityResult} from '../../../packages/auth/authority.js';
+import {InviteRows,OutcomeActions,authoritySend,pendingInvites} from './authority.js';
 const kindKeys:Record<ExchangeKind,MessageKey>={permission:'exchange.kind.permission',proposal:'exchange.kind.proposal',journal:'exchange.kind.journal',breach:'exchange.kind.breach'};
-const stateKeys:Record<ExchangeItem['state'],MessageKey>={open:'exchange.state.open',expired:'exchange.state.expired',approved:'exchange.state.approved',declined:'exchange.state.declined',acknowledged:'exchange.state.acknowledged'};
+const stateKeys:Record<ExchangeItem['state'],MessageKey>={open:'exchange.state.open',recorded:'exchange.state.recorded',expired:'exchange.state.expired',approved:'exchange.state.approved',declined:'exchange.state.declined',acknowledged:'exchange.state.acknowledged'};
 const errors:MessageKey[]=['exchange.invalid','exchange.denied','exchange.conflict','exchange.paused','exchange.capacity','exchange.unavailable','errors.rateLimited','errors.request'];
 const errorKey=(value:unknown):MessageKey=>errors.includes(value as MessageKey)?value as MessageKey:'exchange.unavailable';
 type Session={csrfToken:string};
@@ -50,7 +52,7 @@ function Row({item,language,format,timeZone,onOpen}:{item:ExchangeItem;language:
 /** Detail page with the decision, acknowledgement or withdrawal that applies to this person. */
 export function ExchangeDetail({item,householdId,session,language,format,timeZone,onClose,onChanged}:{item:ExchangeItem;householdId:string;session:Session;language:string;format:string;timeZone:string;onClose:()=>void;onChanged:(notice:MessageKey)=>void}){
  const t=createTranslator(language),[response,setResponse]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[confirmWithdraw,setConfirmWithdraw]=useState(false),operation=useRef<{key:string;id:string}|undefined>(undefined);
- const open=item.state==='open',decide=!item.mine&&open,ack=item.kind==='journal'||item.kind==='breach';
+ const open=item.state==='open',decide=!item.mine&&open&&item.kind!=='breach',ack=item.kind==='journal'||item.kind==='breach';
  const withdrawable=item.mine&&(ack||open);
  async function run(action:'exchangeDecide'|'exchangeWithdraw',extra:Record<string,unknown>){
   if(busy)return;setBusy(true);setError(undefined);
@@ -88,7 +90,7 @@ export function ExchangeForm({people,householdId,session,language,initial,onClos
  const [kind,setKind]=useState<ExchangeKind>(initial?.kind&&kinds.includes(initial.kind)?initial.kind:kinds[0]??'proposal');
  const recipients=people.filter(directions[kind]);
  const [recipient,setRecipient]=useState(initial?.recipientId&&recipients.some(p=>p.membershipId===initial.recipientId)?initial.recipientId:recipients[0]?.membershipId??'');
- const [title,setTitle]=useState(''),[body,setBody]=useState(''),[due,setDue]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[retry,setRetry]=useState(false),operation=useRef<string|undefined>(undefined);
+ const [title,setTitle]=useState(''),[body,setBody]=useState(''),[due,setDue]=useState(''),[punishment,setPunishment]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[retry,setRetry]=useState(false),operation=useRef<string|undefined>(undefined);
  const edit=<T,>(set:(v:T)=>void)=>(v:T)=>{set(v);operation.current=undefined;setRetry(false);};
  useEffect(()=>{if(!recipients.some(p=>p.membershipId===recipient))setRecipient(recipients[0]?.membershipId??'');},[kind]);// eslint-disable-line react-hooks/exhaustive-deps
  async function submit(e:React.FormEvent){
@@ -96,7 +98,13 @@ export function ExchangeForm({people,householdId,session,language,initial,onClos
   const operationId=operation.current??=crypto.randomUUID(),dueAt=kind==='permission'&&due?new Date(due):null;
   try{
    const result=await send(householdId,session,'exchangeCreate',{operationId,kind,recipientId:recipient,title:title.trim(),body:body.trim(),dueAt:dueAt&&Number.isFinite(dueAt.getTime())?dueAt.toISOString():null});
-   if(result.ok){onSaved('exchange.saved');return;}
+   if(result.ok){
+    if(kind==='breach'&&punishment.trim()){
+     const given=await authoritySend(householdId,session,'punishmentGive',{operationId:crypto.randomUUID(),subjectId:recipient,title:punishment.trim(),description:'',exchangeId:result.data.exchangeId??null});
+     onSaved(given.ok?'authority.breachWithPunishment':'authority.punishmentFailed');return;
+    }
+    onSaved('exchange.saved');return;
+   }
    setError(result.key);setRetry(result.unknown);if(!result.unknown)operation.current=undefined;
   }finally{setBusy(false);}
  }
@@ -107,7 +115,7 @@ export function ExchangeForm({people,householdId,session,language,initial,onClos
    <label>{t('library.title')}<input required maxLength={120} autoComplete="off" disabled={busy} value={title} onChange={e=>edit(setTitle)(e.target.value)}/></label>
    <label>{t('library.body')}<textarea maxLength={600} disabled={busy} value={body} onChange={e=>edit(setBody)(e.target.value)}/></label>
    {kind==='permission'&&<label>{t('exchange.dueAtOptional')}<input type="datetime-local" disabled={busy} value={due} onChange={e=>edit(setDue)(e.target.value)}/></label>}
-   {kind==='breach'&&<p className="muted">{t('exchange.breachNotice')}</p>}
+   {kind==='breach'&&<><label>{t('authority.punishmentOptional')}<input maxLength={120} autoComplete="off" disabled={busy} value={punishment} onChange={e=>edit(setPunishment)(e.target.value)}/></label><p className="muted">{t('exchange.breachNotice')}</p></>}
    {error&&<p role="alert">{t(error)}</p>}
    <button type="submit" disabled={busy||!title.trim()||!recipient}>{t(busy?'onboarding.saving':retry?'onboarding.retry':'exchange.send')}</button>
   </form>}
@@ -140,18 +148,19 @@ export function ExchangeView({householdId,session,language,format,timeZone,peopl
  </section>;
 }
 /** Today: what others are waiting on you for, and agreement reviews that are due. */
-export function Attention({householdId,session,language,format,timeZone,data,reload,onChanged,onReviews}:{householdId:string;session:Session;language:string;format:string;timeZone:string;data?:ExchangeResult;reload:number;onChanged:(notice:MessageKey)=>void;onReviews:()=>void}){
+export function Attention({householdId,session,language,format,timeZone,data,authority,reload,onChanged,onReviews}:{householdId:string;session:Session;language:string;format:string;timeZone:string;data?:ExchangeResult;authority?:AuthorityResult;reload:number;onChanged:(notice:MessageKey)=>void;onReviews:()=>void}){
  const t=createTranslator(language),[openId,setOpenId]=useState<string>(),[reviews,setReviews]=useState<AgreementReview[]>([]);
  useEffect(()=>{
   let gone=false;const controller=new AbortController();
   read(`/api/households/${householdId}/exchange/reviews`,controller.signal).then(r=>{if(!gone)setReviews((r.reviews??[]).filter(x=>x.due));}).catch(()=>{});
   return()=>{gone=true;controller.abort();};
  },[householdId,reload]);
- const waiting=(data?.exchanges??[]).filter(item=>!item.mine&&item.state==='open'),open=waiting.find(i=>i.id===openId);
- if(!waiting.length&&!reviews.length)return null;
+ const waiting=(data?.exchanges??[]).filter(item=>!item.mine&&(item.state==='open'||item.state==='recorded')),open=waiting.find(i=>i.id===openId);
+ if(!waiting.length&&!reviews.length&&!pendingInvites(authority).length)return null;
  return <>
   <div className="section-head"><h2>{t('today.attention')}</h2></div>
   <ul className="menu">
+   <InviteRows data={authority} householdId={householdId} session={session} language={language} format={format} timeZone={timeZone} onChanged={onChanged}/>
    {waiting.map(item=><Row key={item.id} item={item} language={language} format={format} timeZone={timeZone} onOpen={()=>setOpenId(item.id)}/>)}
    {reviews.map(review=><li key={review.agreementId}><button type="button" onClick={onReviews}><span className="grow"><span>{review.relationshipLabel}</span><span className="muted">{t('reviews.due')}</span></span><Icon name="chevron"/></button></li>)}
   </ul>
@@ -159,7 +168,7 @@ export function Attention({householdId,session,language,format,timeZone,data,rel
  </>;
 }
 /** For a person you hold task authority over: what is waiting, to review and overdue. Only data they already share with you. */
-export function Overview({householdId,session,language,format,timeZone,data,onAssign,onChanged}:{householdId:string;session:Session;language:string;format:string;timeZone:string;data?:ExchangeResult;onAssign:()=>void;onChanged:(notice:MessageKey)=>void}){
+export function Overview({householdId,session,language,format,timeZone,data,authority,onAssign,onChanged}:{householdId:string;session:Session;language:string;format:string;timeZone:string;data?:ExchangeResult;authority?:AuthorityResult;onAssign:()=>void;onChanged:(notice:MessageKey)=>void}){
  const t=createTranslator(language),[tasks,setTasks]=useState<PartnerSummary[]>(),[openId,setOpenId]=useState<string>(),[breachFor,setBreachFor]=useState<string>();
  useEffect(()=>{
   let gone=false;const controller=new AbortController();
@@ -167,22 +176,24 @@ export function Overview({householdId,session,language,format,timeZone,data,onAs
    .then(async r=>{const body=await r.json();if(!r.ok)throw body;if(!gone)setTasks(body.tasks??[]);}).catch(()=>{if(!gone)setTasks([]);});
   return()=>{gone=true;controller.abort();};
  },[householdId,session.csrfToken,data]);
- const subjects=(data?.people??[]).filter(p=>p.subject),now=Date.now();
+ const names=new Map((authority?.members??[]).map(m=>[m.membershipId,m] as const)),now=Date.now();
+ const subjects=(authority?.powers??[]).map(p=>({membershipId:p.membershipId,name:names.get(p.membershipId)?.name??'',rank:names.get(p.membershipId)?.rank??null,power:p}));
  const waiting=(data?.exchanges??[]).filter(item=>!item.mine&&item.state==='open'),open=waiting.find(i=>i.id===openId);
- if(!data||!tasks)return <Skeleton count={3} label={t('workspace.loading')}/>;
+ if(!data||!tasks||!authority)return <Skeleton count={3} label={t('workspace.loading')}/>;
  if(!subjects.length)return <p className="muted">{t('overview.empty')}</p>;
  return <section className="plain">{subjects.map(person=>{
   const theirs=tasks.filter(task=>task.role==='creator'&&task.assigneeId===person.membershipId);
   const review=theirs.filter(task=>task.state==='submitted'),overdue=theirs.filter(task=>task.dueAt&&Date.parse(task.dueAt)<now&&!['done','declined','cancelled','submitted'].includes(task.state));
   const asks=waiting.filter(item=>item.counterpartId===person.membershipId);
   return <div className="person-card" key={person.membershipId}>
-   <div className="dynamic-card"><span className="badge-letter" aria-hidden="true">{(person.name||'?').slice(0,1).toUpperCase()}</span><span className="grow"><strong>{person.name||t('partner.unnamed')}</strong></span></div>
+   <div className="dynamic-card"><span className="badge-letter" aria-hidden="true">{(person.name||'?').slice(0,1).toUpperCase()}</span><span className="grow"><strong>{person.name||t('partner.unnamed')}</strong><span className="muted">{[person.rank!==null&&t('authority.rankNumber',{rank:String(person.rank)}),person.power.outcomes&&t('authority.pointsBalance',{points:person.power.points})].filter(Boolean).join(t('catalog.separator'))}</span></span></div>
    <div className="workspace-stats"><div><strong>{asks.length}</strong><span>{t('overview.waiting')}</span></div><div><strong>{review.length}</strong><span>{t('overview.toReview')}</span></div><div><strong>{overdue.length}</strong><span>{t('overview.overdue')}</span></div></div>
    {!!(asks.length||review.length||overdue.length)&&<ul className="menu">
     {asks.map(item=><Row key={item.id} item={item} language={language} format={format} timeZone={timeZone} onOpen={()=>setOpenId(item.id)}/>)}
     {[...review,...overdue].map(task=><li key={task.taskId}><button type="button" onClick={onAssign}><span className="grow"><span>{task.title}</span><span className="muted">{t(task.state==='submitted'?'overview.toReview':'overview.overdue')}</span></span><Icon name="chevron"/></button></li>)}
    </ul>}
-   <div className="workspace-actions"><button type="button" className="secondary" onClick={onAssign}>{t('overview.assign')}</button><button type="button" className="secondary" onClick={()=>setBreachFor(person.membershipId)}>{t('overview.recordBreach')}</button></div>
+   <div className="workspace-actions"><button type="button" className="secondary" onClick={onAssign}>{t('overview.assign')}</button>{(data.people??[]).some(p=>p.membershipId===person.membershipId&&p.subject)&&<button type="button" className="secondary" onClick={()=>setBreachFor(person.membershipId)}>{t('overview.recordBreach')}</button>}
+    <OutcomeActions power={person.power} name={person.name} householdId={householdId} session={session} language={language} onChanged={onChanged}/></div>
   </div>;
  })}
   {open&&<ExchangeDetail item={open} householdId={householdId} session={session} language={language} format={format} timeZone={timeZone} onClose={()=>setOpenId(undefined)} onChanged={notice=>{setOpenId(undefined);onChanged(notice);}}/>}

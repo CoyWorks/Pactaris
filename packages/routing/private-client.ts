@@ -442,3 +442,18 @@ export class PrivateExchangeClient{
   }catch(error){if(error instanceof ExchangeError)throw error;throw new ExchangeError('unavailable');}
  }
 }
+
+export class PrivateAuthorityClient{
+ constructor(private signer:DelegationSigner){}
+ async execute(accountId:string,placement:Placement,action:import('../auth/authority.js').AuthorityAction,input:Record<string,unknown>&{operationId:string;membershipId:string}):Promise<import('../auth/authority.js').AuthorityResult>{
+  const {AuthorityError,authorityOutput}=await import('../auth/authority.js');
+  try{
+   if(!uuid(input.operationId))throw new AuthorityError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new AuthorityError('invalid');
+   const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body);
+   const response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
+   if(response.status===403||response.status===404)throw new AuthorityError('denied');if(response.status===400)throw new AuthorityError('invalid');
+   if(response.status===409){const key=(response.data as {code?:string})?.code;throw new AuthorityError(key==='authority_paused'?'paused':key==='authority_capacity'?'capacity':'conflict');}
+   return authorityOutput(action,input,placement.householdId,response.data);
+  }catch(error){if(error instanceof AuthorityError)throw error;throw new AuthorityError('unavailable');}
+ }
+}
