@@ -32,7 +32,7 @@ function stripJpeg(bytes:Buffer):Buffer{
  while(i+1<bytes.length){
   if(bytes[i]!==0xff){throw new ProofError('type');}
   let marker=bytes[i+1];if(marker===undefined)throw new ProofError('type');
-  while(marker===0xff&&i+2<bytes.length){i++;marker=bytes[i+1];}
+  while(marker===0xff&&i+2<bytes.length){i++;const m=bytes[i+1];if(m===undefined)throw new ProofError('type');marker=m;}
   if(marker===0xd9){out.push(bytes.subarray(i,i+2));break;}
   if(marker===0xda){out.push(bytes.subarray(i));break;} // start of scan: copy the rest verbatim
   if(i+4>bytes.length)throw new ProofError('type');

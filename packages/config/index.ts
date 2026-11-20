@@ -11,6 +11,7 @@ export type InstanceConfig = {
   worker: { heartbeatFile: string; intervalSeconds: number };
   oidc?: { issuer: string; clientId: string };
   delegation?: { issuer: string; publicKeys: Record<string, string> };
+  storage?: { root: string; keyFile: string };
 };
 export class ConfigError extends Error { constructor(public field: string) { super('errors.config'); } }
 function invalid(field: string): never { throw new ConfigError(field); }
@@ -63,10 +64,13 @@ export function parseConfig(value: unknown, development = false): InstanceConfig
     if (!Object.keys(keys).length || Object.keys(keys).some(k => !/^[a-zA-Z0-9_-]{1,64}$/.test(k))) invalid('delegation.publicKeys');
     delegation = { issuer: origin(d.issuer, 'delegation.issuer', development), publicKeys: Object.fromEntries(Object.entries(keys).map(([k,v]) => [k,file(v,'delegation.publicKeys')])) };
   }
+  let storage: InstanceConfig['storage'];
+  if (c.storage) { const sc = object(c.storage, 'storage'); storage = { root: file(sc.root, 'storage.root'), keyFile: file(sc.keyFile, 'storage.keyFile') }; }
   let runtimeRole: string | undefined;
   if (db.runtimeRole !== undefined) { runtimeRole = text(db.runtimeRole,'database.runtimeRole'); if (!/^[a-z_][a-z0-9_]{0,62}$/.test(runtimeRole)) invalid('database.runtimeRole'); }
   const migrationUrlFile = db.migrationUrlFile === undefined ? undefined : file(db.migrationUrlFile,'database.migrationUrlFile');
   return { instanceId, publicOrigin, listen: { address, port, ...(tls ? { tls } : {}) }, database: { url, maxConnections: integer(db.maxConnections, 'database.maxConnections', 1, 20), ...(runtimeRole ? { runtimeRole } : {}), ...(migrationUrlFile ? { migrationUrlFile } : {}), ...(db.backupUrlFile ? {backupUrlFile:file(db.backupUrlFile,'database.backupUrlFile')} : {}), ...(db.backupRole ? {backupRole:text(db.backupRole,'database.backupRole')} : {}) },
+    ...(storage ? { storage } : {}),
     locale: { language, format, timeZone }, worker: { heartbeatFile: file(worker.heartbeatFile, 'worker.heartbeatFile'), intervalSeconds: integer(worker.intervalSeconds, 'worker.intervalSeconds', 5, 300) }, ...(oidc ? { oidc } : {}), ...(delegation ? { delegation } : {}) };
 }
 export function loadConfig(path: string, development = false): InstanceConfig {
