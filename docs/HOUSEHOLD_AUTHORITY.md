@@ -26,16 +26,27 @@ As a result, shared tasks, task rewards, point balances, reward redemption, task
 - **Punishment:** creates an ordinary shared task assigned directly to the sub, with the usual inbox notice. It can be linked to a breach record.
 - **Breach record** (see [DYNAMIC_EXCHANGES.md](DYNAMIC_EXCHANGES.md)): recorded at once and shown to the sub; there is nothing to confirm.
 
+## Habits set by a Dom
+
+Someone with task authority over a sub can set a daily or weekly habit for them: at least or at most a number of times, in a chosen time zone. The sub (or the Dom) records progress with **+1** on Today; the Dom follows it under People → Habits. Optional automatic outcomes, for someone with points-and-punishments authority: points when reached, points taken when missed, and a punishment task when missed.
+
+The worker (`run_authority_habits`) checks each ended period once. It applies outcomes only with live points-and-punishments authority, an active household, no pause on either person and no blocked activity (`reward` for points given, `consequence` otherwise). Otherwise the period is recorded as *skipped*; skipped and paused periods are never made up later, and resuming a paused habit starts at the current period. Periods missed while the worker was down are evaluated for at most a week back. Entries can be reversed until their period has been checked.
+
+## Permissions per sub
+
+On a Dom link the Dom can switch off **spending points on rewards** and **sending proposals**. When a sub has several Doms the strictest setting applies. Permission requests, journal entries, pausing, stopping and ending a link can never be switched off.
+
 ## Security and privacy
 
 - Tables `authority_links`, `authority_delegations`, `authority_pairs`, `point_adjustments`, `authority_punishments` and `authority_receipts` use FORCE RLS. The runtime role reaches them only through `authority_command` and `authority_export_page`.
 - Commands use signed per-request delegation, operation IDs with request fingerprints, receipts, an audit event per change and the restore fence. The gateway stores no authority data.
 - Ended links and revoked delegations are journaled (`authority.ended`, `delegation.revoked`) and replayed after a restore, so authority cannot return from a backup.
 - Departure ends the member's links and delegations and clears their rank. Account erasure blanks link names they wrote and reasons they gave for point changes.
-- Personal export section `authority` contains the person's links, delegations and point adjustments.
+- Personal export section `authority` contains the person's links, delegations, point adjustments and assigned habits with their entries and results. Departure archives the person's habits; erasure blanks habit text they wrote.
 
 ## In the app
 
-- **Dynamic → Doms and subs:** invite a sub, accept or decline an invitation, end a link, rank, delegation and per-sub settings, and the owner's visibility switch.
+- **Dynamic → Doms and subs:** invite a sub, accept or decline an invitation, end a link, rank, delegation and per-sub settings (rank authority, hidden, spending points, proposals), the ranking list and the owner's visibility switch.
 - **Today → Needs your attention:** invitations waiting for your answer.
-- **Dynamic → People:** per person you hold authority over: rank, points, what is waiting, tasks to review and overdue, and buttons for a task, a breach, points and a punishment.
+- **Dynamic → People:** per person you hold authority over: rank, points, what is waiting, tasks to review and overdue, and buttons for a task, a breach, habits, points and a punishment.
+- **Today → Habits from your Dom:** progress and +1 for the sub.
