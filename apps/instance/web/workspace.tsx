@@ -17,6 +17,7 @@ import {Skeleton,TodayCheckins,TodayHabits} from './today-habits.js';
 import {SwipeRow,UndoToast,useUndoable} from './swipe.js';
 import {Attention,ExchangeView,Overview,ReviewsView,TermsForm,useExchange,useTerms} from './exchange.js';
 import {AuthorityView,useAuthority} from './authority.js';
+import {TodayAssignedHabits,useAssignedHabits} from './assigned-habits.js';
 type View='home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews'|'authority';
 type Tab='home'|'tasks'|'routines'|'library'|'dynamic';
 type Draft={action:string;body:Record<string,unknown>};
@@ -42,6 +43,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
  const [exchangeReload,setExchangeReload]=useState(0),[termsReload,setTermsReload]=useState(0);
  const [authorityReload,setAuthorityReload]=useState(0);
  const exchange=useExchange(householdId,exchangeReload),terms=useTerms(householdId,termsReload),authority=useAuthority(householdId,authorityReload);
+ const assignedHabits=useAssignedHabits(householdId,authorityReload);
  const refreshAll=()=>{setExchangeReload(v=>v+1);setAuthorityReload(v=>v+1);setRefresh(v=>v+1);};
  const [adding,setAdding]=useState<QuickKind|'menu'>(),[habitsReload,setHabitsReload]=useState(0),pendingEditor=useRef<{fields:TaskFields}|undefined>(undefined);
  const t=createTranslator(language),[data,setData]=useState<WorkspaceResult>(),[filter,setFilter]=useState('open'),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[draft,setDraft]=useState<Draft>(),[editor,setEditor]=useState<{fields:TaskFields;taskId?:string;version?:string}>(),[settings,setSettings]=useState<{name:string;timeZone:string;version:string}>();
@@ -190,13 +192,14 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
     <Attention householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} authority={authority.data} reload={exchangeReload} onChanged={message=>{setNotice(message);refreshAll();}} onReviews={()=>go('reviews')}/>
     <div className="section-head"><h2>{t('workspace.todo')}</h2><button type="button" className="link-button" onClick={()=>go('tasks')}>{t('workspace.allTasks')}</button></div>
     {today.length?<ul className="card-list">{today.map(task=>row(task,true))}</ul>:<div className="empty-card"><p>{t('workspace.nothingDue')}</p><button type="button" onClick={()=>setAdding('task')}><Icon name="plus"/>{t('today.addTask')}</button></div>}
+    {authority.data&&<TodayAssignedHabits habits={assignedHabits} me={authority.data.actorMembershipId} householdId={householdId} session={session} language={language} onChanged={()=>setAuthorityReload(v=>v+1)}/>}
     <TodayHabits householdId={householdId} csrfToken={session.csrfToken} language={language} reload={habitsReload} onAdd={()=>setAdding('habit')} onOpen={()=>go('habits')}/>
     <TodayCheckins householdId={householdId} csrfToken={session.csrfToken} language={language} reload={habitsReload} onSaved={()=>setNotice('routines.confirmed')}/>
     <div className="workspace-stats">{(['open','overdue','done'] as const).map(k=><div key={k}><strong>{data?.counts?.[k]??0}</strong><span>{t(({open:'workspace.open',done:'workspace.done',overdue:'workspace.overdue'} as const)[k])}</span></div>)}</div>
     <div className="tiles"><button type="button" onClick={()=>go('checkins')}><Icon name="routines"/>{t('routines.checkinsTitle')}</button><button type="button" onClick={()=>go('rules')}><Icon name="library"/>{t('library.guidance')}</button><button type="button" onClick={()=>go('notes')}><Icon name="library"/>{t('library.notes')}</button><button type="button" onClick={()=>go('members')}><Icon name="dynamic"/>{t('workspace.invite')}</button></div>
    </section>}
    {view==='exchange'&&h&&<ExchangeView householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} people={exchange.data?.people??[]} onChanged={()=>setExchangeReload(v=>v+1)}/>}
-   {view==='overview'&&h&&<Overview householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} authority={authority.data} onAssign={()=>go('participantTasks')} onChanged={message=>{setNotice(message);refreshAll();}}/>}
+   {view==='overview'&&h&&<Overview householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} authority={authority.data} habits={assignedHabits} onAssign={()=>go('participantTasks')} onChanged={message=>{setNotice(message);refreshAll();}}/>}
    {view==='authority'&&h&&<AuthorityView householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={authority.data} onChanged={refreshAll}/>}
    {view==='reviews'&&h&&<ReviewsView householdId={householdId} session={session} language={language} format={format}/>}
    {view==='dynamic'&&h&&<section className="plain">

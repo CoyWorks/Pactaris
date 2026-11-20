@@ -180,3 +180,8 @@ button.secondary{background:none;border-color:var(--outline);color:var(--accent)
 .rating label:has(input:checked){border-color:var(--primary);background:var(--chip)}
 .rating input{width:18px;height:18px}
 .link-like{color:var(--accent);font-weight:500;font-size:.9rem}
+
+/* Assigned habits and ranking. */
+.bar.over span{background:var(--danger)}
+.habit-row{align-items:flex-start}.row-actions{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:flex-end}
+.ranking li{gap:.75rem}

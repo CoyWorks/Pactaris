@@ -48,6 +48,7 @@ function LinkPage({link,data,householdId,session,language,format,timeZone,onClos
  const delegations=(data.delegations??[]).filter(d=>d.linkId===link.linkId),subRank=data.members?.find(m=>m.membershipId===link.subId)?.rank??null;
  const candidates=(data.members??[]).filter(m=>m.membershipId!==link.domId&&m.membershipId!==link.subId&&!delegations.some(d=>d.delegateId===m.membershipId));
  const title=link.role==='sub'?link.domName:link.subName;
+ const settings={linkId:link.linkId,version:link.version,rankAuthority:link.rankAuthority,private:link.private,canSpendPoints:link.canSpendPoints,canPropose:link.canPropose};
  return <Layer title={title||t('partner.unnamed')} backLabel={t('nav.back')} onClose={onClose}>
   <p className="muted">{[link.label,t(link.role==='dom'?'authority.youAreDom':link.role==='sub'?'authority.youAreSub':'authority.viewOnly'),t(link.state==='invited'?'authority.invited':'authority.active')].filter(Boolean).join(t('catalog.separator'))}</p>
   {error&&<p role="alert">{t(error)}</p>}
@@ -57,9 +58,11 @@ function LinkPage({link,data,householdId,session,language,format,timeZone,onClos
   {link.role==='dom'&&link.state==='active'&&<>
    <h3>{t('authority.settings')}</h3>
    <form className="quick-form" onSubmit={e=>e.preventDefault()}>
-    <label>{t('authority.rankAuthority')}<select disabled={busy} value={link.rankAuthority} onChange={e=>{void run('linkSettings',{linkId:link.linkId,version:link.version,rankAuthority:e.target.value,private:link.private});}}>
+    <label>{t('authority.rankAuthority')}<select disabled={busy} value={link.rankAuthority} onChange={e=>{void run('linkSettings',{...settings,rankAuthority:e.target.value});}}>
      {(Object.keys(rankKeys) as RankAuthority[]).map(k=><option key={k} value={k}>{t(rankKeys[k])}</option>)}</select></label>
-    <label className="check"><input type="checkbox" disabled={busy} checked={link.private} onChange={e=>{void run('linkSettings',{linkId:link.linkId,version:link.version,rankAuthority:link.rankAuthority,private:e.target.checked});}}/>{t('authority.private')}</label>
+    <label className="check"><input type="checkbox" disabled={busy} checked={link.private} onChange={e=>{void run('linkSettings',{...settings,private:e.target.checked});}}/>{t('authority.private')}</label>
+    <label className="check"><input type="checkbox" disabled={busy} checked={link.canSpendPoints} onChange={e=>{void run('linkSettings',{...settings,canSpendPoints:e.target.checked});}}/>{t('authority.canSpendPoints')}</label>
+    <label className="check"><input type="checkbox" disabled={busy} checked={link.canPropose} onChange={e=>{void run('linkSettings',{...settings,canPropose:e.target.checked});}}/>{t('authority.canPropose')}</label>
     <label>{t('authority.subRank')}<select disabled={busy} value={subRank??''} onChange={e=>{void run('rankSet',{subjectId:link.subId,rank:e.target.value?Number(e.target.value):null});}}>
      <option value="">{t('authority.noRank')}</option>{Array.from({length:10},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}</select></label>
    </form>
@@ -108,6 +111,7 @@ export function AuthorityView({householdId,session,language,format,timeZone,data
  if(!data)return <Skeleton count={3} label={t('workspace.loading')}/>;
  const links=data.links??[],mine=links.filter(l=>l.role==='dom'),doms=links.filter(l=>l.role==='sub'),others=links.filter(l=>l.role==='viewer'),open=links.find(l=>l.linkId===openId);
  const done=(message:MessageKey)=>{setOpenId(undefined);setInviting(false);setNotice(message);onChanged();};
+ const ranked=(data.members??[]).filter(m=>m.rank!==null).sort((a,b)=>(a.rank??0)-(b.rank??0)||a.name.localeCompare(b.name));
  return <section className="plain">
   <Hint label={t('hint.more')}>{t('authority.help')}</Hint>
   {notice&&<p role="status">{t(notice)}</p>}{error&&<p role="alert">{t(error)}</p>}
@@ -116,6 +120,7 @@ export function AuthorityView({householdId,session,language,format,timeZone,data
   {mine.length?<ul className="menu">{mine.map(l=><LinkRow key={l.linkId} link={l} language={language} onOpen={()=>setOpenId(l.linkId)}/>)}</ul>:<p className="muted">{t('authority.noSubs')}</p>}
   {!!doms.length&&<><h2 className="group-title">{t('authority.yourDoms')}</h2><ul className="menu">{doms.map(l=><LinkRow key={l.linkId} link={l} language={language} onOpen={()=>setOpenId(l.linkId)}/>)}</ul></>}
   {!!others.length&&<><h2 className="group-title">{t('authority.household')}</h2><ul className="menu">{others.map(l=><LinkRow key={l.linkId} link={l} language={language} onOpen={()=>setOpenId(l.linkId)}/>)}</ul></>}
+  {ranked.length>0&&<><h2 className="group-title">{t('authority.ranking')}</h2><ol className="card-list ranking">{ranked.map(m=><li key={m.membershipId}><span className="badge-letter" aria-hidden="true">{m.rank}</span><span className="grow">{m.name||t('partner.unnamed')}</span></li>)}</ol></>}
   {data.canSetVisibility&&<label className="check"><input type="checkbox" disabled={busy} checked={!!data.subsVisible} onChange={e=>{void run('visibilitySet',{subsVisible:e.target.checked,version:data.settingsVersion});}}/>{t('authority.subsVisible')}</label>}
   {open&&<LinkPage link={open} data={data} householdId={householdId} session={session} language={language} format={format} timeZone={timeZone} onClose={()=>setOpenId(undefined)} onChanged={done}/>}
   {inviting&&<InvitePage data={data} householdId={householdId} session={session} language={language} onClose={()=>setInviting(false)} onChanged={done}/>}
