@@ -1806,7 +1806,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await consent(D,'selfPause',{})).status,200);
      assert.equal((await au(A,'pointsAdjust',{subjectId:D.member,points:5,reason:''})).status,409);
      const paused=await state(D);assert.equal((await consent(D,'selfResume',{epoch:paused.epoch,memberEpoch:paused.memberEpoch})).status,200);
-     assert.equal((await direct()).status,200);
+     const resumed=await direct();assert.equal(resumed.status,200);
      assert.equal((await au(A,'pointsAdjust',{subjectId:D.member,points:5,reason:'Good week'})).status,200);
      assert.equal((await view(D)).myPoints,'5');
      assert.equal((await au(B,'pointsAdjust',{subjectId:D.member,points:5,reason:''})).status,404);
@@ -1833,6 +1833,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await view(C)).powers.some((x:any)=>x.membershipId===D.member),false);
      assert.equal((await direct().catch(()=>({status:0}))).status===200,false);
      assert.equal((await db.owner.query("SELECT count(*)::int n FROM pactaris.revocation_journal WHERE kind='authority.ended' AND subject->>'linkId'=$1",[linkId])).rows[0].n,1);
+     // Cancelling stays possible after the link ended; it also frees capacity for the later checks.
+     for(const taskId of [assigned.data.taskId,resumed.data.taskId,punishment.data.resourceId])assert.equal((await move(A,'partnerCancel',taskId)).status,200);
     })();
     assert.equal((await read(B,legacy)).state,'offered');assert.equal((await read(B,legacy)).assignmentMode,'offer');assert.equal((await move(B,'partnerDecline',legacy)).status,200);
     const defaultPrefs={assigned:true,submitted:true,reviewed:true},quietPrefs={...defaultPrefs,assigned:false};
