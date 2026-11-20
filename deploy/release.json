@@ -431,6 +431,13 @@
     },
     {
       "component": "instance",
+      "id": "0043_habit_streaks",
+      "path": "migrations/instance/0043_habit_streaks.sql",
+      "sha256": "4c86df334dad5bb135037d39b31abfc3bb77afe00a39585c393833c47b5c048d",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
       "id": "0044_task_proofs",
       "path": "migrations/instance/0044_task_proofs.sql",
       "sha256": "56ac7d956af0e02d880dab850803e90a035f1837216e2aae824abf1314395679",

@@ -1129,5 +1129,11 @@
   "start.link": "Link as Dom and sub",
   "start.task": "Give a first task",
   "start.hide": "Hide",
-  "start.done": "Done"
+  "start.done": "Done",
+  "habits.streak": "Streak {count}",
+  "habits.streakBest": "best {count}",
+  "habits.milestoneEnable": "Bonus for a streak",
+  "habits.milestoneHelp": "Give extra points every time the sub reaches this habit a set number of periods in a row. A paused period doesn't break the streak.",
+  "habits.milestoneEvery": "Every how many in a row",
+  "habits.milestonePoints": "Bonus points"
 }
