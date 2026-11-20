@@ -12,6 +12,7 @@ Every member has a notice list per dynamic (bell in the top bar). Notices are cr
 | `delegated` | delegate | authority over a sub is delegated |
 | `points` | person whose points changed | a manual or automatic point change |
 | `habit` | sub | a habit period was checked (not for skipped periods) |
+| `purchase` | Dom who listed the reward | a sub bought a reward in the shop (migration `0042_reward_shop`) |
 
 Task notices (assigned, submitted, reviewed, reminders) stay in the existing task inbox and appear on the same page. A withdrawn exchange removes its notices; leaving a dynamic or erasing an account removes the person's notices. Opening the page marks notices read. Notices have no actor for automatic outcomes.
 
@@ -32,7 +33,7 @@ Push stays best effort. It is not suitable for safety actions.
 
 ## Native Android and iOS apps (planned)
 
-The owner wants separate Android and iOS apps. The design keeps the server side independent of the delivery channel:
+Planned for the pre-release, not the alpha (owner decision, 20 November 2026); the alpha uses the web app with web push. The owner wants separate Android and iOS apps. The design keeps the server side independent of the delivery channel:
 
 - **App shell.** Start with a thin native wrapper around the existing web app (#47), for example Capacitor, so screens, translations and authorization stay in one place. Sign-in uses the system browser (ASWebAuthenticationSession / Custom Tabs) against the gateway's OIDC flow; the app keeps only the gateway session cookie, never identity-provider tokens.
 - **Device registration.** Extend `push_devices` with a provider (`webpush`, `fcm`, `apns`) and an encrypted provider token, bound to the session exactly like Web Push subscriptions today. Logout, revocation, expiry and suspension remove the device.

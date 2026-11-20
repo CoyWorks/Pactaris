@@ -1860,6 +1860,25 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      let relAfter:string|null=null;const listed:string[]=[];
      do{const page=await api(base+'/relationships'+(relAfter?'?after='+relAfter:''),'GET',undefined,D.session);assert.equal(page.status,200);listed.push(...page.data.relationships.map((r:any)=>r.relationshipId));relAfter=page.data.nextCursor;}while(relAfter);
      assert.ok(!listed.includes(backing));
+     // Reward shop: the Dom lists rewards; the sub buys with points, at once or as a request; a weekly limit holds.
+     const shop=async(p:Person)=>{const r=await api(base+'/authority/shop','GET',undefined,p.session);assert.equal(r.status,200,JSON.stringify(r.data));return r.data;};
+     const listedReward=await au(A,'shopSave',{itemId:null,version:null,fields:{kind:'reward',title:'Film night',description:'',points:1},listed:true,autoGrant:false,weeklyLimit:1});
+     assert.equal(listedReward.status,200,JSON.stringify(listedReward.data));
+     const instantReward=await au(A,'shopSave',{itemId:null,version:null,fields:{kind:'reward',title:'Treat',description:'',points:1},listed:true,autoGrant:true,weeklyLimit:null});assert.equal(instantReward.status,200);
+     assert.equal((await au(A,'shopSave',{itemId:null,version:null,fields:{kind:'consequence',title:'Lines',description:'',points:0},listed:true,autoGrant:false,weeklyLimit:null})).status,400);
+     assert.equal((await au(A,'shopSave',{itemId:null,version:null,fields:{kind:'consequence',title:'Lines',description:'Fifty',points:0},listed:false,autoGrant:false,weeklyLimit:null})).status,200);
+     assert.ok((await shop(A)).items.some((i:any)=>i.kind==='consequence'&&i.title==='Lines'));
+     const offers=(await shop(D)).offers;assert.equal(offers.length,2);assert.ok(!(await shop(D)).items.some((i:any)=>i.title==='Lines'));
+     assert.equal((await au(B,'shopBuy',{itemId:listedReward.data.resourceId,version:'1'})).status,404);
+     const before=Number((await shop(D)).balance);
+     const bought=await au(D,'shopBuy',{itemId:listedReward.data.resourceId,version:'1'});assert.equal(bought.status,200,JSON.stringify(bought.data));
+     assert.equal((await au(D,'shopBuy',{itemId:listedReward.data.resourceId,version:'1'})).data.code,'authority_capacity');
+     assert.equal((await au(D,'shopBuy',{itemId:instantReward.data.resourceId,version:'1'})).status,200);
+     const afterBuy=await shop(D);assert.equal(Number(afterBuy.balance),before-2);assert.deepEqual(afterBuy.purchases.map((p:any)=>p.state).sort(),['fulfilled','requested']);
+     const waiting=(await shop(A)).requests;assert.equal(waiting.length,1);
+     assert.equal((await api(base+'/catalog/redemptionFulfill','POST',{operationId:randomUUID(),redemptionId:waiting[0].redemptionId,version:waiting[0].version},A.session)).status,200);
+     assert.equal((await shop(A)).requests.length,0);assert.equal(Number((await shop(D)).balance),before-2);
+     assert.ok((await api(base+'/exchange/notices','GET',undefined,A.session)).data.notices.some((n:any)=>n.kind==='purchase'));
      assert.equal((await db.pool.query('SELECT pactaris.run_authority_habits($1) AS state',[instanceId])).rows[0].state,'idle');
      assert.equal((await consent(D,'selfPause',{})).status,200);
      await db.owner.query("UPDATE pactaris.authority_habits SET next_period=pactaris.habit_period_start('daily','UTC',now())-2 WHERE id=$1",[habit.data.resourceId]);

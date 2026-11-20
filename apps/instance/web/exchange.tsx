@@ -1,4 +1,5 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
+import {PunishmentPicker} from './shop.js';
 import {PersonProgress,type Progress} from './progress.js';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {AgreementReview,ExchangeItem,ExchangeKind,ExchangePerson,ExchangeResult,TermKey,Terms} from '../../../packages/auth/exchange.js';
@@ -118,7 +119,7 @@ export function ExchangeForm({people,householdId,session,language,initial,onClos
    <label>{t('library.title')}<input required maxLength={120} autoComplete="off" disabled={busy} value={title} onChange={e=>edit(setTitle)(e.target.value)}/></label>
    <label>{t('library.body')}<textarea maxLength={600} disabled={busy} value={body} onChange={e=>edit(setBody)(e.target.value)}/></label>
    {kind==='permission'&&<label>{t('exchange.dueAtOptional')}<input type="datetime-local" disabled={busy} value={due} onChange={e=>edit(setDue)(e.target.value)}/></label>}
-   {kind==='breach'&&<><label>{t('authority.punishmentOptional')}<input maxLength={120} autoComplete="off" disabled={busy} value={punishment} onChange={e=>edit(setPunishment)(e.target.value)}/></label><p className="muted">{t('exchange.breachNotice')}</p></>}
+   {kind==='breach'&&<><label>{t('authority.punishmentOptional')}<input maxLength={120} autoComplete="off" disabled={busy} value={punishment} onChange={e=>edit(setPunishment)(e.target.value)}/></label><PunishmentPicker householdId={householdId} language={language} onPick={item=>edit(setPunishment)(item.title)}/><p className="muted">{t('exchange.breachNotice')}</p></>}
    {error&&<p role="alert">{t(error)}</p>}
    <button type="submit" disabled={busy||!title.trim()||!recipient}>{t(busy?'onboarding.saving':retry?'onboarding.retry':'exchange.send')}</button>
   </form>}

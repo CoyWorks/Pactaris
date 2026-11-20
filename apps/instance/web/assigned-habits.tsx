@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
+import {PunishmentPicker} from './shop.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import type {AssignedHabit,AuthorityResult,HabitFields} from '../../../packages/auth/authority.js';
 import {Hint,Icon,Layer} from './navigation.js';
@@ -67,7 +68,8 @@ function HabitForm({habit,subjectId,householdId,session,language,timeZone,canOut
    {canOutcomes&&<><h3>{t('habits.outcomes')}</h3><Hint label={t('hint.more')}>{t('habits.outcomesHelp')}</Hint>
     <label>{t('habits.rewardPoints')}<input type="number" inputMode="numeric" min={1} max={10000} disabled={busy} value={fields.rewardPoints??''} onChange={e=>set('rewardPoints',number(e.target.value))}/></label>
     <label>{t('habits.penaltyPoints')}<input type="number" inputMode="numeric" min={1} max={10000} disabled={busy} value={fields.penaltyPoints??''} onChange={e=>set('penaltyPoints',number(e.target.value))}/></label>
-    <label>{t('habits.punishment')}<input maxLength={120} autoComplete="off" disabled={busy} value={fields.punishment??''} onChange={e=>set('punishment',e.target.value||null)}/></label></>}
+    <label>{t('habits.punishment')}<input maxLength={120} autoComplete="off" disabled={busy} value={fields.punishment??''} onChange={e=>set('punishment',e.target.value||null)}/></label>
+    <PunishmentPicker householdId={householdId} language={language} onPick={item=>set('punishment',item.title)}/></>}
    {error&&<p role="alert">{t(error)}</p>}
    <button type="submit" disabled={busy||!fields.title.trim()}>{t(busy?'onboarding.saving':'habits.save')}</button>
   </form>

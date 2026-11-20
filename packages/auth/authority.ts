@@ -13,9 +13,15 @@ export type AuthorityPower={membershipId:string;tasks:boolean;outcomes:boolean;m
 export type PointAdjustment={id:string;recipientId:string;issuerId:string;points:number;reason:string;createdAt:string};
 /** Last 14 days, oldest first; `today` is the final day in the household time zone. */
 export type ProgressPerson={membershipId:string;name:string;rank:number|null;self:boolean;doms:string[];balance:string;openTasks:number;tasks:number[];points:number[];reached:number[];missed:number[]};
+export type ShopFields={kind:'reward'|'consequence';title:string;description:string;points:number};
+export type ShopOffer={itemId:string;version:string;holderId:string;holderName:string;title:string;description:string;points:number;autoGrant:boolean;weeklyLimit:number|null;usedThisWeek:number};
+export type ShopItem={itemId:string;version:string;kind:'reward'|'consequence';title:string;description:string;points:number;listed:boolean;autoGrant:boolean;weeklyLimit:number|null};
+export type ShopRequest={redemptionId:string;version:string;buyerId:string;buyerName:string;title:string;points:number;createdAt:string};
+export type ShopPurchase={redemptionId:string;version:string;title:string;points:number;state:'requested'|'fulfilled'|'declined'|'cancelled'|'reversed'|'expired';createdAt:string};
 export type AuthorityResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';resourceId?:string;
  links?:AuthorityLink[];delegations?:AuthorityDelegation[];members?:AuthorityMember[];powers?:AuthorityPower[];adjustments?:PointAdjustment[];
- subsVisible?:boolean;settingsVersion?:string;canSetVisibility?:boolean;myPoints?:string;myRank?:number|null;habits?:AssignedHabit[];today?:string;people?:ProgressPerson[]};
+ subsVisible?:boolean;settingsVersion?:string;canSetVisibility?:boolean;myPoints?:string;myRank?:number|null;habits?:AssignedHabit[];today?:string;people?:ProgressPerson[];
+ balance?:string;canSpend?:boolean;pointsEnabled?:boolean;offers?:ShopOffer[];items?:ShopItem[];requests?:ShopRequest[];purchases?:ShopPurchase[]};
 export class AuthorityError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'unavailable'){super('authority.'+kind);}}
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const instant=(v:unknown):v is string=>typeof v==='string'&&v.length<=40&&Number.isFinite(Date.parse(v));
@@ -25,12 +31,17 @@ const shapes:Record<AuthorityAction,string[]>={authorityList:[],linkInvite:['sub
  linkEnd:['linkId','version'],linkSettings:['linkId','version','rankAuthority','private','canSpendPoints','canPropose'],delegationSet:['linkId','delegateId','version','tasks','outcomes','endsAt'],
  delegationRevoke:['delegationId','version'],rankSet:['subjectId','rank'],visibilitySet:['subsVisible','version'],pointsAdjust:['subjectId','points','reason'],
  punishmentGive:['subjectId','title','description','exchangeId'],habitList:[],habitSave:['habitId','subjectId','version','fields'],
- habitState:['habitId','version','state'],habitRecord:['habitId','count'],habitReverse:['entryId'],progressList:[]};
+ habitState:['habitId','version','state'],habitRecord:['habitId','count'],habitReverse:['entryId'],progressList:[],
+ shopList:[],shopSave:['itemId','version','fields','listed','autoGrant','weeklyLimit'],shopArchive:['itemId','version'],shopBuy:['itemId','version']};
 const points=(v:unknown)=>v===null||(Number.isInteger(v)&&(v as number)>=1&&(v as number)<=10000);
 export function validHabitFields(f:unknown):f is HabitFields{
  return record(f)&&Object.keys(f).sort().join(',')==='description,mode,penaltyPoints,period,punishment,rewardPoints,target,timeZone,title'&&documentText(f.title,120)&&documentText(f.description,500,true,true)&&
   ['daily','weekly'].includes(f.period as string)&&['minimum','maximum'].includes(f.mode as string)&&Number.isInteger(f.target)&&(f.target as number)>=(f.mode==='minimum'?1:0)&&(f.target as number)<=1000&&
   typeof f.timeZone==='string'&&/^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-]+){0,2}$/.test(f.timeZone)&&f.timeZone.length<=100&&points(f.rewardPoints)&&points(f.penaltyPoints)&&(f.punishment===null||documentText(f.punishment,120));
+}
+export function validShopFields(f:unknown):f is ShopFields{
+ return record(f)&&Object.keys(f).sort().join(',')==='description,kind,points,title'&&['reward','consequence'].includes(f.kind as string)&&documentText(f.title,120)&&documentText(f.description,500,true,true)&&
+  Number.isInteger(f.points)&&(f.kind==='consequence'?f.points===0:(f.points as number)>=0&&(f.points as number)<=10000);
 }
 export function authorityInput(action:AuthorityAction,value:unknown):Record<string,unknown>&{operationId:string}{
  if(!record(value)||!uuid(value.operationId))throw new AuthorityError('invalid');
@@ -38,11 +49,14 @@ export function authorityInput(action:AuthorityAction,value:unknown):Record<stri
  const v=value,bad=()=>{throw new AuthorityError('invalid');};
  for(const key of ['subId','linkId','delegateId','delegationId','entryId'])if(key in v&&!uuid(v[key]))bad();
  if('subjectId'in v&&!(action==='habitSave'?v.subjectId===null||uuid(v.subjectId):uuid(v.subjectId)))bad();
+ if(action.startsWith('shop')&&'itemId'in v&&!(action==='shopSave'?v.itemId===null||uuid(v.itemId):uuid(v.itemId)))bad();
+ if(action==='shopSave'&&(!validShopFields(v.fields)||(v.itemId===null?v.version!==null:!documentVersion(v.version))||typeof v.listed!=='boolean'||typeof v.autoGrant!=='boolean'||
+  (v.weeklyLimit!==null&&!(Number.isInteger(v.weeklyLimit)&&(v.weeklyLimit as number)>=1&&(v.weeklyLimit as number)<=100))||(v.listed&&(v.fields as ShopFields).kind!=='reward')))bad();
  if('habitId'in v&&!(action==='habitSave'?v.habitId===null||uuid(v.habitId):uuid(v.habitId)))bad();
  if(action==='habitSave'&&(!validHabitFields(v.fields)||(v.habitId===null)!==(v.subjectId!==null)||(v.habitId===null?v.version!==null:!documentVersion(v.version))))bad();
  if(action==='habitState'&&!['active','paused','archived'].includes(v.state as string))bad();
  if(action==='habitRecord'&&(!Number.isInteger(v.count)||(v.count as number)<1||(v.count as number)>1000))bad();
- if('version'in v&&action!=='habitSave'&&!(action==='delegationSet'||action==='visibilitySet'?count(v.version):documentVersion(v.version)))bad();
+ if('version'in v&&action!=='habitSave'&&action!=='shopSave'&&!(action==='delegationSet'||action==='visibilitySet'?count(v.version):documentVersion(v.version)))bad();
  if(action==='linkInvite'&&!documentText(v.label,80,true))bad();
  if(action==='linkSettings'&&(!['off','tasks','outcomes'].includes(v.rankAuthority as string)||typeof v.private!=='boolean'||typeof v.canSpendPoints!=='boolean'||typeof v.canPropose!=='boolean'))bad();
  if(action==='delegationSet'&&(typeof v.tasks!=='boolean'||typeof v.outcomes!=='boolean'||(!v.tasks&&!v.outcomes)||(v.endsAt!==null&&(!instant(v.endsAt)||Date.parse(v.endsAt as string)<=Date.now()))))bad();
@@ -51,7 +65,7 @@ export function authorityInput(action:AuthorityAction,value:unknown):Record<stri
  if(action==='pointsAdjust'&&(!Number.isInteger(v.points)||v.points===0||Math.abs(v.points as number)>10000||!documentText(v.reason,200,true)))bad();
  if(action==='punishmentGive'&&(!documentText(v.title,120)||!documentText(v.description,500,true,true)||(v.exchangeId!==null&&!uuid(v.exchangeId))))bad();
  const lower:Record<string,unknown>={};
- for(const key of ['operationId','subId','linkId','delegateId','delegationId','subjectId','exchangeId','habitId','entryId'])if(typeof v[key]==='string')lower[key]=(v[key] as string).toLowerCase();
+ for(const key of ['operationId','subId','linkId','delegateId','delegationId','subjectId','exchangeId','habitId','entryId','itemId'])if(typeof v[key]==='string')lower[key]=(v[key] as string).toLowerCase();
  return {...value,...lower} as Record<string,unknown>&{operationId:string};
 }
 const name=(v:unknown):v is string=>typeof v==='string'&&v.length<=80;
@@ -59,12 +73,31 @@ const name=(v:unknown):v is string=>typeof v==='string'&&v.length<=80;
 export function authorityOutput(action:AuthorityAction,input:Record<string,unknown>&{operationId:string;membershipId:string},householdId:string,r:unknown):AuthorityResult{
  const bad=():never=>{throw Error('routing.response');};
  if(!record(r)||r.householdId!==householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId)bad();
- const v=r as AuthorityResult,listing=action==='authorityList'||action==='habitList'||action==='progressList';
+ const v=r as AuthorityResult,listing=action==='authorityList'||action==='habitList'||action==='progressList'||action==='shopList';
  if(v.status!==(listing?'listed':'applied'))bad();
  const out:AuthorityResult={householdId:v.householdId,operationId:v.operationId,actorMembershipId:v.actorMembershipId,status:v.status};
  if(!listing){if(!uuid(v.resourceId))bad();out.resourceId=v.resourceId!;return out;}
  const list=<T,>(value:unknown,max:number,map:(x:Record<string,unknown>)=>T):T[]=>{if(!Array.isArray(value)||value.length>max)bad();return (value as unknown[]).map(x=>record(x)?map(x):bad());};
  const day=(x:unknown):x is string=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x);
+ if(action==='shopList'){
+  const n=(x:unknown,max:number)=>Number.isInteger(x)&&(x as number)>=0&&(x as number)<=max;
+  if(!count(v.balance)||typeof v.canSpend!=='boolean'||typeof v.pointsEnabled!=='boolean')bad();
+  Object.assign(out,{balance:v.balance,canSpend:v.canSpend,pointsEnabled:v.pointsEnabled});
+  const fields=(x:Record<string,unknown>)=>{if(!documentText(x.title,120)||!documentText(x.description,500,true,true)||!n(x.points,1000000))bad();};
+  out.offers=list(v.offers,100,x=>{fields(x);
+   if(!uuid(x.itemId)||!documentVersion(x.version)||!uuid(x.holderId)||!name(x.holderName)||typeof x.autoGrant!=='boolean'||!(x.weeklyLimit===null||n(x.weeklyLimit,100))||!n(x.usedThisWeek,100000))bad();
+   return {itemId:x.itemId,version:x.version,holderId:x.holderId,holderName:x.holderName,title:x.title,description:x.description,points:x.points,autoGrant:x.autoGrant,weeklyLimit:x.weeklyLimit,usedThisWeek:x.usedThisWeek} as ShopOffer;});
+  out.items=list(v.items,100,x=>{fields(x);
+   if(!uuid(x.itemId)||!documentVersion(x.version)||!['reward','consequence'].includes(x.kind as string)||typeof x.listed!=='boolean'||typeof x.autoGrant!=='boolean'||!(x.weeklyLimit===null||n(x.weeklyLimit,100)))bad();
+   return {itemId:x.itemId,version:x.version,kind:x.kind,title:x.title,description:x.description,points:x.points,listed:x.listed,autoGrant:x.autoGrant,weeklyLimit:x.weeklyLimit} as ShopItem;});
+  out.requests=list(v.requests,50,x=>{
+   if(!uuid(x.redemptionId)||!documentVersion(x.version)||!uuid(x.buyerId)||!name(x.buyerName)||!documentText(x.title,120)||!n(x.points,1000000)||!instant(x.createdAt))bad();
+   return {redemptionId:x.redemptionId,version:x.version,buyerId:x.buyerId,buyerName:x.buyerName,title:x.title,points:x.points,createdAt:x.createdAt} as ShopRequest;});
+  out.purchases=list(v.purchases,10,x=>{
+   if(!uuid(x.redemptionId)||!documentVersion(x.version)||!documentText(x.title,120)||!n(x.points,1000000)||!['requested','fulfilled','declined','cancelled','reversed','expired'].includes(x.state as string)||!instant(x.createdAt))bad();
+   return {redemptionId:x.redemptionId,version:x.version,title:x.title,points:x.points,state:x.state,createdAt:x.createdAt} as ShopPurchase;});
+  return out;
+ }
  if(action==='progressList'){
   const series=(x:unknown,min:number)=>{if(!Array.isArray(x)||x.length!==14||!x.every(n=>Number.isInteger(n)&&n>=min&&n<=1000000))bad();return x as number[];};
   if(!day(v.today)||typeof v.subsVisible!=='boolean')bad();
