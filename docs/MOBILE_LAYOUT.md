@@ -16,7 +16,7 @@ The gateway serves the same HTML for these paths. Moving between them uses the H
 
 ## Workspace
 
-- **Top bar:** the dynamic's name (opens the switcher list), the safety shield and the avatar (Profile). The shield is on every workspace screen and turns red while the dynamic is paused.
+- **Top bar:** the dynamic's name (opens the switcher list), the notifications bell (dot when something is unread), the safety shield and the avatar (Profile). The shield is on every workspace screen and turns red while the dynamic is paused.
 - **Bottom tabs:** Today, Tasks (My tasks / Shared tasks), Routines (Habits / Rituals and check-ins), Library (Rules and protocols / Notes and ideas) and Dynamic.
 - **Dynamic tab:** Doms and subs, people (only when you hold authority over someone), requests and journal, members and invitations, relationships and agreements, reward catalog, agreement reviews, safety and my limits, and settings (including your own words for sections, and leave). See [DYNAMIC_EXCHANGES.md](DYNAMIC_EXCHANGES.md).
 - **Household words:** when owners set their own words for Tasks, Routines, Library or Dynamic, the tabs show those.
