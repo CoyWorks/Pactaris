@@ -430,6 +430,13 @@
       "backwardCompatible": true
     },
     {
+      "component": "instance",
+      "id": "0043_habit_streaks",
+      "path": "migrations/instance/0043_habit_streaks.sql",
+      "sha256": "4c86df334dad5bb135037d39b31abfc3bb77afe00a39585c393833c47b5c048d",
+      "backwardCompatible": true
+    },
+    {
       "component": "gateway",
       "id": "0020_account_export",
       "path": "migrations/gateway/0020_account_export.sql",

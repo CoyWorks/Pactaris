@@ -36,15 +36,15 @@ export function TodayAssignedHabits({habits,me,householdId,session,language,onCh
   <div className="section-head"><h2>{t('habits.fromDom')}</h2></div>
   <div className="habit-tiles">{mine.map(habit=><div className="habit-tile" key={habit.habitId}>
    <span className="habit-name">{habit.title}</span><Progress habit={habit} language={language}/>
-   <span className="muted">{habit.holderName}</span>
+   <span className="muted">{[habit.holderName,habit.streaks.current>0&&t('habits.streak',{count:String(habit.streaks.current)})].filter(Boolean).join(t('catalog.separator'))}</span>
    <button type="button" className="icon-button add-one" disabled={!!busy} aria-label={t('today.addOne',{title:habit.title})} onClick={()=>{void add(habit);}}><Icon name="plus"/></button>
   </div>)}</div>
   {error&&<p role="alert">{t(error)}</p>}
  </>;
 }
-const empty=(timeZone:string):HabitFields=>({title:'',description:'',period:'daily',mode:'minimum',target:1,timeZone,rewardPoints:null,penaltyPoints:null,punishment:null});
+const empty=(timeZone:string):HabitFields=>({title:'',description:'',period:'daily',mode:'minimum',target:1,timeZone,rewardPoints:null,penaltyPoints:null,punishment:null,milestoneEvery:null,milestonePoints:null});
 function HabitForm({habit,subjectId,householdId,session,language,timeZone,canOutcomes,onClose,onSaved}:{habit?:AssignedHabit;subjectId:string;householdId:string;session:Session;language:string;timeZone:string;canOutcomes:boolean;onClose:()=>void;onSaved:(notice:MessageKey)=>void}){
- const t=createTranslator(language),[fields,setFields]=useState<HabitFields>(habit?{title:habit.title,description:habit.description,period:habit.period,mode:habit.mode,target:habit.target,timeZone:habit.timeZone,rewardPoints:habit.rewardPoints,penaltyPoints:habit.penaltyPoints,punishment:habit.punishment}:empty(timeZone));
+ const t=createTranslator(language),[fields,setFields]=useState<HabitFields>(habit?{title:habit.title,description:habit.description,period:habit.period,mode:habit.mode,target:habit.target,timeZone:habit.timeZone,rewardPoints:habit.rewardPoints,penaltyPoints:habit.penaltyPoints,punishment:habit.punishment,milestoneEvery:habit.milestoneEvery,milestonePoints:habit.milestonePoints}:empty(timeZone));
  const [busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),operation=useRef<string|undefined>(undefined);
  const set=<K extends keyof HabitFields,>(key:K,value:HabitFields[K])=>{setFields(f=>({...f,[key]:value}));operation.current=undefined;};
  const number=(value:string)=>value===''?null:Math.max(1,Math.min(10000,Math.round(Number(value))));
@@ -69,7 +69,11 @@ function HabitForm({habit,subjectId,householdId,session,language,timeZone,canOut
     <label>{t('habits.rewardPoints')}<input type="number" inputMode="numeric" min={1} max={10000} disabled={busy} value={fields.rewardPoints??''} onChange={e=>set('rewardPoints',number(e.target.value))}/></label>
     <label>{t('habits.penaltyPoints')}<input type="number" inputMode="numeric" min={1} max={10000} disabled={busy} value={fields.penaltyPoints??''} onChange={e=>set('penaltyPoints',number(e.target.value))}/></label>
     <label>{t('habits.punishment')}<input maxLength={120} autoComplete="off" disabled={busy} value={fields.punishment??''} onChange={e=>set('punishment',e.target.value||null)}/></label>
-    <PunishmentPicker householdId={householdId} language={language} onPick={item=>set('punishment',item.title)}/></>}
+    <PunishmentPicker householdId={householdId} language={language} onPick={item=>set('punishment',item.title)}/>
+    <label className="check"><input type="checkbox" disabled={busy} checked={fields.milestoneEvery!==null} onChange={e=>{if(e.target.checked){set('milestoneEvery',7);set('milestonePoints',10);}else{set('milestoneEvery',null);set('milestonePoints',null);}}}/>{t('habits.milestoneEnable')}</label>
+    {fields.milestoneEvery!==null&&<><Hint label={t('hint.more')}>{t('habits.milestoneHelp')}</Hint>
+     <label>{t('habits.milestoneEvery')}<input type="number" inputMode="numeric" min={2} max={365} required disabled={busy} value={fields.milestoneEvery} onChange={e=>set('milestoneEvery',Math.max(2,Math.min(365,Math.round(Number(e.target.value))||2)))}/></label>
+     <label>{t('habits.milestonePoints')}<input type="number" inputMode="numeric" min={1} max={10000} required disabled={busy} value={fields.milestonePoints??''} onChange={e=>set('milestonePoints',number(e.target.value))}/></label></>}</>}
    {error&&<p role="alert">{t(error)}</p>}
    <button type="submit" disabled={busy||!fields.title.trim()}>{t(busy?'onboarding.saving':'habits.save')}</button>
   </form>
@@ -91,7 +95,7 @@ export function PersonHabits({habits,subjectId,name,householdId,session,language
    <div className="workspace-actions"><button type="button" onClick={()=>setEditing('new')}><Icon name="plus"/>{t('habits.new')}</button></div>
    {!theirs.length?<p className="muted">{t('habits.none')}</p>:<ul className="card-list">{theirs.map(habit=><li key={habit.habitId} className="habit-row"><span className="grow">
     <span>{habit.title}</span><Progress habit={habit} language={language}/>
-    <span className="muted">{[t(habit.period==='daily'?'routines.daily':'routines.weekly'),habit.state==='paused'&&t('habits.paused'),...habit.results.slice(0,3).map(r=>t(resultKeys[r.result]))].filter(Boolean).join(t('catalog.separator'))}</span></span>
+    <span className="muted">{[t(habit.period==='daily'?'routines.daily':'routines.weekly'),habit.state==='paused'&&t('habits.paused'),habit.streaks.current>0&&t('habits.streak',{count:String(habit.streaks.current)}),habit.streaks.longest>1&&t('habits.streakBest',{count:String(habit.streaks.longest)}),...habit.results.slice(0,3).map(r=>t(resultKeys[r.result]))].filter(Boolean).join(t('catalog.separator'))}</span></span>
     {habit.canEdit&&<span className="row-actions"><button type="button" className="secondary" disabled={busy} onClick={()=>setEditing(habit)}>{t('workspace.edit')}</button>
      <button type="button" className="secondary" disabled={busy} onClick={()=>{void state(habit,habit.state==='active'?'paused':'active');}}>{t(habit.state==='active'?'habits.pause':'habits.resume')}</button>
      <button type="button" className="secondary" disabled={busy} onClick={()=>{void state(habit,'archived');}}>{t('workspace.archive')}</button></span>}

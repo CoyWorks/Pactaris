@@ -1836,12 +1836,17 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal(punishment.status,200,JSON.stringify(punishment.data));assert.equal((await read(D,punishment.data.resourceId)).state,'assigned');
      assert.ok((await post(D,'partnerInbox',{})).status<500);
      // Habits the Dom sets, with automatic outcomes; a pause means the period is skipped.
-     const habitFields={title:'Morning check-in',description:'',period:'daily',mode:'minimum',target:1,timeZone:'UTC',rewardPoints:3,penaltyPoints:2,punishment:'Corner time'};
+     const habitFields={title:'Morning check-in',description:'',period:'daily',mode:'minimum',target:1,timeZone:'UTC',rewardPoints:3,penaltyPoints:2,punishment:'Corner time',milestoneEvery:null,milestonePoints:null};
      const habit=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:habitFields});assert.equal(habit.status,200,JSON.stringify(habit.data));
      assert.equal((await au(B,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:habitFields})).status,404);
      assert.equal((await au(D,'habitRecord',{habitId:habit.data.resourceId,count:1})).status,200);
      assert.equal((await au(B,'habitRecord',{habitId:habit.data.resourceId,count:1})).status,404);
-     const habits=(await api(base+'/authority/habits','GET',undefined,D.session)).data.habits;assert.equal(habits[0].currentTotal,1);assert.equal(habits[0].canEdit,false);
+     const habits=(await api(base+'/authority/habits','GET',undefined,D.session)).data.habits;assert.equal(habits[0].currentTotal,1);assert.equal(habits[0].canEdit,false);assert.deepEqual(habits[0].streaks,{current:0,longest:0});
+     // Milestones must come as a pair and within range; they round-trip through habitList.
+     assert.equal((await au(A,'habitSave',{habitId:habit.data.resourceId,subjectId:null,version:habits[0].version,fields:{...habitFields,milestoneEvery:3}})).status,400);
+     assert.equal((await au(A,'habitSave',{habitId:habit.data.resourceId,subjectId:null,version:habits[0].version,fields:{...habitFields,milestoneEvery:1,milestonePoints:5}})).status,400);
+     assert.equal((await au(A,'habitSave',{habitId:habit.data.resourceId,subjectId:null,version:habits[0].version,fields:{...habitFields,milestoneEvery:3,milestonePoints:5}})).status,200);
+     const withMilestone=(await api(base+'/authority/habits','GET',undefined,A.session)).data.habits.find((x:any)=>x.habitId===habit.data.resourceId);assert.equal(withMilestone.milestoneEvery,3);assert.equal(withMilestone.milestonePoints,5);
      const instanceId=place.instanceId;
      await db.owner.query("UPDATE pactaris.authority_habits SET next_period=pactaris.habit_period_start('daily','UTC',now())-1 WHERE id=$1",[habit.data.resourceId]);
      assert.equal((await db.pool.query('SELECT pactaris.run_authority_habits($1) AS state',[instanceId])).rows[0].state,'processed');
