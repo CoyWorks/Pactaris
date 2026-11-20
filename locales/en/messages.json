@@ -1018,5 +1018,21 @@
   "habits.outcomesHelp": "Checked at the end of each period. Nothing happens while either of you is paused, the household is stopped, the activity is blocked or the link has ended: that period is skipped and not made up later.",
   "habits.rewardPoints": "Points when reached (optional)",
   "habits.penaltyPoints": "Points taken when missed (optional)",
-  "habits.punishment": "Punishment when missed (optional)"
+  "habits.punishment": "Punishment when missed (optional)",
+  "notices.title": "Notifications",
+  "notices.unread": "Unread",
+  "notices.empty": "Nothing new.",
+  "notices.settings": "How you are notified",
+  "notices.settingsHelp": "Turn on notifications for this device under Profile first. Here you choose whether this dynamic may notify you, and when it should stay quiet. A notification never shows names or content; it only opens Pactaris.",
+  "notices.permission": "New permission request",
+  "notices.proposal": "New proposal",
+  "notices.journal": "New journal entry",
+  "notices.breach": "A rule breach was recorded",
+  "notices.answered": "Your request was answered",
+  "notices.invited": "You were invited as a sub",
+  "notices.accepted": "Your invitation was accepted",
+  "notices.ended": "A Dom link was ended",
+  "notices.delegated": "Authority was delegated to you",
+  "notices.points": "Your points changed",
+  "notices.habit": "A habit period was checked"
 }
