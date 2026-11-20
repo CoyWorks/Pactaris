@@ -60,10 +60,11 @@ CREATE TRIGGER notice_events AFTER INSERT ON pactaris.authority_habit_results FO
 -- A withdrawn exchange or an ended membership leaves no unread notice behind.
 CREATE FUNCTION pactaris.notice_cleanup() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pactaris,pg_temp AS $$
 BEGIN
- IF TG_TABLE_NAME='exchanges' AND NEW.state='withdrawn' THEN
-  DELETE FROM pactaris.member_notices WHERE household_id=NEW.household_id AND resource_id=NEW.id;
- ELSIF TG_TABLE_NAME='memberships' AND OLD.status='active' AND NEW.status<>'active' THEN
-  DELETE FROM pactaris.member_notices WHERE household_id=NEW.household_id AND recipient_id=NEW.id;
+ -- Nested on purpose: PL/pgSQL may evaluate both sides of AND, and each table has its own columns.
+ IF TG_TABLE_NAME='exchanges' THEN
+  IF NEW.state='withdrawn' THEN DELETE FROM pactaris.member_notices WHERE household_id=NEW.household_id AND resource_id=NEW.id; END IF;
+ ELSIF TG_TABLE_NAME='memberships' THEN
+  IF OLD.status='active' AND NEW.status<>'active' THEN DELETE FROM pactaris.member_notices WHERE household_id=NEW.household_id AND recipient_id=NEW.id; END IF;
  END IF;
  RETURN NEW;
 END $$;

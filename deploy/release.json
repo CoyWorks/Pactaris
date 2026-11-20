@@ -405,7 +405,7 @@
       "component": "instance",
       "id": "0039_member_notices",
       "path": "migrations/instance/0039_member_notices.sql",
-      "sha256": "a9cc9c8214b5d6e97c609550978404a36927ca9157109cfb759177dbc2df57bd",
+      "sha256": "0a3e73df7d6947af119c839fb5346b6ef216e2fbe937be64d2477d4c11584eef",
       "backwardCompatible": true
     },
     {
