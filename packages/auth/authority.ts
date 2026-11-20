@@ -5,8 +5,8 @@ export {authorityActions,isAuthorityAction,type AuthorityAction} from './authori
 export type RankAuthority='off'|'tasks'|'outcomes';
 export type AuthorityLink={linkId:string;domId:string;domName:string;subId:string;subName:string;state:'invited'|'active';label:string;
  rankAuthority:RankAuthority;private:boolean;canSpendPoints:boolean;canPropose:boolean;version:string;role:'dom'|'sub'|'viewer'};
-export type HabitFields={title:string;description:string;period:'daily'|'weekly';mode:'minimum'|'maximum';target:number;timeZone:string;rewardPoints:number|null;penaltyPoints:number|null;punishment:string|null};
-export type AssignedHabit=HabitFields&{habitId:string;holderId:string;holderName:string;subjectId:string;subjectName:string;state:'active'|'paused';version:string;periodStart:string;currentTotal:number;canEdit:boolean;canRecord:boolean;results:{periodStart:string;total:number;result:'reached'|'missed'|'skipped'}[]};
+export type HabitFields={title:string;description:string;period:'daily'|'weekly';mode:'minimum'|'maximum';target:number;timeZone:string;rewardPoints:number|null;penaltyPoints:number|null;punishment:string|null;milestoneEvery:number|null;milestonePoints:number|null};
+export type AssignedHabit=HabitFields&{habitId:string;holderId:string;holderName:string;subjectId:string;subjectName:string;state:'active'|'paused';version:string;periodStart:string;currentTotal:number;canEdit:boolean;canRecord:boolean;streaks:{current:number;longest:number};results:{periodStart:string;total:number;result:'reached'|'missed'|'skipped'}[]};
 export type AuthorityDelegation={delegationId:string;linkId:string;delegateId:string;delegateName:string;tasks:boolean;outcomes:boolean;endsAt:string|null;version:string};
 export type AuthorityMember={membershipId:string;name:string;owner:boolean;rank:number|null};
 export type AuthorityPower={membershipId:string;tasks:boolean;outcomes:boolean;manage:boolean;points:string};
@@ -35,9 +35,11 @@ const shapes:Record<AuthorityAction,string[]>={authorityList:[],linkInvite:['sub
  shopList:[],shopSave:['itemId','version','fields','listed','autoGrant','weeklyLimit'],shopArchive:['itemId','version'],shopBuy:['itemId','version']};
 const points=(v:unknown)=>v===null||(Number.isInteger(v)&&(v as number)>=1&&(v as number)<=10000);
 export function validHabitFields(f:unknown):f is HabitFields{
- return record(f)&&Object.keys(f).sort().join(',')==='description,mode,penaltyPoints,period,punishment,rewardPoints,target,timeZone,title'&&documentText(f.title,120)&&documentText(f.description,500,true,true)&&
+ const milestone=(v:unknown)=>v===null||(Number.isInteger(v)&&(v as number)>=2&&(v as number)<=365);
+ return record(f)&&Object.keys(f).sort().join(',')==='description,milestoneEvery,milestonePoints,mode,penaltyPoints,period,punishment,rewardPoints,target,timeZone,title'&&documentText(f.title,120)&&documentText(f.description,500,true,true)&&
   ['daily','weekly'].includes(f.period as string)&&['minimum','maximum'].includes(f.mode as string)&&Number.isInteger(f.target)&&(f.target as number)>=(f.mode==='minimum'?1:0)&&(f.target as number)<=1000&&
-  typeof f.timeZone==='string'&&/^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-]+){0,2}$/.test(f.timeZone)&&f.timeZone.length<=100&&points(f.rewardPoints)&&points(f.penaltyPoints)&&(f.punishment===null||documentText(f.punishment,120));
+  typeof f.timeZone==='string'&&/^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-]+){0,2}$/.test(f.timeZone)&&f.timeZone.length<=100&&points(f.rewardPoints)&&points(f.penaltyPoints)&&(f.punishment===null||documentText(f.punishment,120))&&
+  milestone(f.milestoneEvery)&&points(f.milestonePoints)&&((f.milestoneEvery===null)===(f.milestonePoints===null));
 }
 export function validShopFields(f:unknown):f is ShopFields{
  return record(f)&&Object.keys(f).sort().join(',')==='description,kind,points,title'&&['reward','consequence'].includes(f.kind as string)&&documentText(f.title,120)&&documentText(f.description,500,true,true)&&
@@ -112,11 +114,11 @@ export function authorityOutput(action:AuthorityAction,input:Record<string,unkno
  }
  if(action==='habitList'){
   out.habits=list(v.habits,50,x=>{
-   const fields={title:x.title,description:x.description,period:x.period,mode:x.mode,target:x.target,timeZone:x.timeZone,rewardPoints:x.rewardPoints,penaltyPoints:x.penaltyPoints,punishment:x.punishment};
+   const fields={title:x.title,description:x.description,period:x.period,mode:x.mode,target:x.target,timeZone:x.timeZone,rewardPoints:x.rewardPoints,penaltyPoints:x.penaltyPoints,punishment:x.punishment,milestoneEvery:x.milestoneEvery,milestonePoints:x.milestonePoints};
    if(!validHabitFields(fields)||!uuid(x.habitId)||!uuid(x.holderId)||!name(x.holderName)||!uuid(x.subjectId)||!name(x.subjectName)||!['active','paused'].includes(x.state as string)||
-    !documentVersion(x.version)||!day(x.periodStart)||!Number.isInteger(x.currentTotal)||typeof x.canEdit!=='boolean'||typeof x.canRecord!=='boolean')bad();
+    !documentVersion(x.version)||!day(x.periodStart)||!Number.isInteger(x.currentTotal)||typeof x.canEdit!=='boolean'||typeof x.canRecord!=='boolean'||!record(x.streaks)||!Number.isInteger((x.streaks as Record<string,unknown>).current)||!Number.isInteger((x.streaks as Record<string,unknown>).longest))bad();
    const results=list(x.results,7,y=>{if(!day(y.periodStart)||!Number.isInteger(y.total)||!['reached','missed','skipped'].includes(y.result as string))bad();return {periodStart:y.periodStart,total:y.total,result:y.result} as AssignedHabit['results'][number];});
-   return {...fields,habitId:x.habitId,holderId:x.holderId,holderName:x.holderName,subjectId:x.subjectId,subjectName:x.subjectName,state:x.state,version:x.version,periodStart:x.periodStart,currentTotal:x.currentTotal,canEdit:x.canEdit,canRecord:x.canRecord,results} as AssignedHabit;
+   return {...fields,habitId:x.habitId,holderId:x.holderId,holderName:x.holderName,subjectId:x.subjectId,subjectName:x.subjectName,state:x.state,version:x.version,periodStart:x.periodStart,currentTotal:x.currentTotal,canEdit:x.canEdit,canRecord:x.canRecord,streaks:x.streaks,results} as AssignedHabit;
   });
   return out;
  }

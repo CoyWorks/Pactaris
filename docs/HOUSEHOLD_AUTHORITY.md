@@ -32,7 +32,12 @@ Someone with task authority over a sub can set a daily or weekly habit for them:
 
 The worker (`run_authority_habits`) checks each ended period once. It applies outcomes only with live points-and-punishments authority, an active household, no pause on either person and no blocked activity (`reward` for points given, `consequence` otherwise). Otherwise the period is recorded as *skipped*; skipped and paused periods are never made up later, and resuming a paused habit starts at the current period. Periods missed while the worker was down are evaluated for at most a week back. Entries can be reversed until their period has been checked.
 
-## Permissions per sub
+## Streaks and milestones
+
+Migration `0043_habit_streaks`. A **streak** is the number of consecutive periods a habit was reached, counting back from the latest closed period; a paused (`skipped`) period is neutral — it neither breaks nor extends the streak — and a `missed` period breaks it. `habit_streaks` returns the current and longest streak and is included in `habitList`.
+
+A Dom can set a **milestone** on a habit: `milestone_every` (2–365) and `milestone_points` (1–10 000), stored on `authority_habits` and set together or not at all. When the worker records a reached period and points are on, it counts the streak including that period; if it is a multiple of `milestone_every`, the sub gets `milestone_points` bonus points (a `point_adjustment`, on top of any per-period reward), recorded in the result's `outcome` as `milestonePoints` and `streak`. Milestones never fire on a missed or skipped period or during a pause.
+
 
 On a Dom link the Dom can switch off **spending points on rewards** and **sending proposals**. When a sub has several Doms the strictest setting applies. Permission requests, journal entries, pausing, stopping and ending a link can never be switched off.
 
@@ -65,8 +70,9 @@ Migration `0042_reward_shop`, command `shop_command` (`shopList`, `shopSave`, `s
 - **Dynamic → Doms and subs:** invite a sub, accept or decline an invitation, end a link, rank, delegation and per-sub settings (rank authority, hidden, spending points, proposals), the ranking list and the owner's visibility switch.
 - **Today → Needs your attention:** invitations waiting for your answer.
 - **Dynamic → People:** per person you hold authority over: rank, points, what is waiting, tasks to review and overdue, and buttons for a task, a breach, habits, points and a punishment.
-- **Today → Habits from your Dom:** progress and +1 for the sub.
+- **Today → Habits from your Dom:** progress, current streak and +1 for the sub.
 - **Tasks → Shared tasks → Give a task:** choose the person and write the task; it goes straight to them through the backing direct policy. People → **Assign a task** opens it with the person chosen, the add menu opens it empty. Offers through an agreement and older standing assignments are under **Offers and agreements**.
+- **Habit form:** a Dom can turn on a streak bonus (every N reached in a row → bonus points). The people list and Today show the current streak, and the people list also the best streak.
 - **Dynamic → People → Progress:** last 7 days (tasks done with the change against the week before, points, open tasks, habits reached and missed), daily bar charts for tasks and points over 14 days, and a table view.
 - **Dynamic → Rewards and punishments:** for a sub, the shop with balance, prices, limits and recent purchases (a waiting request can be cancelled). For a Dom, purchases waiting for them (grant or decline) and their own rewards and punishments.
 - **Picking a punishment:** "From your list" appears in the punishment form, the breach form and the habit form.
