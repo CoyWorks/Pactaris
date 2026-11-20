@@ -19,7 +19,10 @@ export class InstanceAccount {
       if(!used.rowCount)throw new DelegationError('account.replay');
       // A restored database erases only through replay, after its fence is released.
       if((await db.query('SELECT pactaris.restore_fenced() AS fenced')).rows[0].fenced!==false)throw new AccountDeletionError('unavailable');
-      const result=action==='accountExport'&&input.section==='exchanges'
+      const result=action==='accountExport'&&input.section==='authority'
+        ?(await db.query('SELECT pactaris.authority_export_page($1,$2,$3,$4) AS result',
+          [this.config.instanceId,verified.accountId,input.after??null,exportSections.authority])).rows[0].result
+        :action==='accountExport'&&input.section==='exchanges'
         ?(await db.query('SELECT pactaris.exchange_export_page($1,$2,$3,$4) AS result',
           [this.config.instanceId,verified.accountId,input.after??null,exportSections.exchanges])).rows[0].result
         :action==='accountExport'&&input.section

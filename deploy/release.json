@@ -388,6 +388,13 @@
       "backwardCompatible": true
     },
     {
+      "component": "instance",
+      "id": "0037_household_authority",
+      "path": "migrations/instance/0037_household_authority.sql",
+      "sha256": "0f65da1bcff5e0ac70a756212bf32b30837a0ab5ee8a47f918946b96515384fb",
+      "backwardCompatible": true
+    },
+    {
       "component": "gateway",
       "id": "0020_account_export",
       "path": "migrations/gateway/0020_account_export.sql",

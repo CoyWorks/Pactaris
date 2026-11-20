@@ -7,6 +7,7 @@ import {GatewayCatalog} from '../apps/gateway/catalog.js';
 import {GatewayRoutines} from '../apps/gateway/routines.js';
 import {GatewayLibrary} from '../apps/gateway/library.js';
 import {GatewayExchange} from '../apps/gateway/exchange.js';
+import {GatewayAuthority} from '../apps/gateway/authority.js';
 import {GatewayWorkspace} from '../apps/gateway/workspace.js';
 import {GatewayConsent} from '../apps/gateway/consent.js';
 import {GatewayRelationships} from '../apps/gateway/relationships.js';
@@ -26,7 +27,7 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient,PrivateCatalogClient,PrivatePartnerClient,PrivateExchangeClient } from '../packages/routing/private-client.js';
+import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient,PrivateCatalogClient,PrivatePartnerClient,PrivateExchangeClient,PrivateAuthorityClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import { RevocationJournalSync } from '../apps/gateway/revocation-journal.js';
@@ -371,11 +372,11 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const consentService=new GatewayConsent(store,client,new PrivateConsentClient(signer));
   const workspaceService=new GatewayWorkspace(store,client,new PrivateWorkspaceClient(signer));
   const libraryService=new GatewayLibrary(store,client,new PrivateLibraryClient(signer));
-  const exchangeService=new GatewayExchange(store,client,new PrivateExchangeClient(signer));
+  const exchangeService=new GatewayExchange(store,client,new PrivateExchangeClient(signer)),authorityService=new GatewayAuthority(store,client,new PrivateAuthorityClient(signer));
   const routineService=new GatewayRoutines(store,client,new PrivateRoutineClient(signer));
   const catalogService=new GatewayCatalog(store,client,new PrivateCatalogClient(signer));
   const partnerService=new GatewayPartner(store,client,new PrivatePartnerClient(signer));
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService,partnerService,undefined,undefined,undefined,undefined,undefined,undefined,undefined,exchangeService);
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService,partnerService,undefined,undefined,undefined,undefined,undefined,undefined,undefined,exchangeService,authorityService);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -530,7 +531,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const exported:string[]=[];await streamAccountExport((await store.session('doomed-export',60))!,gatewayDb.pool,signer,async chunk=>{exported.push(chunk);});
   const exportData=JSON.parse(exported.join(''));
   assert.equal(exportData.version,2);assert.equal(exportData.complete,true);assert.equal(exportData.unavailableSources,0);
-  assert.deepEqual(Object.keys(exportData.sections),['memberships','limits','tasks','documents','acknowledgements','routines','catalog','partnerTasks','series','personalSeries','checkins','relationships','agreements','redemptions','inbox','exchanges']);
+  assert.deepEqual(Object.keys(exportData.sections),['memberships','limits','tasks','documents','acknowledgements','routines','catalog','partnerTasks','series','personalSeries','checkins','relationships','agreements','redemptions','inbox','exchanges','authority']);
   assert.ok(exportData.sections.memberships.some((m:{householdId:string;household?:{name:string}})=>m.householdId===doomedHousehold&&m.household?.name==='Deletion fixture'));
   assert.ok(exportData.sections.tasks.some((t:{title:string})=>t.title==='Private deletion fixture'));
   assert.ok(!exported.join('').includes('Partner private fixture'));
@@ -1758,8 +1759,10 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const mine=(await list(B)).exchanges.find((x:any)=>x.id===operationId);assert.equal(mine.state,'approved');assert.equal(mine.response,'Yes, text me when home');
      const journal=await ex(B,'exchangeCreate',{kind:'journal',recipientId:A.member,title:'Today',body:'Private reflection fixture',dueAt:null});assert.equal(journal.status,200);
      const breach=await ex(A,'exchangeCreate',{kind:'breach',recipientId:B.member,title:'Late check-in',body:'',dueAt:null});assert.equal(breach.status,200);
+     // A breach record is informative: recorded at once, never acknowledged.
      assert.equal((await ex(A,'exchangeDecide',{exchangeId:breach.data.exchangeId,version:'1',decision:'acknowledge',response:''})).status,404);
-     assert.equal((await ex(B,'exchangeDecide',{exchangeId:breach.data.exchangeId,version:'1',decision:'acknowledge',response:'Understood'})).status,200);
+     assert.equal((await ex(B,'exchangeDecide',{exchangeId:breach.data.exchangeId,version:'1',decision:'acknowledge',response:'Understood'})).status,409);
+     assert.equal((await list(B,'open')).exchanges.find((x:any)=>x.id===breach.data.exchangeId).state,'recorded');
      assert.equal((await ex(A,'exchangeDecide',{exchangeId:journal.data.exchangeId,version:'1',decision:'acknowledge',response:'Thank you'})).status,200);
      assert.equal((await ex(B,'exchangeWithdraw',{exchangeId:journal.data.exchangeId,version:'2'})).status,200);
      const withdrawn=(await db.owner.query('SELECT state,title,body,response FROM pactaris.exchanges WHERE id=$1',[journal.data.exchangeId])).rows[0];
@@ -1780,6 +1783,56 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const scheduled=(await api(base+'/exchange/reviews','GET',undefined,A.session)).data.reviews.find((x:any)=>x.agreementId===pair.agreementId);
      assert.equal(scheduled.intervalMonths,3);assert.ok(scheduled.nextReview);assert.equal(scheduled.due,false);
      assert.equal((await ex(A,'reviewDone',{agreementId:pair.agreementId,version:'1'})).status,200);
+    })();
+    await (async function verifyHouseholdAuthority(){
+     // Consent once per Dom link; inside it the Dom acts directly. Pause, stop and ending still win.
+     const au=(p:Person,action:string,input:Record<string,unknown>={})=>api(base+'/authority/'+action,'POST',{operationId:randomUUID(),...input},p.session);
+     const view=async(p:Person)=>{const r=await api(base+'/authority','GET',undefined,p.session);assert.equal(r.status,200,JSON.stringify(r.data));return r.data;};
+     const invite=await au(A,'linkInvite',{subId:D.member,label:'House rules'});assert.equal(invite.status,200,JSON.stringify(invite.data));
+     const linkId=invite.data.resourceId;
+     assert.equal((await view(B)).links.some((l:any)=>l.linkId===linkId),false);
+     assert.equal((await au(A,'linkAccept',{linkId,version:'1'})).status,404);
+     const pending=(await view(D)).links.find((l:any)=>l.linkId===linkId);assert.equal(pending.state,'invited');assert.equal(pending.role,'sub');
+     assert.equal((await au(D,'linkAccept',{linkId,version:'1'})).status,200);
+     const power=(await view(A)).powers.find((x:any)=>x.membershipId===D.member);assert.deepEqual([power.tasks,power.outcomes,power.manage],[true,true,true]);
+     // Direct assignment through the backing direct policy: no offer, no acceptance.
+     const direct=async()=>{
+      const choice=(await options(A)).find((c:any)=>c.label==='House rules'&&c.assignees.some((m:any)=>m.membershipId===D.member));assert.ok(choice);
+      const policy=(await post(D,'partnerPolicyList')).data.policies.find((x:any)=>x.agreementId===choice.agreementId&&x.state==='active');assert.ok(policy);
+      return post(A,'partnerAssign',{assigneeId:D.member,agreementId:choice.agreementId,agreementVersion:choice.agreementVersion,epoch:choice.epoch,safetyVersion:choice.safetyVersion,fields,policyId:policy.policyId,policyVersion:policy.version});
+     };
+     const assigned=await direct();assert.equal(assigned.status,200,JSON.stringify(assigned.data));assert.equal((await read(D,assigned.data.taskId)).state,'assigned');
+     // A personal pause blocks; resuming restores authority without any re-acceptance.
+     assert.equal((await consent(D,'selfPause',{})).status,200);
+     assert.equal((await au(A,'pointsAdjust',{subjectId:D.member,points:5,reason:''})).status,409);
+     const paused=await state(D);assert.equal((await consent(D,'selfResume',{epoch:paused.epoch,memberEpoch:paused.memberEpoch})).status,200);
+     assert.equal((await direct()).status,200);
+     assert.equal((await au(A,'pointsAdjust',{subjectId:D.member,points:5,reason:'Good week'})).status,200);
+     assert.equal((await view(D)).myPoints,'5');
+     assert.equal((await au(B,'pointsAdjust',{subjectId:D.member,points:5,reason:''})).status,404);
+     const punishment=await au(A,'punishmentGive',{subjectId:D.member,title:'Write lines',description:'Fifty times',exchangeId:null});
+     assert.equal(punishment.status,200,JSON.stringify(punishment.data));assert.equal((await read(D,punishment.data.resourceId)).state,'assigned');
+     assert.ok((await post(D,'partnerInbox',{})).status<500);
+     // Delegation per area: tasks only.
+     assert.equal((await au(A,'delegationSet',{linkId,delegateId:C.member,version:'0',tasks:true,outcomes:false,endsAt:null})).status,200);
+     const delegated=(await view(C)).powers.find((x:any)=>x.membershipId===D.member);assert.deepEqual([delegated.tasks,delegated.outcomes,delegated.manage],[true,false,false]);
+     assert.equal((await au(C,'pointsAdjust',{subjectId:D.member,points:1,reason:''})).status,404);
+     // Ranking: only for subs; the owner or the sub's own Dom sets it.
+     assert.equal((await au(A,'rankSet',{subjectId:D.member,rank:2})).status,200);
+     assert.equal((await au(C,'rankSet',{subjectId:D.member,rank:1})).status,404);
+     assert.equal((await au(A,'rankSet',{subjectId:C.member,rank:1})).status,409);
+     // Visibility: owner only.
+     assert.equal((await au(B,'visibilitySet',{subsVisible:true,version:'1'})).status,404);
+     assert.equal((await au(A,'visibilitySet',{subsVisible:true,version:'1'})).status,200);
+     assert.equal((await view(A)).subsVisible,true);
+     for(const table of ['authority_links','authority_delegations','authority_pairs','point_adjustments','authority_punishments','authority_receipts'])await assert.rejects(db.pool.query('SELECT * FROM pactaris.'+table),{code:'42501'});
+     // The sub can always end the link; authority and the backing policy go with it, and the journal keeps it ended.
+     const current=(await view(D)).links.find((l:any)=>l.linkId===linkId);
+     assert.equal((await au(D,'linkEnd',{linkId,version:current.version})).status,200);
+     assert.equal((await view(A)).powers.some((x:any)=>x.membershipId===D.member),false);
+     assert.equal((await view(C)).powers.some((x:any)=>x.membershipId===D.member),false);
+     assert.equal((await direct().catch(()=>({status:0}))).status===200,false);
+     assert.equal((await db.owner.query("SELECT count(*)::int n FROM pactaris.revocation_journal WHERE kind='authority.ended' AND subject->>'linkId'=$1",[linkId])).rows[0].n,1);
     })();
     assert.equal((await read(B,legacy)).state,'offered');assert.equal((await read(B,legacy)).assignmentMode,'offer');assert.equal((await move(B,'partnerDecline',legacy)).status,200);
     const defaultPrefs={assigned:true,submitted:true,reviewed:true},quietPrefs={...defaultPrefs,assigned:false};
