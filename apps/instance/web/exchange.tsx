@@ -6,6 +6,8 @@ import {Hint,Icon,Layer} from './navigation.js';
 import {Skeleton} from './today-habits.js';
 import type {AuthorityResult} from '../../../packages/auth/authority.js';
 import {InviteRows,OutcomeActions,authoritySend,pendingInvites} from './authority.js';
+import {PersonHabits} from './assigned-habits.js';
+import type {AssignedHabit} from '../../../packages/auth/authority.js';
 const kindKeys:Record<ExchangeKind,MessageKey>={permission:'exchange.kind.permission',proposal:'exchange.kind.proposal',journal:'exchange.kind.journal',breach:'exchange.kind.breach'};
 const stateKeys:Record<ExchangeItem['state'],MessageKey>={open:'exchange.state.open',recorded:'exchange.state.recorded',expired:'exchange.state.expired',approved:'exchange.state.approved',declined:'exchange.state.declined',acknowledged:'exchange.state.acknowledged'};
 const errors:MessageKey[]=['exchange.invalid','exchange.denied','exchange.conflict','exchange.paused','exchange.capacity','exchange.unavailable','errors.rateLimited','errors.request'];
@@ -168,7 +170,7 @@ export function Attention({householdId,session,language,format,timeZone,data,aut
  </>;
 }
 /** For a person you hold task authority over: what is waiting, to review and overdue. Only data they already share with you. */
-export function Overview({householdId,session,language,format,timeZone,data,authority,onAssign,onChanged}:{householdId:string;session:Session;language:string;format:string;timeZone:string;data?:ExchangeResult;authority?:AuthorityResult;onAssign:()=>void;onChanged:(notice:MessageKey)=>void}){
+export function Overview({householdId,session,language,format,timeZone,data,authority,habits,onAssign,onChanged}:{householdId:string;session:Session;language:string;format:string;timeZone:string;data?:ExchangeResult;authority?:AuthorityResult;habits?:AssignedHabit[];onAssign:()=>void;onChanged:(notice:MessageKey)=>void}){
  const t=createTranslator(language),[tasks,setTasks]=useState<PartnerSummary[]>(),[openId,setOpenId]=useState<string>(),[breachFor,setBreachFor]=useState<string>();
  useEffect(()=>{
   let gone=false;const controller=new AbortController();
@@ -193,6 +195,7 @@ export function Overview({householdId,session,language,format,timeZone,data,auth
     {[...review,...overdue].map(task=><li key={task.taskId}><button type="button" onClick={onAssign}><span className="grow"><span>{task.title}</span><span className="muted">{t(task.state==='submitted'?'overview.toReview':'overview.overdue')}</span></span><Icon name="chevron"/></button></li>)}
    </ul>}
    <div className="workspace-actions"><button type="button" className="secondary" onClick={onAssign}>{t('overview.assign')}</button>{(data.people??[]).some(p=>p.membershipId===person.membershipId&&p.subject)&&<button type="button" className="secondary" onClick={()=>setBreachFor(person.membershipId)}>{t('overview.recordBreach')}</button>}
+    {person.power.tasks&&<PersonHabits habits={habits} subjectId={person.membershipId} name={person.name} householdId={householdId} session={session} language={language} timeZone={timeZone} canOutcomes={person.power.outcomes} onChanged={onChanged}/>}
     <OutcomeActions power={person.power} name={person.name} householdId={householdId} session={session} language={language} onChanged={onChanged}/></div>
   </div>;
  })}
