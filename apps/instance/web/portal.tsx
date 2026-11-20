@@ -1,7 +1,6 @@
 import {useSelectorInbox} from './selector-inbox.js';
 import {AccountDisplayName} from './account-display-name.js';
 import {announceSignOut} from './session-invalidation.js';
-import {PushDevices} from './push-devices.js';
 import {ExportPanel} from './personal-export.js';
 import {DeleteAccountPanel} from './account-deletion.js';
 import {ReportPanel} from './abuse-report.js';
@@ -15,6 +14,7 @@ import {InvitationJoin} from './invitations.js';
 import {Hint,Icon,Link,navigate,useLocation} from './navigation.js';
 import {Skeleton} from './today-habits.js';
 import {AppearancePanel} from './appearance.js';
+import {NotificationSettings} from './notification-settings.js';
 type Session={account:{id:string;displayName:string};csrfToken:string;presentation?:Presentation;preferredName?:string};
 type Summary={id:string;name:string};
 // Per-browser convenience only: which dynamic this account opened last. Cleared on sign-out.
@@ -32,7 +32,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   const accountId=useRef<string|undefined>(undefined);
   const {path,search}=useLocation();
   const selectedId=/^\/households\/([a-f0-9-]{36})$/i.exec(path)?.[1];
-  const profile=path==='/profile',showAll=new URLSearchParams(search).has('all');
+  const profile=path==='/profile'||path==='/profile/notifications',notificationsPage=path==='/profile/notifications',showAll=new URLSearchParams(search).has('all');
   const inbox=useSelectorInbox(selectedId?undefined:session?.account.id,
     [...new Set(listing?.households.map(h=>h.id))].sort().join(','));
   useEffect(()=>{
@@ -125,6 +125,10 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   if(loading||autoOpen)return <main className="page"><div className="app-bar"><span className="skeleton-title" aria-hidden="true"/></div><Skeleton count={4} label={t('portal.loading')}/></main>;
   if(!session)return <main className="page sign-in"><span className="eyebrow">{t('app.title')}</span>{problem}
     {!loadError&&<section><h1>{t('portal.signInTitle')}</h1><p>{t('portal.signInDescription')}</p><a className="button" href="/auth/login">{t('portal.signIn')}</a></section>}</main>;
+  if(notificationsPage)return <main className="page profile">
+    <header className="app-bar"><button type="button" className="icon-button" aria-label={t('nav.back')} onClick={()=>{if(window.history.length>1)window.history.back();else navigate('/profile');}}><Icon name="back"/></button><h1>{t('notices.title')}</h1></header>
+    <NotificationSettings households={listing?.households??[]} csrfToken={session.csrfToken} language={language}/>
+  </main>;
   if(profile)return <main className="page profile">
     <header className="app-bar"><button type="button" className="icon-button" aria-label={t('nav.back')} onClick={()=>{if(window.history.length>1)window.history.back();else navigate('/');}}><Icon name="back"/></button><h1>{t('profile.title')}</h1></header>
     <div className="profile-card"><span className="avatar large" aria-hidden="true">{initial}</span><strong>{session.account.displayName||t('portal.account')}</strong></div>
@@ -136,7 +140,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
     <AccountPresentation key={'presentation:'+session.account.id} csrfToken={session.csrfToken} language={language}
       saved={session.presentation} defaults={{format,timeZone}} onSave={value=>setSession(current=>
         current?.account.id===session.account.id?{...current,presentation:value??undefined}:current)}/>
-    <PushDevices key={'push:'+session.account.id} csrfToken={session.csrfToken} language={language}/>
+    <ul className="menu"><li><Link to="/profile/notifications"><span className="grow"><span>{t('notices.title')}</span><span className="muted">{t('notifySettings.summary')}</span></span><Icon name="chevron"/></Link></li></ul>
     <AppearancePanel language={language}/>
     <h2 className="group-title">{t('profile.privacy')}</h2>
     <AccountSessions key={'sessions:'+session.account.id} csrfToken={session.csrfToken} language={language} format={displayFormat} timeZone={displayZone}/>
