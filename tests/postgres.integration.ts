@@ -1879,6 +1879,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await api(base+'/catalog/redemptionFulfill','POST',{operationId:randomUUID(),redemptionId:waiting[0].redemptionId,version:waiting[0].version},A.session)).status,200);
      assert.equal((await shop(A)).requests.length,0);assert.equal(Number((await shop(D)).balance),before-2);
      assert.ok((await api(base+'/exchange/notices','GET',undefined,A.session)).data.notices.some((n:any)=>n.kind==='purchase'));
+     // Restore the two points spent so the balance checks below stay as they were.
+     assert.equal((await au(A,'pointsAdjust',{subjectId:D.member,points:2,reason:''})).status,200);
      assert.equal((await db.pool.query('SELECT pactaris.run_authority_habits($1) AS state',[instanceId])).rows[0].state,'idle');
      assert.equal((await consent(D,'selfPause',{})).status,200);
      await db.owner.query("UPDATE pactaris.authority_habits SET next_period=pactaris.habit_period_start('daily','UTC',now())-2 WHERE id=$1",[habit.data.resourceId]);
