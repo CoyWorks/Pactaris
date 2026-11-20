@@ -1,4 +1,5 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
+import {PersonProgress,type Progress} from './progress.js';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {AgreementReview,ExchangeItem,ExchangeKind,ExchangePerson,ExchangeResult,TermKey,Terms} from '../../../packages/auth/exchange.js';
 import type {PartnerSummary} from '../../../packages/auth/partner.js';
@@ -170,7 +171,7 @@ export function Attention({householdId,session,language,format,timeZone,data,aut
  </>;
 }
 /** For a person you hold task authority over: what is waiting, to review and overdue. Only data they already share with you. */
-export function Overview({householdId,session,language,format,timeZone,data,authority,habits,onAssign,onChanged}:{householdId:string;session:Session;language:string;format:string;timeZone:string;data?:ExchangeResult;authority?:AuthorityResult;habits?:AssignedHabit[];onAssign:()=>void;onChanged:(notice:MessageKey)=>void}){
+export function Overview({householdId,session,language,format,timeZone,data,authority,habits,progress,onAssign,onChanged}:{householdId:string;session:Session;language:string;format:string;timeZone:string;data?:ExchangeResult;authority?:AuthorityResult;habits?:AssignedHabit[];progress?:Progress;onAssign:(person?:string,task?:string)=>void;onChanged:(notice:MessageKey)=>void}){
  const t=createTranslator(language),[tasks,setTasks]=useState<PartnerSummary[]>(),[openId,setOpenId]=useState<string>(),[breachFor,setBreachFor]=useState<string>();
  useEffect(()=>{
   let gone=false;const controller=new AbortController();
@@ -192,11 +193,12 @@ export function Overview({householdId,session,language,format,timeZone,data,auth
    <div className="workspace-stats"><div><strong>{asks.length}</strong><span>{t('overview.waiting')}</span></div><div><strong>{review.length}</strong><span>{t('overview.toReview')}</span></div><div><strong>{overdue.length}</strong><span>{t('overview.overdue')}</span></div></div>
    {!!(asks.length||review.length||overdue.length)&&<ul className="menu">
     {asks.map(item=><Row key={item.id} item={item} language={language} format={format} timeZone={timeZone} onOpen={()=>setOpenId(item.id)}/>)}
-    {[...review,...overdue].map(task=><li key={task.taskId}><button type="button" onClick={onAssign}><span className="grow"><span>{task.title}</span><span className="muted">{t(task.state==='submitted'?'overview.toReview':'overview.overdue')}</span></span><Icon name="chevron"/></button></li>)}
+    {[...review,...overdue].map(task=><li key={task.taskId}><button type="button" onClick={()=>onAssign(undefined,task.taskId)}><span className="grow"><span>{task.title}</span><span className="muted">{t(task.state==='submitted'?'overview.toReview':'overview.overdue')}</span></span><Icon name="chevron"/></button></li>)}
    </ul>}
-   <div className="workspace-actions"><button type="button" className="secondary" onClick={onAssign}>{t('overview.assign')}</button>{(data.people??[]).some(p=>p.membershipId===person.membershipId&&p.subject)&&<button type="button" className="secondary" onClick={()=>setBreachFor(person.membershipId)}>{t('overview.recordBreach')}</button>}
+   <div className="workspace-actions">{person.power.tasks&&<button type="button" className="secondary" onClick={()=>onAssign(person.membershipId)}>{t('overview.assign')}</button>}{(data.people??[]).some(p=>p.membershipId===person.membershipId&&p.subject)&&<button type="button" className="secondary" onClick={()=>setBreachFor(person.membershipId)}>{t('overview.recordBreach')}</button>}
     {person.power.tasks&&<PersonHabits habits={habits} subjectId={person.membershipId} name={person.name} householdId={householdId} session={session} language={language} timeZone={timeZone} canOutcomes={person.power.outcomes} onChanged={onChanged}/>}
     <OutcomeActions power={person.power} name={person.name} householdId={householdId} session={session} language={language} onChanged={onChanged}/></div>
+   {(()=>{const mine=progress?.people?.find(p=>p.membershipId===person.membershipId);return mine&&progress?.today?<details className="settings-group"><summary>{t('progress.title')}</summary><PersonProgress person={mine} today={progress.today} language={language} format={format}/></details>:null;})()}
   </div>;
  })}
   {open&&<ExchangeDetail item={open} householdId={householdId} session={session} language={language} format={format} timeZone={timeZone} onClose={()=>setOpenId(undefined)} onChanged={notice=>{setOpenId(undefined);onChanged(notice);}}/>}

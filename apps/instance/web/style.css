@@ -189,3 +189,20 @@ button.secondary{background:none;border-color:var(--outline);color:var(--accent)
 .settings-group{background:var(--surface);border-radius:var(--radius);padding:0 1rem;margin:.6rem 0}.settings-group[open]{padding-bottom:1rem}
 .settings-group>summary{font-weight:600;color:var(--text)}
 fieldset.kinds{border:0;padding:0;margin:.25rem 0 0}fieldset.kinds legend{font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.25rem}
+/* Progress charts: one validated series color per theme (dataviz reference slot 1). */
+:root{--series-1:#3987e5}:root[data-theme=light]{--series-1:#2a78d6}
+.progress h4{margin:1rem 0 0}.progress .workspace-stats{margin-top:.5rem}.stat-note{font-size:.75rem}
+.daily-bars{margin:1rem 0 0}.daily-bars figcaption{font-size:.9rem;color:var(--text)}
+.daily-bars svg{display:block;width:100%;height:auto;overflow:visible}
+.chart-readout{margin:.15rem 0;min-height:1.3em;font-size:.85rem;color:var(--muted)}.chart-readout strong{color:var(--text)}
+.chart-column path{fill:var(--series-1)}.chart-column.active path{opacity:.8}.chart-hit{fill:transparent}
+.chart-column:focus{outline:none}.chart-column:focus-visible .chart-hit{stroke:var(--accent);stroke-width:2px}
+.chart-grid{stroke:var(--line);stroke-width:1}.chart-axis{stroke:var(--outline-strong,var(--muted));stroke-width:1}
+.chart-tick{fill:var(--muted);font-size:9px;font-variant-numeric:tabular-nums}
+.chart-table summary{min-height:44px;display:flex;align-items:center;color:var(--accent)}
+.chart-table table,.board{width:100%;border-collapse:collapse;font-size:.85rem;font-variant-numeric:tabular-nums}
+.chart-table th,.chart-table td,.board th,.board td{padding:.4rem .5rem;text-align:right;border-bottom:1px solid var(--line)}
+.chart-table th:first-child,.board th[scope=row],.board thead th:nth-child(2){text-align:left}
+.board-scroll{overflow-x:auto;background:var(--surface);border-radius:var(--radius);padding:.25rem}
+.board th[scope=row]{display:flex;flex-direction:column;align-items:flex-start;font-weight:400;min-width:9rem}.board th[scope=row] .link-button{padding:.25rem 0;min-height:44px;font-weight:600;text-align:left}
+.board tr[aria-current=true]{background:var(--surface-2)}

@@ -19,11 +19,12 @@ import {Attention,ExchangeView,Overview,ReviewsView,TermsForm,useExchange,useTer
 import {AuthorityView,useAuthority} from './authority.js';
 import {TodayAssignedHabits,useAssignedHabits} from './assigned-habits.js';
 import {NoticesView,useNotices} from './notices.js';
-type View='home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews'|'authority'|'notices';
+import {BoardView,useProgress} from './progress.js';
+type View='home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews'|'authority'|'notices'|'board';
 type Tab='home'|'tasks'|'routines'|'library'|'dynamic';
 type Draft={action:string;body:Record<string,unknown>};
-const views:readonly View[]=['home','habits','checkins','rewards','participantTasks','rules','notes','tasks','dynamic','members','settings','relationships','safety','exchange','overview','reviews','authority','notices'];
-const labels:Record<View,MessageKey>={home:'workspace.home',tasks:'workspace.mine',habits:'routines.habits',checkins:'routines.checkinsTitle',rewards:'catalog.title',participantTasks:'partner.title',rules:'library.guidance',notes:'library.notes',dynamic:'workspace.dynamic',members:'workspace.invite',settings:'workspace.settings',relationships:'workspace.relationships',safety:'workspace.safety',exchange:'exchange.title',overview:'overview.title',reviews:'reviews.title',authority:'authority.title',notices:'notices.title'};
+const views:readonly View[]=['home','habits','checkins','rewards','participantTasks','rules','notes','tasks','dynamic','members','settings','relationships','safety','exchange','overview','reviews','authority','notices','board'];
+const labels:Record<View,MessageKey>={home:'workspace.home',tasks:'workspace.mine',habits:'routines.habits',checkins:'routines.checkinsTitle',rewards:'catalog.title',participantTasks:'partner.title',rules:'library.guidance',notes:'library.notes',dynamic:'workspace.dynamic',members:'workspace.invite',settings:'workspace.settings',relationships:'workspace.relationships',safety:'workspace.safety',exchange:'exchange.title',overview:'overview.title',reviews:'reviews.title',authority:'authority.title',notices:'notices.title',board:'board.title'};
 const tabs:{tab:Tab;view:View;label:MessageKey;icon:IconName}[]=[
  {tab:'home',view:'home',label:'workspace.home',icon:'today'},
  {tab:'tasks',view:'tasks',label:'workspace.tasks',icon:'tasks'},
@@ -33,8 +34,8 @@ const tabs:{tab:Tab;view:View;label:MessageKey;icon:IconName}[]=[
 ];
 const tabOf=(view:View):Tab=>view==='tasks'||view==='participantTasks'?'tasks':view==='habits'||view==='checkins'?'routines':view==='rules'||view==='notes'?'library':view==='home'?'home':'dynamic';
 const segments:Partial<Record<Tab,View[]>>={tasks:['tasks','participantTasks'],routines:['habits','checkins'],library:['rules','notes']};
-const menu:View[]=['authority','overview','exchange','members','relationships','rewards','reviews','safety','settings'];
-const additions:{view:View;label:MessageKey;quick?:QuickKind}[]=[{view:'tasks',label:'workspace.addPrivateTask',quick:'task'},{view:'participantTasks',label:'workspace.addSharedTask'},{view:'habits',label:'routines.habits',quick:'habit'},{view:'checkins',label:'routines.checkinsTitle'},{view:'notes',label:'library.notes',quick:'note'},{view:'rules',label:'library.guidance'},{view:'rewards',label:'catalog.title'},{view:'exchange',label:'exchange.new'}];
+const menu:View[]=['authority','overview','board','exchange','members','relationships','rewards','reviews','safety','settings'];
+const additions:{view:View;label:MessageKey;quick?:QuickKind;query?:string}[]=[{view:'tasks',label:'workspace.addPrivateTask',quick:'task'},{view:'participantTasks',label:'workspace.addSharedTask',query:'&give=any'},{view:'habits',label:'routines.habits',quick:'habit'},{view:'checkins',label:'routines.checkinsTitle'},{view:'notes',label:'library.notes',quick:'note'},{view:'rules',label:'library.guidance'},{view:'rewards',label:'catalog.title'},{view:'exchange',label:'exchange.new'}];
 const priorities:Record<TaskFields['priority'],MessageKey>={low:'workspace.priorityLow',normal:'workspace.priorityNormal',high:'workspace.priorityHigh'};
 const filters:Record<string,MessageKey>={open:'workspace.open',done:'workspace.done',archived:'workspace.archived'};
 const errorKey=(key:unknown):MessageKey=>(['workspace.invalid','workspace.denied','workspace.conflict','workspace.capacity','workspace.paused','workspace.unavailable','errors.rateLimited','errors.request'] as unknown[]).includes(key)?key as MessageKey:'workspace.unavailable';
@@ -45,6 +46,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
  const [authorityReload,setAuthorityReload]=useState(0);
  const exchange=useExchange(householdId,exchangeReload),terms=useTerms(householdId,termsReload),authority=useAuthority(householdId,authorityReload);
  const assignedHabits=useAssignedHabits(householdId,authorityReload);
+ const progress=useProgress(householdId,authorityReload+':'+(view==='board'||view==='overview'?view:''));
  const [noticeReload,setNoticeReload]=useState(0),notices=useNotices(householdId,noticeReload);
  const refreshAll=()=>{setExchangeReload(v=>v+1);setAuthorityReload(v=>v+1);setNoticeReload(v=>v+1);setRefresh(v=>v+1);};
  const [adding,setAdding]=useState<QuickKind|'menu'>(),[habitsReload,setHabitsReload]=useState(0),pendingEditor=useRef<{fields:TaskFields}|undefined>(undefined);
@@ -182,7 +184,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
    </div>
   </header>
   {sub&&<div className="sub-bar"><button type="button" className="icon-button" aria-label={t('nav.back')} onClick={back}><Icon name="back"/></button><h1>{t(labels[view])}</h1></div>}
-  {segment&&<div className="segmented" role="tablist" aria-label={t(tabs.find(item=>item.tab===tab)!.label)}>{segment.map(v=><button type="button" role="tab" key={v} aria-selected={view===v} onClick={()=>navigate('/households/'+householdId+'?view='+v,true)}>{t(labels[v])}{v==='participantTasks'&&data?.hasUnreadTaskInbox&&<span className="dot" aria-label={t('inbox.unreadBadge')}/>}</button>)}</div>}
+  {segment&&<div className="segmented" role="tablist" aria-label={t(tabs.find(item=>item.tab===tab)!.label)}>{segment.map(v=><button type="button" role="tab" key={v} aria-selected={view===v} onClick={()=>navigate('/households/'+householdId+'?view='+v,true)}>{t(labels[v])}</button>)}</div>}
   <SafetyProvider householdId={householdId} session={session} language={language} compact={view!=='safety'}>
    {error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}
    {draft&&<div className="notice"><p>{t('workspace.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void change(draft.action,draft.body,draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}
@@ -191,7 +193,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
    {h&&view==='home'&&<section className="plain today">
     <p className="muted">{new Intl.DateTimeFormat(format,{weekday:'long',day:'numeric',month:'long',timeZone:h.timeZone}).format(new Date())}</p>
     {h.status==='paused'&&<p className="notice" role="status">{t('consent.householdPaused')}</p>}
-    {data?.hasUnreadTaskInbox&&<button type="button" className="row-button" onClick={()=>go('participantTasks')}><span className="dot" aria-hidden="true"/><span className="grow">{t('workspace.unreadShared')}</span><Icon name="chevron"/></button>}
+    {data?.hasUnreadTaskInbox&&<button type="button" className="row-button" onClick={()=>go('notices')}><span className="dot" aria-hidden="true"/><span className="grow">{t('workspace.unreadShared')}</span><Icon name="chevron"/></button>}
     <Attention householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} authority={authority.data} reload={exchangeReload} onChanged={message=>{setNotice(message);refreshAll();}} onReviews={()=>go('reviews')}/>
     <div className="section-head"><h2>{t('workspace.todo')}</h2><button type="button" className="link-button" onClick={()=>go('tasks')}>{t('workspace.allTasks')}</button></div>
     {today.length?<ul className="card-list">{today.map(task=>row(task,true))}</ul>:<div className="empty-card"><p>{t('workspace.nothingDue')}</p><button type="button" onClick={()=>setAdding('task')}><Icon name="plus"/>{t('today.addTask')}</button></div>}
@@ -202,13 +204,14 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
     <div className="tiles"><button type="button" onClick={()=>go('checkins')}><Icon name="routines"/>{t('routines.checkinsTitle')}</button><button type="button" onClick={()=>go('rules')}><Icon name="library"/>{t('library.guidance')}</button><button type="button" onClick={()=>go('notes')}><Icon name="library"/>{t('library.notes')}</button><button type="button" onClick={()=>go('members')}><Icon name="dynamic"/>{t('workspace.invite')}</button></div>
    </section>}
    {view==='exchange'&&h&&<ExchangeView householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} people={exchange.data?.people??[]} onChanged={()=>setExchangeReload(v=>v+1)}/>}
-   {view==='overview'&&h&&<Overview householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} authority={authority.data} habits={assignedHabits} onAssign={()=>go('participantTasks')} onChanged={message=>{setNotice(message);refreshAll();}}/>}
+   {view==='overview'&&h&&<Overview householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} authority={authority.data} habits={assignedHabits} progress={progress.data} onAssign={(person,task)=>navigate('/households/'+householdId+'?view=participantTasks'+(person?'&give='+person:'')+(task?'&task='+task:''))} onChanged={message=>{setNotice(message);refreshAll();}}/>}
    {view==='authority'&&h&&<AuthorityView householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={authority.data} onChanged={refreshAll}/>}
    {view==='notices'&&h&&<NoticesView householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={notices} onOpen={target=>go(target==='home'?'home':target)} onRead={()=>{setNoticeReload(v=>v+1);setRefresh(v=>v+1);}}/>}
+   {view==='board'&&h&&<BoardView progress={progress.data} failed={progress.failed} language={language} format={format}/>}
    {view==='reviews'&&h&&<ReviewsView householdId={householdId} session={session} language={language} format={format}/>}
    {view==='dynamic'&&h&&<section className="plain">
     <div className="dynamic-card"><span className="badge-letter" aria-hidden="true">{h.name.trim().slice(0,1).toUpperCase()}</span><span className="grow"><strong>{h.name}</strong><span className="muted">{t('workspace.memberCount')} {h.memberCount}</span></span></div>
-    <ul className="menu">{menu.filter(v=>v!=='overview'||subjects).map(v=><li key={v}><button type="button" onClick={()=>go(v)}><span className="grow">{t(labels[v])}</span><Icon name="chevron"/></button></li>)}</ul>
+    <ul className="menu">{menu.filter(v=>(v!=='overview'||subjects)&&(v!=='board'||(authority.data?.links??[]).some(l=>l.state==='active'))).map(v=><li key={v}><button type="button" onClick={()=>go(v)}><span className="grow">{t(labels[v])}</span><Icon name="chevron"/></button></li>)}</ul>
    </section>}
    {view==='tasks'&&data&&<section className="plain"><Hint label={t('hint.more')}>{t('workspace.privateTasks')}</Hint><div className="chips">{Object.keys(filters).map(f=><button type="button" key={f} aria-pressed={filter===f} onClick={()=>{setFilter(f);setCursor(undefined);}}>{t(filters[f]??'workspace.open')}</button>)}</div>
     {!data.tasks?.length&&!editor&&<div className="empty-card"><p>{t('workspace.emptyTitle')}</p><button type="button" disabled={blocked} onClick={()=>setAdding('task')}><Icon name="plus"/>{t('today.addTask')}</button></div>}
@@ -221,7 +224,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
      onStop={series=>void change('personalSeriesStop',{seriesId:series.seriesId,version:series.version})}/>}
 
    </section>}
-   {view==='participantTasks'&&h&&<PartnerPanel householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} onInboxRead={()=>setRefresh(value=>value+1)} pointsSettings={data?.pointsSettings}/>}
+   {view==='participantTasks'&&h&&<PartnerPanel householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} pointsSettings={data?.pointsSettings}/>}
    {view==='rewards'&&h&&<CatalogPanel householdId={householdId} session={session} language={language} format={format}/>}
    {view==='checkins'&&h&&<SharedCheckins householdId={householdId} csrfToken={session.csrfToken} language={language}/>}
    {(view==='habits'||view==='checkins')&&h&&<RoutinesPanel key={view} householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} section={view}/>}
@@ -255,7 +258,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
   {tab!=='dynamic'&&<button type="button" className="fab" aria-label={t('workspace.add')} onClick={()=>setAdding('menu')}><Icon name="plus"/></button>}
   <nav className="bottom-nav" aria-label={t('workspace.navigation')}>{tabs.map(item=><button type="button" key={item.tab} aria-current={tab===item.tab?'page':undefined} onClick={()=>go(item.view)}><Icon name={item.icon}/><span>{tabLabel(item)}</span>{item.tab==='tasks'&&data?.hasUnreadTaskInbox&&<span className="dot" aria-label={t('inbox.unreadBadge')}/>}</button>)}</nav>
   {adding&&<Sheet title={t(adding==='menu'?'workspace.add':adding==='task'?'workspace.addPrivateTask':adding==='habit'?'quick.newHabit':'quick.newNote')} closeLabel={t('onboarding.cancel')} onClose={()=>setAdding(undefined)}>
-   {adding==='menu'?<ul className="menu">{additions.map(item=><li key={item.label}><button type="button" onClick={()=>{if(item.quick){setAdding(item.quick);return;}setAdding(undefined);go(item.view);}}><span className="grow">{t(item.label)}</span><Icon name="chevron"/></button></li>)}</ul>
+   {adding==='menu'?<ul className="menu">{additions.map(item=><li key={item.label}><button type="button" onClick={()=>{if(item.quick){setAdding(item.quick);return;}setAdding(undefined);if(item.query)navigate('/households/'+householdId+'?view='+item.view+item.query);else go(item.view);}}><span className="grow">{t(item.label)}</span><Icon name="chevron"/></button></li>)}</ul>
    :h&&<QuickAdd key={adding} kind={adding} householdId={householdId} csrfToken={session.csrfToken} language={language} timeZone={h.timeZone} safety={safety}
      onDone={message=>{setAdding(undefined);setError(undefined);setNotice(message);setRefresh(v=>v+1);setHabitsReload(v=>v+1);}}
      onMore={()=>{const target=adding==='task'?'tasks':adding==='habit'?'habits':'notes';setAdding(undefined);if(target==='tasks')pendingEditor.current={fields:blank()};if(view===target){setEditor(pendingEditor.current);pendingEditor.current=undefined;}else go(target);}}/>}

@@ -416,6 +416,13 @@
       "backwardCompatible": true
     },
     {
+      "component": "instance",
+      "id": "0041_progress_board",
+      "path": "migrations/instance/0041_progress_board.sql",
+      "sha256": "2c8c2e5cf83353f259937e127bc2663a9a9f1459c04cc707ec981499e19e9015",
+      "backwardCompatible": true
+    },
+    {
       "component": "gateway",
       "id": "0020_account_export",
       "path": "migrations/gateway/0020_account_export.sql",

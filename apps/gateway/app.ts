@@ -58,7 +58,7 @@ type OperatorInventory={
   instances:(after:string|null)=>ReturnType<typeof listRegistryInstances>;
   placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
 };
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'>) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -607,17 +607,17 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     const kind=error instanceof AuthorityError?error.kind:'unavailable';
     res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,unavailable:503}[kind]).json({code:'authority_'+kind,messageKey:('authority.'+kind) as MessageKey});
   }
-  app.get(['/api/households/:householdId/authority','/api/households/:householdId/authority/habits'],async(req,res)=>{
+  app.get(['/api/households/:householdId/authority','/api/households/:householdId/authority/habits','/api/households/:householdId/authority/progress'],async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;
       if(!uuid(req.params.householdId)||Object.keys(req.query).length)throw new AuthorityError('invalid');if(!authority)throw new AuthorityError('unavailable');
-      res.json(await (req.path.endsWith('/habits')?authority.habits(session.account.id,req.params.householdId):authority.list(session.account.id,req.params.householdId)));
+      res.json(await (req.path.endsWith('/progress')?authority.progress(session.account.id,req.params.householdId):req.path.endsWith('/habits')?authority.habits(session.account.id,req.params.householdId):authority.list(session.account.id,req.params.householdId)));
     }catch(error){authorityFailure(res,error);}
   });
   app.post('/api/households/:householdId/authority/:action',async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;
       if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
       const action=req.params.action;
-      if(!uuid(req.params.householdId)||!isAuthorityAction(action)||action==='authorityList'||action==='habitList')throw new AuthorityError('invalid');
+      if(!uuid(req.params.householdId)||!isAuthorityAction(action)||action==='authorityList'||action==='habitList'||action==='progressList')throw new AuthorityError('invalid');
       const input=authorityInput(action,req.body);if(!authority)throw new AuthorityError('unavailable');
       if(!await store.throttle('authority:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
       res.json(await authority.execute(session.account.id,req.params.householdId,action,input));
