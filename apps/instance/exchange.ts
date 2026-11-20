@@ -21,7 +21,7 @@ export class InstanceExchange{
    await db.query('BEGIN');
    const used=await db.query('INSERT INTO pactaris.delegation_uses(jti,expires_at) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING jti',[verified.jti,verified.expiresAt]);
    if(!used.rowCount)throw new DelegationError('exchange.replay');
-   const result=await db.query('SELECT pactaris.exchange_command($1,$2,$3,$4,$5,$6,$7) AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint]);
+   const result=await db.query(action.startsWith('notice')?'SELECT pactaris.notice_command($1,$2,$3,$4,$5,$6,$7) AS result':'SELECT pactaris.exchange_command($1,$2,$3,$4,$5,$6,$7) AS result',[householdId,this.config.instanceId,verified.accountId,verified.operationId,action,input,fingerprint]);
    await db.query('COMMIT');return result.rows[0].result as ExchangeResult;
   }catch(error){
    await db.query('ROLLBACK');

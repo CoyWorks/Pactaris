@@ -627,9 +627,9 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     const kind=error instanceof ExchangeError?error.kind:'unavailable';
     res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,unavailable:503}[kind]).json({code:'exchange_'+kind,messageKey:('exchange.'+kind) as MessageKey});
   }
-  app.get(['/api/households/:householdId/exchange','/api/households/:householdId/exchange/reviews','/api/households/:householdId/exchange/terms'],async(req,res)=>{
+  app.get(['/api/households/:householdId/exchange','/api/households/:householdId/exchange/reviews','/api/households/:householdId/exchange/terms','/api/households/:householdId/exchange/notices'],async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;
-      const kind=req.path.endsWith('/reviews')?'reviewList':req.path.endsWith('/terms')?'termsGet':'exchangeList';
+      const kind=req.path.endsWith('/reviews')?'reviewList':req.path.endsWith('/terms')?'termsGet':req.path.endsWith('/notices')?'noticeList':'exchangeList';
       const allowed=kind==='exchangeList'?['box','before']:[];
       if(!uuid(req.params.householdId)||Object.keys(req.query).some(k=>!allowed.includes(k)))throw new ExchangeError('invalid');
       const input=kind==='exchangeList'?{box:req.query.box??'open',...(req.query.before!==undefined?{before:req.query.before}:{})}:{};
@@ -641,7 +641,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     try{const session=await authenticate(req,res);if(!session)return;
       if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
       const action=req.params.action;
-      if(!uuid(req.params.householdId)||!isExchangeAction(action)||['exchangeList','reviewList','termsGet'].includes(action))throw new ExchangeError('invalid');
+      if(!uuid(req.params.householdId)||!isExchangeAction(action)||['exchangeList','reviewList','termsGet','noticeList'].includes(action))throw new ExchangeError('invalid');
       const input=exchangeInput(action,req.body);if(!exchange)throw new ExchangeError('unavailable');
       if(!await store.throttle('exchange:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
       res.json(await exchange.execute(session.account.id,req.params.householdId,action,input));

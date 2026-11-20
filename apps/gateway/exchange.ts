@@ -13,7 +13,7 @@ export class GatewayExchange{
   if(!summary||!uuid(summary.membershipId))throw new ExchangeError('denied');
   return this.client.execute(accountId,placement,action,{...input,membershipId:summary.membershipId});
  }
- read(accountId:string,householdId:string,action:'exchangeList'|'reviewList'|'termsGet',input:Record<string,unknown>={}){
+ read(accountId:string,householdId:string,action:'exchangeList'|'reviewList'|'termsGet'|'noticeList',input:Record<string,unknown>={}){
   return this.execute(accountId,householdId,action,{operationId:randomUUID(),...input});
  }
 }

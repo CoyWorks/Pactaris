@@ -1769,6 +1769,21 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.deepEqual(withdrawn,{state:'withdrawn',title:'',body:'',response:null});
      assert.equal((await db.owner.query("SELECT count(*)::int n FROM pactaris.revocation_journal WHERE kind='exchange.withdrawn' AND subject->>'exchangeId'=$1",[journal.data.exchangeId])).rows[0].n,1);
      for(const table of ['exchanges','exchange_receipts','agreement_reviews','household_terms'])await assert.rejects(db.pool.query('SELECT * FROM pactaris.'+table),{code:'42501'});
+     // Notices: created with the change, readable only by the recipient, and part of the push sequence.
+     const notices=async(p:Person)=>{const r=await api(base+'/exchange/notices','GET',undefined,p.session);assert.equal(r.status,200,JSON.stringify(r.data));return r.data;};
+     const forA=await notices(A);assert.ok(forA.unread>=1);assert.ok(forA.notices.some((n:any)=>n.kind==='permission'&&n.resourceId===operationId));
+     assert.ok(!JSON.stringify(forA).includes('midnight'));
+     assert.ok((await notices(B)).notices.some((n:any)=>n.kind==='answered'&&n.resourceId===operationId));
+     assert.ok((await notices(B)).notices.some((n:any)=>n.kind==='breach'));
+     assert.equal((await notices(C)).notices.length,0);
+     assert.equal((await ex(A,'noticeRead',{ids:null})).status,200);assert.equal((await notices(A)).unread,0);
+     assert.equal((await post(A,'partnerDeliveryConfigure',{deliveryPreferences:{push:true,reminders:false,quietStart:null,quietEnd:null,timeZone:'UTC'}})).status,200);
+     const pushStatus=async()=>(await db.owner.query("SELECT pactaris.task_delivery_command($1,$2,$3,$4,'partnerPushStatus',$5) AS r",
+      [home.householdId,place.instanceId,A.account.id,randomUUID(),{membershipId:A.member,pushAfter:'0',pushSince:'2000-01-01T00:00:00.000Z'}])).rows[0].r.pushSequence;
+     const before=await pushStatus();
+     assert.equal((await ex(B,'exchangeCreate',{kind:'proposal',recipientId:A.member,title:'Push me',body:'',dueAt:null})).status,200);
+     const after=await pushStatus();assert.ok(after&&(!before||BigInt(after)>BigInt(before)),JSON.stringify({before,after}));
+     assert.equal((await ex(A,'noticeRead',{ids:null})).status,200);
      // Household words: owners and admins only, optimistic version.
      assert.equal((await ex(B,'termsSet',{terms:{tasks:'Duties'},version:'0'})).status,404);
      assert.equal((await ex(A,'termsSet',{terms:{tasks:'Duties',bogus:'x'},version:'0'})).status,400);
