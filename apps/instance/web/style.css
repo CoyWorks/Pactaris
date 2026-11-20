@@ -206,3 +206,9 @@ fieldset.kinds{border:0;padding:0;margin:.25rem 0 0}fieldset.kinds legend{font-s
 .board-scroll{overflow-x:auto;background:var(--surface);border-radius:var(--radius);padding:.25rem}
 .board th[scope=row]{display:flex;flex-direction:column;align-items:flex-start;font-weight:400;min-width:9rem}.board th[scope=row] .link-button{padding:.25rem 0;min-height:44px;font-weight:600;text-align:left}
 .board tr[aria-current=true]{background:var(--surface-2)}
+.shop-row{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;min-height:56px}.shop-row+.shop-row{border-top:1px solid var(--line)}
+.row-actions{display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end}
+fieldset.picker{border:0;padding:0;margin:.25rem 0}fieldset.picker legend{font-size:.85rem;color:var(--muted);margin-bottom:.25rem}
+.start-card{background:none;padding:0}.start-card ol{padding:0}
+.step-mark{flex:none;width:28px;height:28px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;background:var(--chip-strong);font-weight:600;font-size:.85rem}
+.step-mark.done{background:var(--ok-bg,var(--chip));color:var(--ok-text,var(--text))}

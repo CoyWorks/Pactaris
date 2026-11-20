@@ -42,6 +42,16 @@ On a Dom link the Dom can switch off **spending points on rewards** and **sendin
 
 Who is visible: yourself when you are a sub in an active link, every sub you hold task or outcome authority over, and, when the owner made subs visible and you are part of an active link, every sub without a private link. The same rule as the ranking list; personal-private data is not included.
 
+## Reward shop and punishment list
+
+Migration `0042_reward_shop`, command `shop_command` (`shopList`, `shopSave`, `shopArchive`, `shopBuy`).
+
+- A Dom's rewards and punishments are their own catalog items (kinds `reward` and `consequence`). `shopSave` creates or revises one; for a reward it also sets whether it is **in the shop**, whether a purchase is **granted at once** and an optional **limit per week** (1–100, counted from Monday 00:00 in the household time zone). Putting a reward in the shop publishes its title, description and price to the subs below; everything else in the catalog stays private.
+- A sub sees the listed rewards of every Dom with points authority over them (`authority_area … 'outcomes'`). `shopBuy` names the item version the sub saw, so a price change is a conflict. It runs on the backing agreement through `activity_guard` with activity `reward`: pauses, stops, a blocked reward category and a Dom who switched off spending all refuse it. Then the weekly limit and the available points are checked.
+- A purchase is a reward redemption marked `source: shop`. Granted at once, it is `fulfilled` with its debit. Otherwise it is `requested`, which holds the points for 14 days. The Dom grants or declines it with the existing `redemptionFulfill` / `redemptionDecline`, and the sub can cancel it. An expired request frees the points. The Dom gets a `purchase` notice.
+- Punishments are only a list for the Dom. Picking one fills the title and text when giving a punishment, recording a breach or setting a habit's punishment; the punishment itself still goes through `punishmentGive` or the habit worker.
+- `shop_listings` uses FORCE RLS and is reached only through `shop_command`. Purchases are reward redemptions and appear in the existing catalog export. Listing settings are not in the personal export.
+
 ## Security and privacy
 
 - Tables `authority_links`, `authority_delegations`, `authority_pairs`, `point_adjustments`, `authority_punishments` and `authority_receipts` use FORCE RLS. The runtime role reaches them only through `authority_command` and `authority_export_page`.
@@ -58,4 +68,7 @@ Who is visible: yourself when you are a sub in an active link, every sub you hol
 - **Today → Habits from your Dom:** progress and +1 for the sub.
 - **Tasks → Shared tasks → Give a task:** choose the person and write the task; it goes straight to them through the backing direct policy. People → **Assign a task** opens it with the person chosen, the add menu opens it empty. Offers through an agreement and older standing assignments are under **Offers and agreements**.
 - **Dynamic → People → Progress:** last 7 days (tasks done with the change against the week before, points, open tasks, habits reached and missed), daily bar charts for tasks and points over 14 days, and a table view.
+- **Dynamic → Rewards and punishments:** for a sub, the shop with balance, prices, limits and recent purchases (a waiting request can be cancelled). For a Dom, purchases waiting for them (grant or decline) and their own rewards and punishments.
+- **Picking a punishment:** "From your list" appears in the punishment form, the breach form and the habit form.
+- **Today → Getting started** (owners and administrators): invite people, link as Dom and sub, give a first task. Hidden on this device once dismissed or after the first task.
 - **Dynamic → Household board:** everyone you may see, by rank, with their last 7 days and balance; a row opens the same progress view. Shown when you are part of an active Dom link.

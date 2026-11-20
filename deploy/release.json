@@ -423,6 +423,13 @@
       "backwardCompatible": true
     },
     {
+      "component": "instance",
+      "id": "0042_reward_shop",
+      "path": "migrations/instance/0042_reward_shop.sql",
+      "sha256": "231812352b07e2ff0c6aa501c4518eb23858e449df6e3ac576351673c0a16b0d",
+      "backwardCompatible": true
+    },
+    {
       "component": "gateway",
       "id": "0020_account_export",
       "path": "migrations/gateway/0020_account_export.sql",

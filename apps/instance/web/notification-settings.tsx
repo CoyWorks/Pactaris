@@ -10,11 +10,11 @@ const groups:Group[]=[
  {title:'notifySettings.tasks',task:['assigned','submitted','reviewed'],notices:[],reminders:true},
  {title:'notifySettings.requests',notices:['permission','proposal','journal','breach','answered']},
  {title:'notifySettings.links',notices:['invited','accepted','ended','delegated']},
- {title:'notifySettings.pointsHabits',notices:['points','habit']},
+ {title:'notifySettings.pointsHabits',notices:['points','habit','purchase']},
 ];
 const taskLabels:Record<keyof InboxPreferences,MessageKey>={assigned:'inbox.prefAssigned',submitted:'inbox.prefSubmitted',reviewed:'inbox.prefReviewed'};
 const noticeLabels:Record<Kind,MessageKey>={permission:'notices.permission',proposal:'notices.proposal',journal:'notices.journal',breach:'notices.breach',
- answered:'notices.answered',invited:'notices.invited',accepted:'notices.accepted',ended:'notices.ended',delegated:'notices.delegated',points:'notices.points',habit:'notices.habit'};
+ answered:'notices.answered',invited:'notices.invited',accepted:'notices.accepted',ended:'notices.ended',delegated:'notices.delegated',points:'notices.points',habit:'notices.habit',purchase:'notices.purchase'};
 type Loaded={delivery:DeliveryPreferences;inbox:InboxPreferences;muted:Kind[]};
 /** One dynamic: whether it may notify you, quiet hours, and which kinds you receive. */
 function HouseholdSettings({household,csrfToken,language}:{household:{id:string;name:string};csrfToken:string;language:string}){

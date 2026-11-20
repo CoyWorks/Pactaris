@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
+import {PunishmentPicker} from './shop.js';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {AuthorityLink,AuthorityPower,AuthorityResult,RankAuthority} from '../../../packages/auth/authority.js';
 import {Hint,Icon,Layer} from './navigation.js';
@@ -155,6 +156,7 @@ export function OutcomeActions({power,name,householdId,session,language,onChange
   </Layer>}
   {mode==='punishment'&&<Layer title={t('authority.punishmentFor',{name:name||t('partner.unnamed')})} backLabel={t('nav.back')} onClose={()=>setMode(undefined)}>
    <form className="quick-form" onSubmit={e=>{e.preventDefault();void run('punishmentGive',{subjectId:power.membershipId,title:title.trim(),description:description.trim(),exchangeId:null},'authority.punishmentGiven');}}>
+    <PunishmentPicker householdId={householdId} language={language} onPick={item=>{setTitle(item.title);setDescription(item.description);}}/>
     <label>{t('library.title')}<input required maxLength={120} disabled={busy} value={title} onChange={e=>setTitle(e.target.value)}/></label>
     <label>{t('library.body')}<textarea maxLength={500} disabled={busy} value={description} onChange={e=>setDescription(e.target.value)}/></label>
     <p className="muted">{t('authority.punishmentHelp')}</p>
