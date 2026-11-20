@@ -14,5 +14,6 @@ export class GatewayAuthority{
   return this.client.execute(accountId,placement,action,{...input,membershipId:summary.membershipId});
  }
  list(accountId:string,householdId:string){return this.execute(accountId,householdId,'authorityList',{operationId:randomUUID()});}
+ progress(accountId:string,householdId:string){return this.execute(accountId,householdId,'progressList',{operationId:randomUUID()});}
  habits(accountId:string,householdId:string){return this.execute(accountId,householdId,'habitList',{operationId:randomUUID()});}
 }

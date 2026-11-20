@@ -11,9 +11,11 @@ export type AuthorityDelegation={delegationId:string;linkId:string;delegateId:st
 export type AuthorityMember={membershipId:string;name:string;owner:boolean;rank:number|null};
 export type AuthorityPower={membershipId:string;tasks:boolean;outcomes:boolean;manage:boolean;points:string};
 export type PointAdjustment={id:string;recipientId:string;issuerId:string;points:number;reason:string;createdAt:string};
+/** Last 14 days, oldest first; `today` is the final day in the household time zone. */
+export type ProgressPerson={membershipId:string;name:string;rank:number|null;self:boolean;doms:string[];balance:string;openTasks:number;tasks:number[];points:number[];reached:number[];missed:number[]};
 export type AuthorityResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';resourceId?:string;
  links?:AuthorityLink[];delegations?:AuthorityDelegation[];members?:AuthorityMember[];powers?:AuthorityPower[];adjustments?:PointAdjustment[];
- subsVisible?:boolean;settingsVersion?:string;canSetVisibility?:boolean;myPoints?:string;myRank?:number|null;habits?:AssignedHabit[]};
+ subsVisible?:boolean;settingsVersion?:string;canSetVisibility?:boolean;myPoints?:string;myRank?:number|null;habits?:AssignedHabit[];today?:string;people?:ProgressPerson[]};
 export class AuthorityError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'unavailable'){super('authority.'+kind);}}
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const instant=(v:unknown):v is string=>typeof v==='string'&&v.length<=40&&Number.isFinite(Date.parse(v));
@@ -23,7 +25,7 @@ const shapes:Record<AuthorityAction,string[]>={authorityList:[],linkInvite:['sub
  linkEnd:['linkId','version'],linkSettings:['linkId','version','rankAuthority','private','canSpendPoints','canPropose'],delegationSet:['linkId','delegateId','version','tasks','outcomes','endsAt'],
  delegationRevoke:['delegationId','version'],rankSet:['subjectId','rank'],visibilitySet:['subsVisible','version'],pointsAdjust:['subjectId','points','reason'],
  punishmentGive:['subjectId','title','description','exchangeId'],habitList:[],habitSave:['habitId','subjectId','version','fields'],
- habitState:['habitId','version','state'],habitRecord:['habitId','count'],habitReverse:['entryId']};
+ habitState:['habitId','version','state'],habitRecord:['habitId','count'],habitReverse:['entryId'],progressList:[]};
 const points=(v:unknown)=>v===null||(Number.isInteger(v)&&(v as number)>=1&&(v as number)<=10000);
 export function validHabitFields(f:unknown):f is HabitFields{
  return record(f)&&Object.keys(f).sort().join(',')==='description,mode,penaltyPoints,period,punishment,rewardPoints,target,timeZone,title'&&documentText(f.title,120)&&documentText(f.description,500,true,true)&&
@@ -57,12 +59,24 @@ const name=(v:unknown):v is string=>typeof v==='string'&&v.length<=80;
 export function authorityOutput(action:AuthorityAction,input:Record<string,unknown>&{operationId:string;membershipId:string},householdId:string,r:unknown):AuthorityResult{
  const bad=():never=>{throw Error('routing.response');};
  if(!record(r)||r.householdId!==householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId)bad();
- const v=r as AuthorityResult,listing=action==='authorityList'||action==='habitList';
+ const v=r as AuthorityResult,listing=action==='authorityList'||action==='habitList'||action==='progressList';
  if(v.status!==(listing?'listed':'applied'))bad();
  const out:AuthorityResult={householdId:v.householdId,operationId:v.operationId,actorMembershipId:v.actorMembershipId,status:v.status};
  if(!listing){if(!uuid(v.resourceId))bad();out.resourceId=v.resourceId!;return out;}
  const list=<T,>(value:unknown,max:number,map:(x:Record<string,unknown>)=>T):T[]=>{if(!Array.isArray(value)||value.length>max)bad();return (value as unknown[]).map(x=>record(x)?map(x):bad());};
  const day=(x:unknown):x is string=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x);
+ if(action==='progressList'){
+  const series=(x:unknown,min:number)=>{if(!Array.isArray(x)||x.length!==14||!x.every(n=>Number.isInteger(n)&&n>=min&&n<=1000000))bad();return x as number[];};
+  if(!day(v.today)||typeof v.subsVisible!=='boolean')bad();
+  out.today=v.today;out.subsVisible=v.subsVisible;
+  out.people=list(v.people,50,x=>{
+   if(!uuid(x.membershipId)||!name(x.name)||!rank(x.rank)||typeof x.self!=='boolean'||!count(x.balance)||!Number.isInteger(x.openTasks)||(x.openTasks as number)<0||
+    !Array.isArray(x.doms)||x.doms.length>20||!x.doms.every(name))bad();
+   return {membershipId:x.membershipId,name:x.name,rank:x.rank,self:x.self,doms:x.doms,balance:x.balance,openTasks:x.openTasks,
+    tasks:series(x.tasks,0),points:series(x.points,-1000000),reached:series(x.reached,0),missed:series(x.missed,0)} as ProgressPerson;
+  });
+  return out;
+ }
  if(action==='habitList'){
   out.habits=list(v.habits,50,x=>{
    const fields={title:x.title,description:x.description,period:x.period,mode:x.mode,target:x.target,timeZone:x.timeZone,rewardPoints:x.rewardPoints,penaltyPoints:x.penaltyPoints,punishment:x.punishment};

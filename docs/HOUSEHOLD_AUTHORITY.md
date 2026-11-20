@@ -16,7 +16,7 @@ What never changes: every member can pause themselves and stop the household at 
 
 ## How it plugs into existing modules
 
-For every pair with authority (own link, delegation or rank) the Instance keeps a **backing set**: a two-person relationship, a non-expiring agreement covering tasks, protocols, rewards, consequences and reminders, and an active *direct* assignment policy. `authority_sync` creates and removes these sets whenever links, delegations, ranks, settings or memberships change. `activity_guard` treats a backing agreement by the live authority: both members active and not paused, no pause on the relationship, no blocked activity, and authority for the area (tasks for tasks/protocols/reminders, points and punishments for rewards/consequences). Per-version acceptance epochs and expiry do not apply to backing agreements. Ordinary agreements keep their existing rules.
+For every pair with authority (own link, delegation or rank) the Instance keeps a **backing set**: a two-person relationship, a non-expiring agreement covering tasks, protocols, rewards, consequences and reminders, and an active *direct* assignment policy. `authority_sync` creates and removes these sets whenever links, delegations, ranks, settings or memberships change. `activity_guard` treats a backing agreement by the live authority: both members active and not paused, no pause on the relationship, no blocked activity, and authority for the area (tasks for tasks/protocols/reminders, points and punishments for rewards/consequences). Per-version acceptance epochs and expiry do not apply to backing agreements. Ordinary agreements keep their existing rules. Backing relationships carry `relationships.system` (migration `0041_progress_board`) and are left out of the Relationships list and its commands; they change only through authority. Relationships that existed before a link and were reused for it stay visible.
 
 As a result, shared tasks, task rewards, point balances, reward redemption, task inbox notices, exchanges and the People overview work for linked pairs without further steps. Existing adopted standing authority was converted to Dom links by migration `0037_household_authority`; two-person agreements behind them became backing agreements.
 
@@ -36,6 +36,12 @@ The worker (`run_authority_habits`) checks each ended period once. It applies ou
 
 On a Dom link the Dom can switch off **spending points on rewards** and **sending proposals**. When a sub has several Doms the strictest setting applies. Permission requests, journal entries, pausing, stopping and ending a link can never be switched off.
 
+## Progress and the household board
+
+`progressList` (read only, `authority_progress_command`) returns, per visible sub, the last 14 days in the household time zone: shared tasks approved per day, points earned per day (approved task points that were not reversed, plus point changes, which include habit outcomes; spending on rewards is not subtracted), habit periods reached and missed (a weekly period counts on its last day), plus open shared tasks, current balance, rank and the names of their Doms. At most 50 people.
+
+Who is visible: yourself when you are a sub in an active link, every sub you hold task or outcome authority over, and, when the owner made subs visible and you are part of an active link, every sub without a private link. The same rule as the ranking list; personal-private data is not included.
+
 ## Security and privacy
 
 - Tables `authority_links`, `authority_delegations`, `authority_pairs`, `point_adjustments`, `authority_punishments` and `authority_receipts` use FORCE RLS. The runtime role reaches them only through `authority_command` and `authority_export_page`.
@@ -50,3 +56,6 @@ On a Dom link the Dom can switch off **spending points on rewards** and **sendin
 - **Today → Needs your attention:** invitations waiting for your answer.
 - **Dynamic → People:** per person you hold authority over: rank, points, what is waiting, tasks to review and overdue, and buttons for a task, a breach, habits, points and a punishment.
 - **Today → Habits from your Dom:** progress and +1 for the sub.
+- **Tasks → Shared tasks → Give a task:** choose the person and write the task; it goes straight to them through the backing direct policy. People → **Assign a task** opens it with the person chosen, the add menu opens it empty. Offers through an agreement and older standing assignments are under **Offers and agreements**.
+- **Dynamic → People → Progress:** last 7 days (tasks done with the change against the week before, points, open tasks, habits reached and missed), daily bar charts for tasks and points over 14 days, and a table view.
+- **Dynamic → Household board:** everyone you may see, by rank, with their last 7 days and balance; a row opens the same progress view. Shown when you are part of an active Dom link.

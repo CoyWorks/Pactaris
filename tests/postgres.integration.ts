@@ -1848,6 +1848,18 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const missed=(await db.owner.query('SELECT result,outcome FROM pactaris.authority_habit_results WHERE habit_id=$1',[habit.data.resourceId])).rows;
      assert.equal(missed.length,1);assert.equal(missed[0].result,'missed');assert.equal(missed[0].outcome.points,-2);assert.ok(missed[0].outcome.punishmentTaskId);
      assert.equal((await view(D)).myPoints,'3');assert.equal((await read(D,missed[0].outcome.punishmentTaskId)).state,'assigned');
+     // Progress: the Dom sees the sub's last 14 days; a member without authority does not while subs are not visible.
+     const progress=await api(base+'/authority/progress','GET',undefined,A.session);assert.equal(progress.status,200,JSON.stringify(progress.data));
+     const mine=progress.data.people.find((p:any)=>p.membershipId===D.member);assert.ok(mine);assert.equal(mine.tasks.length,14);
+     assert.equal(mine.points.reduce((a:number,b:number)=>a+b,0),3);assert.equal(mine.missed.reduce((a:number,b:number)=>a+b,0),1);assert.equal(mine.balance,'3');assert.ok(mine.openTasks>=1);
+     assert.ok((await api(base+'/authority/progress','GET',undefined,D.session)).data.people.some((p:any)=>p.membershipId===D.member&&p.self));
+     assert.ok(!(await api(base+'/authority/progress','GET',undefined,B.session)).data.people.some((p:any)=>p.membershipId===D.member));
+     assert.equal((await au(A,'progressList')).status,400);
+     // Backing relationships for Dom links stay out of the Relationships list.
+     const backing=(await db.owner.query('SELECT relationship_id FROM pactaris.authority_pairs WHERE holder_id=$1 AND subject_id=$2',[A.member,D.member])).rows[0].relationship_id;
+     let relAfter:string|null=null;const listed:string[]=[];
+     do{const page=await api(base+'/relationships'+(relAfter?'?after='+relAfter:''),'GET',undefined,D.session);assert.equal(page.status,200);listed.push(...page.data.relationships.map((r:any)=>r.relationshipId));relAfter=page.data.nextCursor;}while(relAfter);
+     assert.ok(!listed.includes(backing));
      assert.equal((await db.pool.query('SELECT pactaris.run_authority_habits($1) AS state',[instanceId])).rows[0].state,'idle');
      assert.equal((await consent(D,'selfPause',{})).status,200);
      await db.owner.query("UPDATE pactaris.authority_habits SET next_period=pactaris.habit_period_start('daily','UTC',now())-2 WHERE id=$1",[habit.data.resourceId]);
