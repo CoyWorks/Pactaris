@@ -437,6 +437,13 @@
       "backwardCompatible": true
     },
     {
+      "component": "instance",
+      "id": "0044_task_proofs",
+      "path": "migrations/instance/0044_task_proofs.sql",
+      "sha256": "56ac7d956af0e02d880dab850803e90a035f1837216e2aae824abf1314395679",
+      "backwardCompatible": true
+    },
+    {
       "component": "gateway",
       "id": "0020_account_export",
       "path": "migrations/gateway/0020_account_export.sql",

@@ -100,6 +100,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0034_account_erasure'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.account_erasure(uuid,uuid,text) TO ${role}`);
       if(entries.some(m=>m.id==='0043_habit_streaks'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.habit_streaks(uuid,uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0042_reward_shop'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.shop_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
+      if(entries.some(m=>m.id==='0044_task_proofs'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.proof_command(uuid,uuid,uuid,uuid,text,jsonb,text),pactaris.proof_sweep(uuid),pactaris.proof_mark_purged(uuid,uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0041_progress_board'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.authority_progress_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0039_member_notices'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.notice_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
       if(entries.some(m=>m.id==='0038_assigned_habits'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.authority_habit_command(uuid,uuid,uuid,uuid,text,jsonb,text),pactaris.run_authority_habits(uuid) TO ${role}`);
