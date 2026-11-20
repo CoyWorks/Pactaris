@@ -16,7 +16,7 @@ In account settings, enable device notifications and send a test. The worker per
 
 Verify with a browser on desktop, Android and a Home Screen installation on iOS/iPadOS. Open the site over HTTPS, enable permission from the in-app button, queue a test, close the page and open the notification. Repeat with permission blocked, explicit disable, and account switch on a shared device. On return, the user's data remains behind the normal session. Record browser version and provider separately. CI exercises the database and queue against a stub provider.
 
-Household inbox events have not been connected to Push delivery. That path needs an exact membership check at send time, current preference and placement checks, and durable coalescing across Instances. Push remains best effort and is unsuitable for emergency actions.
+Task notices and member notices (requests, breach records, Dom links, delegation, points and habit results; see [NOTIFICATIONS.md](NOTIFICATIONS.md)) share one push sequence per dynamic and are delivered through this worker with the same membership, preference, placement and pause checks. Push remains best effort and is unsuitable for emergency actions.
 
 ## Participant task notices
 

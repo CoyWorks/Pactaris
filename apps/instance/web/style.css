@@ -185,3 +185,4 @@ button.secondary{background:none;border-color:var(--outline);color:var(--accent)
 .bar.over span{background:var(--danger)}
 .habit-row{align-items:flex-start}.row-actions{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:flex-end}
 .ranking li{gap:.75rem}
+.bell{position:relative}.bell .dot{position:absolute;top:9px;right:10px}

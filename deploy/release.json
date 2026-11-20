@@ -402,6 +402,13 @@
       "backwardCompatible": true
     },
     {
+      "component": "instance",
+      "id": "0039_member_notices",
+      "path": "migrations/instance/0039_member_notices.sql",
+      "sha256": "0a3e73df7d6947af119c839fb5346b6ef216e2fbe937be64d2477d4c11584eef",
+      "backwardCompatible": true
+    },
+    {
       "component": "gateway",
       "id": "0020_account_export",
       "path": "migrations/gateway/0020_account_export.sql",

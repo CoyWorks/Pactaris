@@ -18,11 +18,12 @@ import {SwipeRow,UndoToast,useUndoable} from './swipe.js';
 import {Attention,ExchangeView,Overview,ReviewsView,TermsForm,useExchange,useTerms} from './exchange.js';
 import {AuthorityView,useAuthority} from './authority.js';
 import {TodayAssignedHabits,useAssignedHabits} from './assigned-habits.js';
-type View='home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews'|'authority';
+import {NoticesView,useNotices} from './notices.js';
+type View='home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews'|'authority'|'notices';
 type Tab='home'|'tasks'|'routines'|'library'|'dynamic';
 type Draft={action:string;body:Record<string,unknown>};
-const views:readonly View[]=['home','habits','checkins','rewards','participantTasks','rules','notes','tasks','dynamic','members','settings','relationships','safety','exchange','overview','reviews','authority'];
-const labels:Record<View,MessageKey>={home:'workspace.home',tasks:'workspace.mine',habits:'routines.habits',checkins:'routines.checkinsTitle',rewards:'catalog.title',participantTasks:'partner.title',rules:'library.guidance',notes:'library.notes',dynamic:'workspace.dynamic',members:'workspace.invite',settings:'workspace.settings',relationships:'workspace.relationships',safety:'workspace.safety',exchange:'exchange.title',overview:'overview.title',reviews:'reviews.title',authority:'authority.title'};
+const views:readonly View[]=['home','habits','checkins','rewards','participantTasks','rules','notes','tasks','dynamic','members','settings','relationships','safety','exchange','overview','reviews','authority','notices'];
+const labels:Record<View,MessageKey>={home:'workspace.home',tasks:'workspace.mine',habits:'routines.habits',checkins:'routines.checkinsTitle',rewards:'catalog.title',participantTasks:'partner.title',rules:'library.guidance',notes:'library.notes',dynamic:'workspace.dynamic',members:'workspace.invite',settings:'workspace.settings',relationships:'workspace.relationships',safety:'workspace.safety',exchange:'exchange.title',overview:'overview.title',reviews:'reviews.title',authority:'authority.title',notices:'notices.title'};
 const tabs:{tab:Tab;view:View;label:MessageKey;icon:IconName}[]=[
  {tab:'home',view:'home',label:'workspace.home',icon:'today'},
  {tab:'tasks',view:'tasks',label:'workspace.tasks',icon:'tasks'},
@@ -44,7 +45,8 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
  const [authorityReload,setAuthorityReload]=useState(0);
  const exchange=useExchange(householdId,exchangeReload),terms=useTerms(householdId,termsReload),authority=useAuthority(householdId,authorityReload);
  const assignedHabits=useAssignedHabits(householdId,authorityReload);
- const refreshAll=()=>{setExchangeReload(v=>v+1);setAuthorityReload(v=>v+1);setRefresh(v=>v+1);};
+ const [noticeReload,setNoticeReload]=useState(0),notices=useNotices(householdId,noticeReload);
+ const refreshAll=()=>{setExchangeReload(v=>v+1);setAuthorityReload(v=>v+1);setNoticeReload(v=>v+1);setRefresh(v=>v+1);};
  const [adding,setAdding]=useState<QuickKind|'menu'>(),[habitsReload,setHabitsReload]=useState(0),pendingEditor=useRef<{fields:TaskFields}|undefined>(undefined);
  const t=createTranslator(language),[data,setData]=useState<WorkspaceResult>(),[filter,setFilter]=useState('open'),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[draft,setDraft]=useState<Draft>(),[editor,setEditor]=useState<{fields:TaskFields;taskId?:string;version?:string}>(),[settings,setSettings]=useState<{name:string;timeZone:string;version:string}>();
  const [pointsDraft,setPointsDraft]=useState<PointsSettings & {version:string}>();
@@ -174,6 +176,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
   <header className="app-bar">
    <Link to="/?all" className="title-button" aria-label={t('workspace.switch')}><span>{h?.name??t('workspace.loading')}</span><Icon name="down"/></Link>
    <div className="app-bar-actions">
+    <button type="button" className="icon-button bell" aria-label={t('notices.title')} aria-pressed={view==='notices'} onClick={()=>go('notices')}><Icon name="bell"/>{(!!notices?.unread||!!data?.hasUnreadTaskInbox)&&<span className="dot" aria-label={t('notices.unread')}/>}</button>
     <button type="button" className={'icon-button shield'+(h?.status==='paused'?' alert':'')} aria-label={t('workspace.safety')} aria-pressed={view==='safety'} onClick={()=>go('safety')}><Icon name="shield"/></button>
     {avatar}
    </div>
@@ -201,6 +204,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
    {view==='exchange'&&h&&<ExchangeView householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} people={exchange.data?.people??[]} onChanged={()=>setExchangeReload(v=>v+1)}/>}
    {view==='overview'&&h&&<Overview householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} authority={authority.data} habits={assignedHabits} onAssign={()=>go('participantTasks')} onChanged={message=>{setNotice(message);refreshAll();}}/>}
    {view==='authority'&&h&&<AuthorityView householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={authority.data} onChanged={refreshAll}/>}
+   {view==='notices'&&h&&<NoticesView householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={notices} onOpen={target=>go(target==='home'?'home':target)} onRead={()=>{setNoticeReload(v=>v+1);setRefresh(v=>v+1);}}/>}
    {view==='reviews'&&h&&<ReviewsView householdId={householdId} session={session} language={language} format={format}/>}
    {view==='dynamic'&&h&&<section className="plain">
     <div className="dynamic-card"><span className="badge-letter" aria-hidden="true">{h.name.trim().slice(0,1).toUpperCase()}</span><span className="grow"><strong>{h.name}</strong><span className="muted">{t('workspace.memberCount')} {h.memberCount}</span></span></div>
