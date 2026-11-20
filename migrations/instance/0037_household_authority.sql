@@ -165,22 +165,22 @@ REVOKE ALL ON FUNCTION pactaris.authority_points(uuid,uuid) FROM PUBLIC;
 -- Identical to 0008 apart from the authority-backed branch.
 CREATE OR REPLACE FUNCTION pactaris.activity_guard(target uuid,instance uuid,actor uuid,member_id uuid,agreement uuid,expected_version bigint,activity text,expected_epoch bigint)
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pactaris,pg_temp AS $$
-DECLARE h pactaris.households; a pactaris.agreements; v pactaris.agreement_versions; p pactaris.authority_pairs;
+DECLARE h pactaris.households; a pactaris.agreements; v pactaris.agreement_versions; ap pactaris.authority_pairs;
 BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended('pactaris.household.'||target::text,0));
  SELECT * INTO h FROM pactaris.households WHERE id=target AND instance_id=instance FOR UPDATE;
  IF NOT FOUND OR h.status<>'active' OR h.safety_version IS DISTINCT FROM expected_epoch OR activity IS NULL OR activity NOT IN ('task','protocol','reward','consequence','session','reminder') THEN RETURN false; END IF;
  -- Authority-backed agreement: consent was given once by linking. Live authority, membership,
  -- pause, relationship hold and blocked activities decide; per-version acceptance and expiry do not.
- SELECT * INTO p FROM pactaris.authority_pairs WHERE household_id=target AND agreement_id=agreement;
+ SELECT * INTO ap FROM pactaris.authority_pairs WHERE household_id=target AND agreement_id=agreement;
  IF FOUND THEN
   IF expected_version IS DISTINCT FROM (SELECT version FROM pactaris.agreements WHERE household_id=target AND id=agreement) THEN RETURN false; END IF;
-  IF NOT EXISTS(SELECT 1 FROM pactaris.memberships WHERE household_id=target AND id=member_id AND account_id=actor AND status='active' AND id IN (p.holder_id,p.subject_id)) THEN RETURN false; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pactaris.memberships WHERE household_id=target AND id=member_id AND account_id=actor AND status='active' AND id IN (ap.holder_id,ap.subject_id)) THEN RETURN false; END IF;
   IF EXISTS(SELECT 1 FROM pactaris.memberships x LEFT JOIN pactaris.personal_limits l ON l.household_id=x.household_id AND l.membership_id=x.id
-    WHERE x.household_id=target AND x.id IN (p.holder_id,p.subject_id) AND (x.status<>'active' OR x.safety_paused OR coalesce(l.limits->'blockedActivities','[]'::jsonb)?activity)) THEN RETURN false; END IF;
-  IF NOT EXISTS(SELECT 1 FROM pactaris.relationships WHERE household_id=target AND id=p.relationship_id AND status='active')
-   OR EXISTS(SELECT 1 FROM pactaris.relationship_holds WHERE household_id=target AND relationship_id=p.relationship_id AND paused) THEN RETURN false; END IF;
-  RETURN pactaris.authority_area(target,p.holder_id,p.subject_id,CASE WHEN activity IN ('reward','consequence') THEN 'outcomes' ELSE 'tasks' END);
+    WHERE x.household_id=target AND x.id IN (ap.holder_id,ap.subject_id) AND (x.status<>'active' OR x.safety_paused OR coalesce(l.limits->'blockedActivities','[]'::jsonb)?activity)) THEN RETURN false; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pactaris.relationships WHERE household_id=target AND id=ap.relationship_id AND status='active')
+   OR EXISTS(SELECT 1 FROM pactaris.relationship_holds WHERE household_id=target AND relationship_id=ap.relationship_id AND paused) THEN RETURN false; END IF;
+  RETURN pactaris.authority_area(target,ap.holder_id,ap.subject_id,CASE WHEN activity IN ('reward','consequence') THEN 'outcomes' ELSE 'tasks' END);
  END IF;
  SELECT * INTO a FROM pactaris.agreements WHERE household_id=target AND id=agreement AND version=expected_version;
  IF NOT FOUND OR NOT EXISTS(SELECT 1 FROM pactaris.relationships WHERE household_id=target AND id=a.relationship_id AND status='active') OR

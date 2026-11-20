@@ -391,7 +391,7 @@
       "component": "instance",
       "id": "0037_household_authority",
       "path": "migrations/instance/0037_household_authority.sql",
-      "sha256": "0f65da1bcff5e0ac70a756212bf32b30837a0ab5ee8a47f918946b96515384fb",
+      "sha256": "46052ac2bd7d7ce19fee05418e5167e365f87e87583f9a601743c5bea02f1595",
       "backwardCompatible": true
     },
     {
