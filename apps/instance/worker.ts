@@ -17,6 +17,8 @@ async function tick() {
     if(schema.rowCount){for(let n=0;n<16&&!stopped;n++){const result=await db.pool.query('SELECT pactaris.run_task_scheduler($1) AS state',[config.instanceId]);if(result.rows[0].state==='idle')break;if(result.rows[0].state==='failed')state='unavailable';}}
     const personal=await db.pool.query("SELECT 1 FROM pactaris_meta.migrations WHERE component='instance' AND id='0027_personal_task_series'");
     if(personal.rowCount){for(let n=0;n<16&&!stopped;n++){const result=await db.pool.query('SELECT pactaris.run_personal_scheduler($1) AS state',[config.instanceId]);if(result.rows[0].state==='idle')break;if(result.rows[0].state==='failed')state='unavailable';}}
+    const habits=await db.pool.query("SELECT 1 FROM pactaris_meta.migrations WHERE component='instance' AND id='0038_assigned_habits'");
+    if(habits.rowCount){for(let n=0;n<16&&!stopped;n++){const result=await db.pool.query('SELECT pactaris.run_authority_habits($1) AS state',[config.instanceId]);if(result.rows[0].state==='idle')break;}}
     const reminders=await db.pool.query("SELECT 1 FROM pactaris_meta.migrations WHERE component='instance' AND id='0028_task_notifications'");
     if(reminders.rowCount){for(let n=0;n<16&&!stopped;n++){const result=await db.pool.query('SELECT pactaris.run_task_reminders($1) AS processed',[config.instanceId]);if(!result.rows[0].processed)break;}}
   } } catch { state = 'unavailable'; }

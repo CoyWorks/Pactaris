@@ -1813,6 +1813,32 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const punishment=await au(A,'punishmentGive',{subjectId:D.member,title:'Write lines',description:'Fifty times',exchangeId:null});
      assert.equal(punishment.status,200,JSON.stringify(punishment.data));assert.equal((await read(D,punishment.data.resourceId)).state,'assigned');
      assert.ok((await post(D,'partnerInbox',{})).status<500);
+     // Habits the Dom sets, with automatic outcomes; a pause means the period is skipped.
+     const habitFields={title:'Morning check-in',description:'',period:'daily',mode:'minimum',target:1,timeZone:'UTC',rewardPoints:3,penaltyPoints:2,punishment:'Corner time'};
+     const habit=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:habitFields});assert.equal(habit.status,200,JSON.stringify(habit.data));
+     assert.equal((await au(B,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:habitFields})).status,404);
+     assert.equal((await au(D,'habitRecord',{habitId:habit.data.resourceId,count:1})).status,200);
+     assert.equal((await au(B,'habitRecord',{habitId:habit.data.resourceId,count:1})).status,404);
+     const habits=(await api(base+'/authority/habits','GET',undefined,D.session)).data.habits;assert.equal(habits[0].currentTotal,1);assert.equal(habits[0].canEdit,false);
+     const instanceId=place.instanceId;
+     await db.owner.query("UPDATE pactaris.authority_habits SET next_period=pactaris.habit_period_start('daily','UTC',now())-1 WHERE id=$1",[habit.data.resourceId]);
+     assert.equal((await db.pool.query('SELECT pactaris.run_authority_habits($1) AS state',[instanceId])).rows[0].state,'processed');
+     const missed=(await db.owner.query('SELECT result,outcome FROM pactaris.authority_habit_results WHERE habit_id=$1',[habit.data.resourceId])).rows;
+     assert.equal(missed.length,1);assert.equal(missed[0].result,'missed');assert.equal(missed[0].outcome.points,-2);assert.ok(missed[0].outcome.punishmentTaskId);
+     assert.equal((await view(D)).myPoints,'3');assert.equal((await read(D,missed[0].outcome.punishmentTaskId)).state,'assigned');
+     assert.equal((await db.pool.query('SELECT pactaris.run_authority_habits($1) AS state',[instanceId])).rows[0].state,'idle');
+     assert.equal((await consent(D,'selfPause',{})).status,200);
+     await db.owner.query("UPDATE pactaris.authority_habits SET next_period=pactaris.habit_period_start('daily','UTC',now())-2 WHERE id=$1",[habit.data.resourceId]);
+     await db.pool.query('SELECT pactaris.run_authority_habits($1)',[instanceId]);
+     assert.equal((await db.owner.query("SELECT result FROM pactaris.authority_habit_results WHERE habit_id=$1 AND period_start=pactaris.habit_period_start('daily','UTC',now())-2",[habit.data.resourceId])).rows[0].result,'skipped');
+     assert.equal((await view(D)).myPoints,'3');
+     const pausedAgain=await state(D);assert.equal((await consent(D,'selfResume',{epoch:pausedAgain.epoch,memberEpoch:pausedAgain.memberEpoch})).status,200);
+     assert.equal((await move(A,'partnerCancel',missed[0].outcome.punishmentTaskId)).status,200);
+     // Per-sub permission: proposals can be switched off by the Dom.
+     const settings=(await view(A)).links.find((l:any)=>l.linkId===linkId);
+     assert.equal((await au(A,'linkSettings',{linkId,version:settings.version,rankAuthority:'tasks',private:false,canSpendPoints:false,canPropose:false})).status,200);
+     assert.equal((await api(base+'/exchange/exchangeCreate','POST',{operationId:randomUUID(),kind:'proposal',recipientId:A.member,title:'Idea',body:'',dueAt:null},D.session)).status,404);
+     assert.equal((await api(base+'/exchange/exchangeCreate','POST',{operationId:randomUUID(),kind:'permission',recipientId:A.member,title:'May I',body:'',dueAt:null},D.session)).status,200);
      // Delegation per area: tasks only.
      assert.equal((await au(A,'delegationSet',{linkId,delegateId:C.member,version:'0',tasks:true,outcomes:false,endsAt:null})).status,200);
      const delegated=(await view(C)).powers.find((x:any)=>x.membershipId===D.member);assert.deepEqual([delegated.tasks,delegated.outcomes,delegated.manage],[true,false,false]);

@@ -395,6 +395,13 @@
       "backwardCompatible": true
     },
     {
+      "component": "instance",
+      "id": "0038_assigned_habits",
+      "path": "migrations/instance/0038_assigned_habits.sql",
+      "sha256": "c51740b8b3fa5ae458c875583d6db6669db4f88a0cf078657a95b35317a11760",
+      "backwardCompatible": true
+    },
+    {
       "component": "gateway",
       "id": "0020_account_export",
       "path": "migrations/gateway/0020_account_export.sql",
