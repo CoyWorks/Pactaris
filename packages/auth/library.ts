@@ -1,3 +1,4 @@
+import {containsDisguisedText} from './text.js';
 import {uuid} from './delegation.js';
 import type {LibraryAction} from './library-actions.js';
 export {libraryActions,isLibraryAction,type LibraryAction} from './library-actions.js';
@@ -18,6 +19,7 @@ export function validDraftAttachment(value:unknown):value is string{
  catch{return false;}
 }
 export function libraryInput(action:LibraryAction,value:unknown):Record<string,unknown>&{operationId:string}{
+ if(containsDisguisedText(value))throw new LibraryError('invalid');
  if(!record(value)||!uuid(value.operationId))throw new LibraryError('invalid');const names=['operationId'];
  if(action==='documentList')names.push('kind','filter','query',...('after'in value?['after']:[]));
  else if(action==='documentCreate')names.push('kind','fields');

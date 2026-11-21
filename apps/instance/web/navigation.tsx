@@ -26,17 +26,33 @@ export function Link({to,children,...rest}:{to:string;children:React.ReactNode}&
  }}>{children}</a>;
 }
 /** Short help that stays out of the way until asked for. */
+/** Success notices ("the server confirmed…") clear themselves after a few seconds so they do not linger
+ *  into the next screen. Notices that need action, such as an unknown outcome, stay. */
+export function useFleetingNotice(notice:string|undefined,clear:()=>void,ms=5000){
+ useEffect(()=>{
+  if(!notice||!/\.(confirmed|saved)$/.test(notice))return;
+  const timer=setTimeout(clear,ms);return()=>clearTimeout(timer);
+ },[notice]);// eslint-disable-line react-hooks/exhaustive-deps
+}
 export function Hint({label,children}:{label:string;children:React.ReactNode}){
  return <details className="hint"><summary>{label}</summary><p>{children}</p></details>;
 }
 /** Bottom sheet for short choices; Escape and the backdrop close it. */
 export function Sheet({title,closeLabel,onClose,children}:{title:string;closeLabel:string;onClose:()=>void;children:React.ReactNode}){
+ const box=useRef<HTMLDivElement>(null);
  useEffect(()=>{
   const key=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose();};
   window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);
  },[onClose]);
+ // Move focus into the sheet on open and give it back to the opener on close.
+ useEffect(()=>{
+  const previous=document.activeElement as HTMLElement|null;
+  const first=box.current?.querySelector<HTMLElement>('input:not([type=hidden]),select,textarea,.sheet-body button,a[href]');
+  (first??box.current)?.focus();
+  return()=>{previous?.focus?.();};
+ },[]);
  return <div className="sheet-backdrop" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-  <div className="sheet" role="dialog" aria-modal="true" aria-label={title}>
+  <div className="sheet" role="dialog" aria-modal="true" aria-label={title} ref={box} tabIndex={-1}>
    <div className="sheet-head"><h2>{title}</h2><button type="button" className="icon-button" aria-label={closeLabel} onClick={onClose}><Icon name="close"/></button></div>
    {children}
   </div>

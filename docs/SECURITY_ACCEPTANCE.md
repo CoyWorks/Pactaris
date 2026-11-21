@@ -10,6 +10,8 @@ This maps the #31 criteria to automated evidence in the repository and to the ch
 | IDOR | Integration: wrong household, wrong Instance, wrong membership generation, foreign resource IDs and forged actor fields fail closed in every module | Automated |
 | CSRF and Origin | `tests/gateway.test.ts` enumerates **every** gateway `POST`/`PUT`/`PATCH`/`DELETE` route under `/api/` and proves each rejects a session without exact Origin and CSRF proof | Automated |
 | XSS | All user content renders as escaped React text; CSP `default-src 'self'` without inline scripts on every response (asserted per API route); the i18n checker rejects visible literals | Automated (no browser fuzzing) |
+| Disguised text | Names, titles and notes refuse bidirectional overrides/isolates (U+202A–U+202E, U+2066–U+2069) and text with no visible character (`packages/auth/text.ts`, every module's input validation, display names, household names and aliases; `tests/text.test.ts`). Right-to-left writing and LRM/RLM marks stay allowed | Automated |
+| Transport headers | HSTS (`max-age=31536000`, no `includeSubDomains`) from the gateway for an HTTPS public origin; the exact deployed revision is in `/api/status` only for signed-in callers; CSP allows `blob:` images for the one-time proof viewer | Automated (`tests/gateway.test.ts`) |
 | Session fixation | Login rotates the session; one-time login binding, replayed callback and wrong browser rejected (`tests/gateway.test.ts`) | Automated |
 | Proxy headers | Forged identity/role headers ignored; host poisoning rejected; `trust proxy` limited to configured addresses | Automated |
 | Uploads | Draft attachments: size/type bounds, owner-only download, lifecycle cleanup (integration) | Automated (only small text attachments exist) |
@@ -21,6 +23,10 @@ This maps the #31 criteria to automated evidence in the repository and to the ch
 | Bounded load and polling | `scripts/load_probe.py` (below) | **Pending** host measurement |
 | Query plans, queue recovery, large export | — | **Pending** host measurement |
 | Manager outage, wrong audience, downgrade, Instance compromise boundaries | Integration covers wrong audience, replay, private route failure, downgrade and the restrictive outage path | Automated; second-instance evidence pending in #62 |
+
+## Live test, 21 November 2026
+
+Browser test against the live site with one owner account in a one-member test household (release of #97): foreign household IDs, operator routes, CSRF variants, forged membership, unknown keys and prototype keys all failed closed; duplicate operations created one task; pause and stop blocked activity until re-entry. Findings fixed afterwards: disguised text, generic "Refresh" label, lingering success notices, counters during the undo window, the invitation retry button after success, focus in sheets, and the empty "give a task" form. Still open: a cross-account test with a second account (Dom/sub, approvals and proof); the obsolete `X-XSS-Protection` header comes from the proxy, not the app.
 
 ## Load probe
 

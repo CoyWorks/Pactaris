@@ -1,3 +1,4 @@
+import {containsDisguisedText} from './text.js';
 import {uuid} from './delegation.js';
 import {documentText,documentVersion} from './library.js';
 import type {ExchangeAction} from './exchange-actions.js';
@@ -28,6 +29,7 @@ export function validTerms(v:unknown):v is Terms{
  return record(v)&&Object.entries(v).every(([key,value])=>(termKeys as readonly string[]).includes(key)&&documentText(value,24));
 }
 export function exchangeInput(action:ExchangeAction,value:unknown):Record<string,unknown>&{operationId:string}{
+ if(containsDisguisedText(value))throw new ExchangeError('invalid');
  if(!record(value)||!uuid(value.operationId))throw new ExchangeError('invalid');
  const names=['operationId'];
  if(action==='exchangeList')names.push('box',...('before'in value?['before']:[]));

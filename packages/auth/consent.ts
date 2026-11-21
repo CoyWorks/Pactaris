@@ -1,3 +1,4 @@
+import {containsDisguisedText} from './text.js';
 import {uuid} from './delegation.js';
 import type {ConsentAction} from './consent-actions.js';
 export {consentActions,isConsentAction,type ConsentAction} from './consent-actions.js';
@@ -12,6 +13,7 @@ const version=(v:unknown):v is string=>typeof v==='string'&&/^[1-9][0-9]{0,14}$/
 const text=(v:unknown,max:number)=>typeof v==='string'&&[...v].length<=max&&v===v.trim()&&!/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(v);
 const codes=(v:unknown,min=0)=>Array.isArray(v)&&v.length>=min&&v.length<=activities.length&&new Set(v).size===v.length&&v.every(c=>(activities as readonly unknown[]).includes(c));
 export function consentInput(action:ConsentAction,value:unknown):Record<string,unknown>&{operationId:string}{
+ if(containsDisguisedText(value))throw new ConsentError('invalid');
  if(!object(value)||!uuid(value.operationId))throw new ConsentError('invalid');
  let names=['operationId'];
  if(action==='agreementList')names.push('relationshipId',...('after'in value?['after']:[]));

@@ -1,3 +1,4 @@
+import {containsDisguisedText} from './text.js';
 import {uuid} from './delegation.js';
 import {documentText,documentVersion} from './library.js';
 import type {RoutineAction} from './routine-actions.js';
@@ -14,6 +15,7 @@ export const calendarDate=(v:unknown):v is string=>typeof v==='string'&&/^(?:19|
 export const utcInstant=(v:unknown):v is string=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v)&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString()===v;
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 export function routineInput(action:RoutineAction,value:unknown):Record<string,unknown>&{operationId:string}{
+ if(containsDisguisedText(value))throw new RoutineError('invalid');
  if(!record(value)||!uuid(value.operationId))throw new RoutineError('invalid');const names=['operationId'];
  if(action==='checkinList')names.push(...('after'in value?['after']:[]));
  else if(action==='checkinSubmit')names.push('reviewerId','title','text');

@@ -1,5 +1,5 @@
 import {DraftAttachment} from './draft-attachment.js';
-import {Hint,Layer} from './navigation.js';
+import {Hint,Layer,useFleetingNotice} from './navigation.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {DocumentFields,DocumentKind,DocumentSummary,DocumentDetail,LibraryResult} from '../../../packages/auth/library.js';
@@ -12,6 +12,7 @@ const empty=():DocumentFields=>({title:'',body:'',category:'',position:0,visibil
 type Draft={action:string;body:Record<string,unknown>};
 export function LibraryPanel({householdId,session,language,format,timeZone,section}:{householdId:string;session:{csrfToken:string};language:string;format:string;timeZone:string;section:'guidance'|'notes'}){
  const t=createTranslator(language),[kind,setKind]=useState<DocumentKind>(section==='notes'?'note':'rule'),[filter,setFilter]=useState('active'),[search,setSearch]=useState(''),[query,setQuery]=useState(''),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[listing,setListing]=useState<LibraryResult>(),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[busy,setBusy]=useState(false),[draft,setDraft]=useState<Draft>(),[detail,setDetail]=useState<DocumentDetail>(),[editor,setEditor]=useState<{fields:DocumentFields;documentId?:string;version?:string}>(),[confirmation,setConfirmation]=useState<{action:string;document:DocumentDetail}>(),[members,setMembers]=useState<MemberRow[]>([]),[memberCursor,setMemberCursor]=useState<string|null>(null);
+ useFleetingNotice(notice,()=>setNotice(undefined));
  const writing=useRef(false),base='/api/households/'+householdId+'/library';
  useEffect(()=>{
   let gone=false,active:AbortController|undefined,timer:ReturnType<typeof setTimeout>|undefined;
@@ -113,6 +114,6 @@ export function LibraryPanel({householdId,session,language,format,timeZone,secti
    <p>{t(confirmation.action==='documentPublish'?'library.publishNotice':confirmation.action==='documentDelete'?'library.deleteNotice':'library.archiveNotice')}</p>
    <button type="button" disabled={blocked} onClick={()=>{void change(confirmation.action,{documentId:confirmation.document.documentId,version:confirmation.document.version});}}>{t('members.confirm')}</button><button type="button" disabled={busy} onClick={()=>setConfirmation(undefined)}>{t('onboarding.cancel')}</button>
   </div>}</>}
-  {listing?.nextCursor&&<button type="button" disabled={busy} onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}<button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>
+  {listing?.nextCursor&&<button type="button" disabled={busy} onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}<button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('common.refresh')}</button>
  </section>;
 }

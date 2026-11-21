@@ -136,6 +136,6 @@ export function TaskInbox({householdId,csrfToken,language,onRead,pointsLabel}:{h
   }}>{t('inbox.read')}</button>}</li>)}</ul>
   {items?.length===25&&<button type="button" onClick={()=>setAfter(items.at(-1)?.id)}>{t('portal.more')}</button>}
   {after&&<button type="button" onClick={()=>setAfter(undefined)}>{t('workspace.firstPage')}</button>}
-  <button type="button" onClick={()=>setRevision(n=>n+1)}>{t('members.refresh')}</button>
+  <button type="button" onClick={()=>setRevision(n=>n+1)}>{t('common.refresh')}</button>
  </section>;
 }

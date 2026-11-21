@@ -1,3 +1,4 @@
+import {disguisedText} from '../../packages/auth/text.js';
 import type pg from 'pg';
 import type { InstanceConfig } from '../../packages/config/index.js';
 import { CommandVerifier,DelegationError,digest,uuid,type HouseholdAction } from '../../packages/auth/delegation.js';
@@ -19,7 +20,7 @@ export class InstanceCommands {
       if(!input||Array.isArray(input)||input.operationId!==verified.operationId||
         Object.keys(input).sort().join(',')!==(action==='create'?'name,operationId':action==='leave'&&input.membershipId!==undefined?'membershipId,operationId':'operationId'))throw Error('command.input');
       if(action==='leave'&&input.membershipId!==undefined&&!uuid(input.membershipId))throw Error('command.membership');
-      if(action==='create'&&(typeof input.name!=='string'||!input.name.trim()||[...input.name].length>120||input.name!==input.name.trim()||/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(input.name)))throw Error('command.name');
+      if(action==='create'&&(typeof input.name!=='string'||!input.name.trim()||[...input.name].length>120||input.name!==input.name.trim()||(/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(input.name)||disguisedText(input.name))))throw Error('command.name');
     }catch{throw new CommandError('invalid');}
     // Semantic receipt hash is independent of JSON whitespace/key order. The
     // transport JWT still authenticates the exact bytes, not a parsed approximation.

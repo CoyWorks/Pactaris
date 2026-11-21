@@ -1,3 +1,4 @@
+import {containsDisguisedText} from './text.js';
 import {uuid} from './delegation.js';
 import {documentText,documentVersion} from './library.js';
 import {calendarDate,utcInstant} from './routines.js';
@@ -44,6 +45,7 @@ export function validTaskRewardReference(value:unknown):value is TaskRewardRefer
  return record(value)&&Object.keys(value).sort().join(',')==='itemId,version'&&uuid(value.itemId)&&documentVersion(value.version);
 }
 export function partnerInput(action:PartnerAction,value:unknown):Record<string,unknown>&{operationId:string}{
+ if(containsDisguisedText(value))throw new PartnerError('invalid');
  if(!record(value)||!uuid(value.operationId))throw new PartnerError('invalid');const keys=['operationId'];
  if(action==='partnerSeriesList')keys.push(...('after'in value?['after']:[]));
  else if(action==='partnerSeriesCancel')keys.push('seriesId','version');

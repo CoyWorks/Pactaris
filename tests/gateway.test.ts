@@ -338,7 +338,11 @@ test('every API response is uncached and carries the restrictive security header
     assert.match(String(response.headers['cache-control']),/no-store/,url);
     assert.equal(response.headers['x-content-type-options'],'nosniff',url);
     assert.match(String(response.headers['content-security-policy']),/frame-ancestors 'none'/,url);
+    assert.match(String(response.headers['strict-transport-security']),/max-age=31536000/,url);
   }
+  // The deployed revision is not shown to anonymous callers.
+  const anonymous=await inject(f.app,{url:'/api/status',headers});
+  assert.equal(JSON.parse(anonymous.payload).deployment,null);
 });
 test('abuse reports bind the reporter, validate input and cannot name an inaccessible household; moderation is operator-only',async()=>{
   const {reportInput}=await import('../apps/gateway/moderation.js');

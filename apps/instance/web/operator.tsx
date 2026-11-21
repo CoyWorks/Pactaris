@@ -43,7 +43,7 @@ export function OperatorPage({language}:{language:string}){
   }
   return <main>
     <header><h1>{t('operator.title')}</h1><a href="/">{t('portal.return')}</a></header>
-    <p><a href="/auth/operator" target="_blank" rel="noopener">{t('operator.signIn')}</a> <button type="button" disabled={busy} onClick={()=>setRefresh(n=>n+1)}>{t('members.refresh')}</button></p>
+    <p><a href="/auth/operator" target="_blank" rel="noopener">{t('operator.signIn')}</a> <button type="button" disabled={busy} onClick={()=>setRefresh(n=>n+1)}>{t('common.refresh')}</button></p>
     <section><h2>{t('operator.smtpTitle')}</h2>
       {error&&<p role="alert">{t(error)}</p>}
       {notice&&<p role="status">{t(notice)}</p>}

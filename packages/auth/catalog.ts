@@ -1,3 +1,4 @@
+import {containsDisguisedText} from './text.js';
 import {uuid} from './delegation.js';
 import {documentText,documentVersion} from './library.js';
 import type {CatalogAction} from './catalog-actions.js';
@@ -12,6 +13,7 @@ export type CatalogResult={householdId:string;operationId:string;actorMembership
 export class CatalogError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'habitGoalPending'|'unavailable'){super('catalog.'+kind);}}
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 export function catalogInput(action:CatalogAction,value:unknown):Record<string,unknown>&{operationId:string}{
+ if(containsDisguisedText(value))throw new CatalogError('invalid');
  if(!object(value)||!uuid(value.operationId))throw new CatalogError('invalid');const keys=['operationId'];
  if(action==='redemptionOptions'||action==='redemptionList'){
   if(action==='redemptionOptions'){

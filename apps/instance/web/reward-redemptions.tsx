@@ -121,7 +121,7 @@ export function RewardRedemptions({base,householdId,csrfToken,language,format,de
   </li>)}</ul>
   {result?.nextCursor&&<button type="button" onClick={()=>setCursor(result.nextCursor!)}>{t('portal.more')}</button>}
   {cursor&&<button type="button" onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}
-  <button type="button" onClick={()=>setReload(value=>value+1)}>{t('members.refresh')}</button>
+  <button type="button" onClick={()=>setReload(value=>value+1)}>{t('common.refresh')}</button>
  </section>;
 }
 

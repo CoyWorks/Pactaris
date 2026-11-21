@@ -153,6 +153,8 @@
   "members.retryDescription": "Keep this page open to retry the original request. Leaving the dynamic remains available.",
   "members.otherPending": "An earlier operation is awaiting confirmation. Background receipt checks do not repeat the change.",
   "members.refresh": "Refresh members",
+  "common.refresh": "Refresh",
+  "partner.giveSetUp": "Go to Doms and subs",
   "members.invalid": "Check the member details and try again.",
   "members.denied": "This membership or operation is unavailable for this account.",
   "members.conflict": "Membership or ownership has changed. Refresh the list before trying again.",
