@@ -1,5 +1,5 @@
 import {createCipheriv,createDecipheriv,randomBytes,createHash} from 'node:crypto';
-import {mkdir,writeFile,readFile,rm,link} from 'node:fs/promises';
+import {mkdir,writeFile,readFile,rm,link,readdir,stat} from 'node:fs/promises';
 import {join} from 'node:path';
 
 /** Completion proof is intimate content. It is stored only on the instance's own disk,
@@ -124,5 +124,15 @@ export class ProofStore{
   }catch{throw new ProofError('corrupt');}
  }
  async delete(householdId:string,proofId:string):Promise<void>{await rm(this.path(householdId,proofId),{force:true});}
+ /** Household folders and the proof files in one, with their age; temporary files are skipped. */
+ async households():Promise<string[]>{
+  try{return (await readdir(this.root,{withFileTypes:true})).filter(e=>e.isDirectory()&&uuidLike(e.name)).map(e=>e.name.toLowerCase());}catch{return [];}
+ }
+ async files(householdId:string):Promise<{id:string;modified:number}[]>{
+  let names:string[];try{names=await readdir(this.dir(householdId));}catch{return [];}
+  const out:{id:string;modified:number}[]=[];
+  for(const name of names.filter(uuidLike)){try{out.push({id:name.toLowerCase(),modified:(await stat(join(this.dir(householdId),name))).mtimeMs});}catch{}}
+  return out;
+ }
  async deleteHousehold(householdId:string):Promise<void>{await rm(this.dir(householdId),{recursive:true,force:true});}
 }

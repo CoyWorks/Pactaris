@@ -4,12 +4,12 @@ import {randomUUID} from 'node:crypto';
 import {settingsInput,accountQuery,reportQuery} from '../apps/gateway/admin.js';
 
 test('operator settings input is exact',()=>{
- assert.deepEqual(settingsInput({registration:'closed',announcement:{text:'Maintenance at 22:00',level:'warning'},version:'3'}),{registration:'closed',announcement:{text:'Maintenance at 22:00',level:'warning'},version:'3'});
- assert.deepEqual(settingsInput({registration:'open',announcement:null,version:'1'}),{registration:'open',announcement:null,version:'1'});
+ assert.deepEqual(settingsInput({registration:'closed',announcement:{text:'Maintenance at 22:00',level:'warning'},closedReportDays:365,version:'3'}),{registration:'closed',announcement:{text:'Maintenance at 22:00',level:'warning'},closedReportDays:365,version:'3'});
+ assert.deepEqual(settingsInput({registration:'open',announcement:null,closedReportDays:30,version:'1'}),{registration:'open',announcement:null,closedReportDays:30,version:'1'});
  for(const bad of [{registration:'invite',announcement:null,version:'1'},{registration:'open',announcement:null,version:'0'},{registration:'open',announcement:null},
   {registration:'open',announcement:{text:'',level:'info'},version:'1'},{registration:'open',announcement:{text:'x'.repeat(301),level:'info'},version:'1'},
   {registration:'open',announcement:{text:'a‮b',level:'info'},version:'1'},{registration:'open',announcement:{text:'x',level:'loud'},version:'1'},
-  {registration:'open',announcement:null,version:'1',extra:true}])assert.equal(settingsInput(bad),undefined,JSON.stringify(bad));
+  {registration:'open',announcement:null,closedReportDays:365,version:'1',extra:true},{registration:'open',announcement:null,closedReportDays:29,version:'1'},{registration:'open',announcement:null,version:'1'}])assert.equal(settingsInput(bad),undefined,JSON.stringify(bad));
 });
 test('operator list queries reject unknown or malformed parameters',()=>{
  const id=randomUUID();

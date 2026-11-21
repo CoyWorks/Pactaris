@@ -7,8 +7,8 @@ import {disguisedText} from '../../packages/auth/text.js';
  *  never household names or content, which live only on the instances. */
 export type Registration='open'|'closed';
 export type Announcement={text:string;level:'info'|'warning'};
-export type PlatformSettings={registration:Registration;announcement:Announcement|null;version:string;updatedAt:string};
-export type SettingsInput={registration:Registration;announcement:Announcement|null;version:string};
+export type PlatformSettings={registration:Registration;announcement:Announcement|null;closedReportDays:number;version:string;updatedAt:string};
+export type SettingsInput={registration:Registration;announcement:Announcement|null;closedReportDays:number;version:string};
 /** Audit target for platform-wide changes, which have no own resource ID. */
 export const platformTarget='00000000-0000-4000-8000-000000000000';
 const accountStates=['active','suspended','deleting','deleted'] as const;
@@ -19,7 +19,8 @@ const pageSize=50;
 export function settingsInput(value:unknown):SettingsInput|undefined{
  if(!value||typeof value!=='object'||Array.isArray(value))return;
  const v=value as Record<string,unknown>;
- if(Object.keys(v).sort().join(',')!=='announcement,registration,version')return;
+ if(Object.keys(v).sort().join(',')!=='announcement,closedReportDays,registration,version')return;
+ if(!Number.isInteger(v.closedReportDays)||(v.closedReportDays as number)<30||(v.closedReportDays as number)>3650)return;
  if(v.registration!=='open'&&v.registration!=='closed')return;
  if(typeof v.version!=='string'||!/^[1-9][0-9]{0,9}$/.test(v.version))return;
  let announcement:Announcement|null=null;
@@ -29,7 +30,7 @@ export function settingsInput(value:unknown):SettingsInput|undefined{
    typeof a.text!=='string'||a.text!==a.text.trim()||!a.text||[...a.text].length>300||/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(a.text)||disguisedText(a.text))return;
   announcement={text:a.text,level:a.level};
  }
- return {registration:v.registration,announcement,version:v.version};
+ return {registration:v.registration,announcement,closedReportDays:v.closedReportDays as number,version:v.version};
 }
 export type AccountQuery={q?:string;status?:typeof accountStates[number];after?:string};
 export function accountQuery(query:Record<string,unknown>):AccountQuery|undefined{
@@ -105,10 +106,10 @@ export class AdminConsole{
   }catch(error){await db.query('ROLLBACK');throw error;}finally{db.release();}
  }
  async settings():Promise<PlatformSettings>{
-  const r=await this.pool.query('SELECT registration,announcement,announcement_level,version,updated_at FROM pactaris.platform_settings WHERE singleton');
+  const r=await this.pool.query('SELECT * FROM pactaris.platform_settings WHERE singleton');
   const row=r.rows[0];
-  if(!row)return {registration:'open',announcement:null,version:'1',updatedAt:new Date(0).toISOString()};
-  return {registration:row.registration,announcement:row.announcement?{text:row.announcement,level:row.announcement_level}:null,version:String(row.version),updatedAt:iso(row.updated_at)!};
+  if(!row)return {registration:'open',announcement:null,closedReportDays:365,version:'1',updatedAt:new Date(0).toISOString()};
+  return {registration:row.registration,announcement:row.announcement?{text:row.announcement,level:row.announcement_level}:null,closedReportDays:row.closed_report_days??365,version:String(row.version),updatedAt:iso(row.updated_at)!};
  }
  /** Public part: shown to everyone in the app. */
  async announcement():Promise<Announcement|null>{
@@ -124,8 +125,8 @@ export class AdminConsole{
   const db=await this.pool.connect();
   try{
    await db.query('BEGIN');
-   const r=await db.query(`UPDATE pactaris.platform_settings SET registration=$1,announcement=$2,announcement_level=$3,version=version+1,updated_by=$4,updated_at=now()
-    WHERE singleton AND version=$5 RETURNING version`,[input.registration,input.announcement?.text??null,input.announcement?.level??'info',operatorId,Number(input.version)]);
+   const r=await db.query(`UPDATE pactaris.platform_settings SET registration=$1,announcement=$2,announcement_level=$3,closed_report_days=$6,version=version+1,updated_by=$4,updated_at=now()
+    WHERE singleton AND version=$5 RETURNING version`,[input.registration,input.announcement?.text??null,input.announcement?.level??'info',operatorId,Number(input.version),input.closedReportDays]);
    if(!r.rowCount){await db.query('ROLLBACK');return undefined;}
    await db.query("INSERT INTO pactaris.operator_events(operator_account_id,action,target_id) VALUES($1,'settings.updated',$2)",[operatorId,platformTarget]);
    await db.query('COMMIT');

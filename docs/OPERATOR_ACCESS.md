@@ -21,7 +21,8 @@ Acceptance on the deployed provider must cover fresh MFA, stale MFA, an ordinary
 | Accounts | Search by email, name or account ID and filter by status; detail with created, last sign-in, active sessions, reports filed, household IDs with member counts, and operator actions on the account; suspend or restore. |
 | Households | Household ID, instance, registry status and member count. No names or content: those live only on the instances. |
 | Instances | The registry inventory (unchanged). |
-| Settings | Operators (see below); new accounts open or closed; a platform-wide announcement (information or warning, at most 300 characters) shown at the top of every page; invitation email (SMTP). |
+| Maintenance | Daily cleanup on the gateway and every instance: recent runs, largest tables, proof storage, preview and run now. See [MAINTENANCE.md](MAINTENANCE.md). |
+| Settings | Operators (see below); new accounts open or closed; how long closed reports are kept; a platform-wide announcement (information or warning, at most 300 characters) shown at the top of every page; invitation email (SMTP). |
 | Audit log | Every operator change: report closed, reopened or noted, account suspended or restored, settings changed. |
 
 **Operators.** The `operatorSubjects` in the gateway configuration are the bootstrap operators: an empty list keeps the console off, and they can only be removed in the configuration. From an account's page an operator can **make another account operator** or remove that access again; such grants are stored in `pactaris.operator_grants`, are limited to accounts of the configured issuer, and cannot remove one's own access. Every operator, configured or granted, still needs a multi-factor sign-in within the last five minutes to act.

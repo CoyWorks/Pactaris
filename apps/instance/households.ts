@@ -2,6 +2,7 @@ import {InstancePartner} from './partner.js';
 import {InstanceProof} from './proof.js';
 import type {ProofStore} from './proof-store.js';
 import {InstanceJournal} from './journal.js';
+import {InstanceMaintenance} from './maintenance.js';
 import {InstanceAccount} from './account.js';
 import type {JournalAction,AccountAction} from '../../packages/auth/delegation.js';
 import type {PartnerAction} from '../../packages/auth/partner.js';
@@ -49,7 +50,7 @@ export class InstanceHouseholds {
   private journalService:InstanceJournal;
   private accountService:InstanceAccount;
   private proofService:InstanceProof;
-  constructor(private pool:pg.Pool,private config:InstanceConfig,proofStore?:ProofStore){this.proofService=new InstanceProof(pool,config,proofStore);this.verifier=new DelegationVerifier(config);this.exportVerifier=new CommandVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);this.members=new InstanceMembers(pool,config);this.relationships=new InstanceRelationships(pool,config);this.consentService=new InstanceConsent(pool,config);this.workspaceService=new InstanceWorkspace(pool,config);this.exchangeService=new InstanceExchange(pool,config);this.authorityService=new InstanceAuthority(pool,config);this.libraryService=new InstanceLibrary(pool,config);this.routineService=new InstanceRoutines(pool,config);this.catalogService=new InstanceCatalog(pool,config);this.partnerService=new InstancePartner(pool,config);this.journalService=new InstanceJournal(pool,config);this.accountService=new InstanceAccount(pool,config);}
+  constructor(private pool:pg.Pool,private config:InstanceConfig,proofStore?:ProofStore){this.proofService=new InstanceProof(pool,config,proofStore);this.verifier=new DelegationVerifier(config);this.exportVerifier=new CommandVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);this.members=new InstanceMembers(pool,config);this.relationships=new InstanceRelationships(pool,config);this.consentService=new InstanceConsent(pool,config);this.workspaceService=new InstanceWorkspace(pool,config);this.exchangeService=new InstanceExchange(pool,config);this.authorityService=new InstanceAuthority(pool,config);this.libraryService=new InstanceLibrary(pool,config);this.routineService=new InstanceRoutines(pool,config);this.catalogService=new InstanceCatalog(pool,config);this.partnerService=new InstancePartner(pool,config);this.journalService=new InstanceJournal(pool,config,new InstanceMaintenance(pool,config,proofStore));this.accountService=new InstanceAccount(pool,config);}
   command(token:string,householdId:string,action:HouseholdAction,body:Buffer){return this.commands.execute(token,householdId,action,body);}
   invitation(token:string,householdId:string,action:InvitationAction,body:Buffer){return this.invitations.execute(token,householdId,action,body);}
   membership(token:string,householdId:string,action:MembershipAction,body:Buffer){return this.members.execute(token,householdId,action,body);}

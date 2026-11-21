@@ -1,15 +1,15 @@
 import {OperatorInventory} from './operator-inventory.js';
-import {AccountsTab,AuditTab,HouseholdsTab,OperatorsPanel,OverviewTab,ReportsTab,readJson,send} from './operator-console.js';
+import {AccountsTab,AuditTab,HouseholdsTab,MaintenanceTab,OperatorsPanel,OverviewTab,ReportsTab,readJson,send} from './operator-console.js';
 import {navigate,useLocation} from './navigation.js';
 import React,{useEffect,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 
 type Smtp={configured:false}|{configured:true;from:string;username:string;hasPassword:boolean;host:string;port:number;tls:string;queue:{status:string;count:number}[];unreadable?:boolean};
-type Settings={registration:'open'|'closed';announcement:{text:string;level:'info'|'warning'}|null;version:string;updatedAt:string};
-const tabs=['overview','reports','accounts','households','instances','settings','audit'] as const;
+type Settings={registration:'open'|'closed';announcement:{text:string;level:'info'|'warning'}|null;closedReportDays:number;version:string;updatedAt:string};
+const tabs=['overview','reports','accounts','households','instances','maintenance','settings','audit'] as const;
 type Tab=typeof tabs[number];
 const tabLabels:Record<Tab,MessageKey>={overview:'operator.tabOverview',reports:'operator.tabReports',accounts:'operator.tabAccounts',households:'operator.tabHouseholds',
- instances:'operator.tabInstances',settings:'operator.tabSettings',audit:'operator.tabAudit'};
+ instances:'operator.tabInstances',maintenance:'operator.tabMaintenance',settings:'operator.tabSettings',audit:'operator.tabAudit'};
 const queueLabels:Record<string,MessageKey>={queued:'operator.mailQueued',sent:'operator.mailSent',failed:'operator.mailFailed',inactive:'operator.mailInactive'};
 const errors:Record<number,MessageKey>={400:'operator.smtpInvalid',401:'operator.authenticationRequired',403:'operator.authenticationRequired',429:'errors.rateLimited'};
 
@@ -46,6 +46,7 @@ export function OperatorPage({language,format,timeZone}:{language:string;format:
     {tab==='households'&&<HouseholdsTab refresh={refresh} {...f}/>}
     {tab==='instances'&&<OperatorInventory language={language} refresh={refresh}/>}
     {tab==='settings'&&<><GeneralSettings csrf={csrf} refresh={refresh} language={language}/><OperatorsPanel refresh={refresh} onAccount={id=>go('accounts',{account:id})} {...f}/><SmtpPanel csrf={csrf} refresh={refresh} language={language}/></>}
+    {tab==='maintenance'&&<MaintenanceTab csrf={csrf} refresh={refresh} {...f}/>}
     {tab==='audit'&&<AuditTab refresh={refresh} onAccount={id=>go('accounts',{account:id})} {...f}/>}
    </section>
   </>}
@@ -64,7 +65,7 @@ function GeneralSettings({csrf,refresh,language}:{csrf:string;refresh:number;lan
   if(!draft)return;setBusy(true);setError(undefined);setNotice(undefined);
   const announcement=draft.announcement&&draft.announcement.text.trim()?{text:draft.announcement.text.trim(),level:draft.announcement.level}:null;
   try{
-   const r=await send('/api/operator/settings',csrf,'PUT',{registration:draft.registration,announcement,version:draft.version});
+   const r=await send('/api/operator/settings',csrf,'PUT',{registration:draft.registration,announcement,closedReportDays:draft.closedReportDays,version:draft.version});
    if(r.status===409){setError('operator.settingsConflict');return;}if(r.status===400){setError('operator.settingsInvalid');return;}if(!r.ok)throw r.status;
    const value=await r.json() as Settings;setSaved(value);setDraft(value);setNotice('operator.settingsSaved');
   }catch{setError('errors.unavailable');}finally{setBusy(false);}
@@ -82,6 +83,10 @@ function GeneralSettings({csrf,refresh,language}:{csrf:string;refresh:number;lan
    <label>{t('operator.announcementLevel')}<select value={draft.announcement?.level??'info'} onChange={e=>setDraft({...draft,announcement:{text:draft.announcement?.text??'',level:e.target.value as 'info'|'warning'}})}>
     <option value="info">{t('operator.announcementInfo')}</option><option value="warning">{t('operator.announcementWarning')}</option></select></label>
    <p className="muted">{t('operator.announcementHelp')}</p>
+  </fieldset><fieldset disabled={busy}>
+   <legend>{t('operator.retentionTitle')}</legend>
+   <label>{t('operator.closedReportDays')}<input type="number" min={30} max={3650} step={1} required value={draft.closedReportDays} onChange={e=>setDraft({...draft,closedReportDays:Number(e.target.value)})}/></label>
+   <p className="muted">{t('operator.retentionHelp')}</p>
   </fieldset>
   <div className="workspace-actions"><button type="submit" disabled={busy}>{t('operator.settingsSave')}</button>
    <button type="button" className="secondary" disabled={busy||JSON.stringify(draft)===JSON.stringify(saved)} onClick={()=>setDraft(saved)}>{t('onboarding.cancel')}</button></div>

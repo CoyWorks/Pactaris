@@ -458,6 +458,13 @@
       "backwardCompatible": true
     },
     {
+      "component": "instance",
+      "id": "0046_retention",
+      "path": "migrations/instance/0046_retention.sql",
+      "sha256": "1207ba6ac20b1b7f57217a125187631520a5039265c367740bdd35d3833f6541",
+      "backwardCompatible": true
+    },
+    {
       "component": "gateway",
       "id": "0020_account_export",
       "path": "migrations/gateway/0020_account_export.sql",
@@ -490,6 +497,13 @@
       "id": "0024_operator_grants",
       "path": "migrations/gateway/0024_operator_grants.sql",
       "sha256": "21ce747911df3ac33695e2866fbdfcea108e9881461bb446fb51fb9cc22b7a37",
+      "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0025_maintenance",
+      "path": "migrations/gateway/0025_maintenance.sql",
+      "sha256": "d363e63b31b91f935c60d862e5c94da4f101cca2239acf91c65fd6b731a025da",
       "backwardCompatible": true
     }
   ]
