@@ -23,6 +23,13 @@ MEDIA = {
     'branding_default_flow_background': 'pactaris/flow-background.jpg',
 }
 FIELDS = ('branding_title', 'branding_custom_css', *MEDIA)
+# Authentik renders a flow's raw title before its first challenge arrives, so the
+# stock "%(app)s" placeholders leak into the page. Each designation gets a fixed title.
+FLOW_TITLES = {
+    'authentication': 'portal.signInTitle',
+    'authorization': 'identity.redirectTitle',
+    'invalidation': 'identity.signedOutTitle',
+}
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -154,11 +161,11 @@ def change_flow(origin, slug, flow_id, language, token, apply, backup=None, rest
     target = {'origin': origin, 'flow': flow_id, 'slug': slug}
     endpoint = f'{origin}/api/v3/flows/instances/{slug}/'
     current = request(endpoint, token)
-    if (current.get('pk') != flow_id or current.get('slug') != slug
-            or current.get('designation') != 'authentication'):
+    designation = current.get('designation')
+    if current.get('pk') != flow_id or current.get('slug') != slug or designation not in FLOW_TITLES:
         raise DeployError('cli.brandFlowMismatch')
     old = current['title']
-    desired = messages(language)['portal.signInTitle']
+    desired = messages(language)[FLOW_TITLES[designation]]
     if restore is not None:
         previous = read_json(restore)
         if previous['target'] != target:

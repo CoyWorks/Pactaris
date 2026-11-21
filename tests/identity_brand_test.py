@@ -101,3 +101,30 @@ class IdentityBrandTests(unittest.TestCase):
                 with self.assertRaises(brand.DeployError):
                     brand.change_flow(origin, slug, 'different', 'en', 'fixture-token', True)
                 self.assertEqual(current['title'], 'Previous')
+
+    def test_flow_titles_per_designation_replace_app_placeholders(self):
+        origin = 'https://identity.example.invalid'
+        flow_id = '6aef4af8-9d3d-4efa-be12-4d719e6e411c'
+        expected = {'authorization': 'identity.redirectTitle', 'invalidation': 'identity.signedOutTitle'}
+        for designation, key in expected.items():
+            current = {'pk': flow_id, 'slug': 'provider-flow', 'designation': designation,
+                       'title': 'Redirecting to %(app)s'}
+
+            def request(endpoint, token, patch_data=None, current=current):
+                if patch_data is not None:
+                    current.update(patch_data)
+                return dict(current)
+
+            with tempfile.TemporaryDirectory() as temp, \
+                    patch.object(brand, 'request', side_effect=request), patch.object(brand, 'emit'):
+                brand.change_flow(origin, 'provider-flow', flow_id, 'en', 'fixture-token', True,
+                                  Path(temp) / 'before.json')
+            title = brand.messages('en')[key]
+            self.assertEqual(current['title'], title)
+            self.assertNotIn('%', title)
+
+    def test_flow_title_rejects_other_designations(self):
+        current = {'pk': 'id', 'slug': 'setup', 'designation': 'stage_configuration', 'title': 'Setup'}
+        with patch.object(brand, 'request', return_value=current), patch.object(brand, 'emit'):
+            with self.assertRaises(brand.DeployError):
+                brand.change_flow('https://identity.example.invalid', 'setup', 'id', 'en', 'token', False)

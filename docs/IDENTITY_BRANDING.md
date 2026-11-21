@@ -38,6 +38,8 @@ python3 scripts/identity_brand.py --flow "$PACTARIS_FLOW_UUID" --flow-slug "$PAC
 
 Reopen the public sign-in page after applying. For a manual change, edit only **Title** and record its previous value for rollback. Preserve the flow name, slug, designation, stages and provider bindings.
 
+Repeat this for the provider flows that the Pactaris applications use: `default-provider-authorization-explicit-consent` (and `default-provider-authorization-implicit-consent` if bound), and `default-provider-invalidation-flow`. Their stock titles contain the placeholder `%(app)s`. Authentik shows a flow's raw title until its first challenge loads, so users briefly see the placeholder while signing in or out. The utility sets authorization flows to `identity.redirectTitle` and invalidation flows to `identity.signedOutTitle`. It refuses any other designation.
+
 To restore only the earlier cosmetic values, use that backup as input and a new path for the pre-restore snapshot.
 
 ```bash
