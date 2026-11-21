@@ -340,6 +340,36 @@ class GatewayDeploymentTests(unittest.TestCase):
             finally:
                 os.umask(previous)
 
+    def test_instance_staging_provisions_one_proof_key_and_storage_folder(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); base = root / 'instance'; base.mkdir()
+            public = root / 'gateway.pem'; public.write_text('fixture-public-key')
+            cfg = {'delegation': {'publicKeys': {'gateway-v1': str(public)}}}
+            info = SimpleNamespace(pw_gid=os.getgid(), pw_uid=os.getuid())
+            previous = os.umask(0o077)
+            try:
+                with patch.object(deploy, 'safe_root'), patch.object(deploy.shutil, 'chown'):
+                    deploy.stage_runtime_secrets(base, cfg, info)
+                    key = Path(cfg['storage']['keyFile']); first = key.read_text()
+                    self.assertRegex(first, r'^[0-9a-f]{64}\n$')
+                    self.assertEqual(key.stat().st_mode & 0o777, 0o640)
+                    self.assertEqual(Path(cfg['storage']['root']), base / 'data/proofs')
+                    self.assertEqual((base / 'data/proofs').stat().st_mode & 0o777, 0o700)
+                    # An update keeps the key; existing proofs stay readable.
+                    again = {'delegation': {'publicKeys': {'gateway-v1': str(public)}}}
+                    deploy.stage_runtime_secrets(base, again, info)
+                    self.assertEqual(Path(again['storage']['keyFile']).read_text(), first)
+                    # An operator-chosen storage section is left alone.
+                    custom = {'delegation': {'publicKeys': {}}, 'storage': {'root': '/srv/proofs', 'keyFile': '/etc/proof.key'}}
+                    deploy.stage_runtime_secrets(base, custom, info)
+                    self.assertEqual(custom['storage']['root'], '/srv/proofs')
+                    key.unlink(); key.symlink_to(public)
+                    with self.assertRaises(deploy.DeployError):
+                        deploy.stage_runtime_secrets(base, {'delegation': {'publicKeys': {}}}, info)
+            finally:
+                os.umask(previous)
+
     def test_build_log_captures_both_streams_without_echo_or_overwrite(self):
         with tempfile.TemporaryDirectory() as folder, patch('sys.stdout', new_callable=io.StringIO) as console:
             log = Path(folder) / 'npm-build.log'
