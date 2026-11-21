@@ -18,6 +18,8 @@ import {isLibraryAction,libraryInput,LibraryError} from '../../packages/auth/lib
 import type {GatewayLibrary} from './library.js';
 import type {GatewayExchange} from './exchange.js';
 import type {GatewayAuthority} from './authority.js';
+import type {GatewayProof} from './proof.js';
+import {ProofCommandError,proofImageTypes,maxProofUpload,type ProofType} from '../../packages/auth/proof.js';
 import {isAuthorityAction,authorityInput,AuthorityError} from '../../packages/auth/authority.js';
 import {isExchangeAction,exchangeInput,ExchangeError} from '../../packages/auth/exchange.js';
 import {isWorkspaceAction,workspaceInput,WorkspaceError} from '../../packages/auth/workspace.js';
@@ -58,7 +60,7 @@ type OperatorInventory={
   instances:(after:string|null)=>ReturnType<typeof listRegistryInstances>;
   placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
 };
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'|'shop'>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'|'shop'>,proof?:Pick<GatewayProof,'upload'|'view'|'remove'>) {
   const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -671,6 +673,43 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       if(!catalog)throw new CatalogError('unavailable');if(!['catalogRead','catalogList','catalogArchive','redemptionOptions','redemptionList','redemptionDecline','redemptionCancel','redemptionReverse'].includes(action)&&!await store.throttle('catalog:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
       res.json(await catalog.execute(session.account.id,req.params.householdId,action,input));
     }catch(error){const kind=error instanceof CatalogError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,habitGoalPending:422,unavailable:503}[kind]).json({code:'catalog_'+kind,messageKey:('catalog.'+kind) as MessageKey});}
+  });
+  function proofFailure(res:express.Response,error:unknown){
+    const kind=error instanceof ProofCommandError?error.kind:'unavailable';
+    res.status({invalid:400,denied:404,conflict:409,paused:409,gone:410,unavailable:503}[kind]).json({code:'proof_'+kind,messageKey:('proof.'+kind) as MessageKey});
+  }
+  // The assignee attaches one photo before submitting. The body is the image itself (no JSON envelope).
+  app.post('/api/households/:householdId/participant-tasks/:taskId/proof',express.raw({type:[...proofImageTypes],limit:maxProofUpload,inflate:false}),async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+      const type=String(req.get('content-type')??'').split(';')[0]!.trim().toLowerCase(),operationId=req.get('x-operation-id');
+      if(!uuid(req.params.householdId)||!uuid(req.params.taskId)||!uuid(operationId)||Object.keys(req.query).length||!(proofImageTypes as readonly string[]).includes(type)||!Buffer.isBuffer(req.body)||!req.body.length)throw new ProofCommandError('invalid');
+      if(!proof)throw new ProofCommandError('unavailable');
+      if(!await store.throttle('proof.upload:'+session.account.id,10)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+      res.json(await proof.upload(session.account.id,req.params.householdId,req.params.taskId,type as ProofType,req.body,operationId.toLowerCase()));
+    }catch(error){proofFailure(res,error);}
+  });
+  // Viewing is a POST so a cross-site link cannot use up someone's single view. The view is recorded
+  // only after the whole image was handed to the browser.
+  app.post('/api/households/:householdId/proofs/:proofId/view',async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+      if(!uuid(req.params.householdId)||!uuid(req.params.proofId)||Object.keys(req.query).length)throw new ProofCommandError('invalid');
+      if(!proof)throw new ProofCommandError('unavailable');
+      if(!await store.throttle('proof.view:'+session.account.id,30)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+      const image=await proof.view(session.account.id,req.params.householdId,req.params.proofId);
+      res.on('finish',()=>{void image.confirm().catch(()=>undefined);});
+      res.set({'Cache-Control':'no-store','Content-Disposition':'inline','X-Content-Type-Options':'nosniff'}).type(image.type).send(image.bytes);
+    }catch(error){proofFailure(res,error);}
+  });
+  app.post('/api/households/:householdId/proofs/:proofId/remove',async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+      const body=req.body as Record<string,unknown>|undefined;
+      if(!uuid(req.params.householdId)||!uuid(req.params.proofId)||Object.keys(req.query).length||!body||Object.keys(body).join(',')!=='operationId'||!uuid(body.operationId))throw new ProofCommandError('invalid');
+      if(!proof)throw new ProofCommandError('unavailable');
+      res.json(await proof.remove(session.account.id,req.params.householdId,req.params.proofId,(body.operationId as string).toLowerCase()));
+    }catch(error){proofFailure(res,error);}
   });
   app.post('/api/households/:householdId/participant-tasks/:action',async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;

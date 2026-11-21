@@ -23,11 +23,12 @@ import { database } from '../../packages/db/index.js';
 import { requireSchema } from '../../packages/db/migrations.js';
 import { OpenIdLogin } from '../../packages/auth/oidc.js';
 import { DelegationSigner } from '../../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateExchangeClient,PrivateAuthorityClient,PrivateRoutineClient,PrivateCatalogClient,PrivatePartnerClient } from '../../packages/routing/private-client.js';
+import { PrivateProofClient,PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateExchangeClient,PrivateAuthorityClient,PrivateRoutineClient,PrivateCatalogClient,PrivatePartnerClient } from '../../packages/routing/private-client.js';
 import {GatewayMembers} from './members.js';
 import { GatewayInvitations } from './invitations.js';
 import { PgGatewayStore } from './store.js';
 import { createGatewayApp } from './app.js';
+import { GatewayProof } from './proof.js';
 import { OnboardingService,PgOnboardingStore } from './onboarding.js';
 try {
   const config=loadGatewayConfig(process.env.APP_CONFIG??'',process.argv.includes('--development')),db=database(config);
@@ -38,7 +39,7 @@ try {
   const smtp=config.invitationMailFile?new SmtpSettings(db.pool,config):undefined;
   const app=createGatewayApp(config,store,login,new PrivateHouseholdClient(signer),undefined,onboarding,new GatewayInvitations(db.pool,store,new PrivateHouseholdClient(signer),new PrivateInvitationClient(signer),loadInvitationMail(config,db.pool,smtp)),new GatewayMembers(db.pool,store,new PrivateHouseholdClient(signer),new PrivateMemberClient(signer)),new GatewayRelationships(store,new PrivateHouseholdClient(signer),new PrivateRelationshipClient(signer)),new GatewayConsent(store,new PrivateHouseholdClient(signer),new PrivateConsentClient(signer)),new GatewayWorkspace(store,new PrivateHouseholdClient(signer),new PrivateWorkspaceClient(signer)),new GatewayLibrary(store,new PrivateHouseholdClient(signer),new PrivateLibraryClient(signer)),new GatewayRoutines(store,new PrivateHouseholdClient(signer),new PrivateRoutineClient(signer)),new GatewayCatalog(store,new PrivateHouseholdClient(signer),new PrivateCatalogClient(signer)),new GatewayPartner(store,new PrivateHouseholdClient(signer),new PrivatePartnerClient(signer)),smtp,{
     instances:after=>listRegistryInstances(db.pool,after),placements:(id,after)=>listRegistryPlacements(db.pool,id,after)
-  },session=>personalExport(session,store,new PrivateHouseholdClient(signer),signer),config.webPushFile?WebPushDevices.load(db.pool,config.webPushFile):undefined,new AccountDeletion(db.pool,signer),(session,write)=>streamAccountExport(session,db.pool,signer,write),new Moderation(db.pool),new GatewayExchange(store,new PrivateHouseholdClient(signer),new PrivateExchangeClient(signer)),new GatewayAuthority(store,new PrivateHouseholdClient(signer),new PrivateAuthorityClient(signer)));
+  },session=>personalExport(session,store,new PrivateHouseholdClient(signer),signer),config.webPushFile?WebPushDevices.load(db.pool,config.webPushFile):undefined,new AccountDeletion(db.pool,signer),(session,write)=>streamAccountExport(session,db.pool,signer,write),new Moderation(db.pool),new GatewayExchange(store,new PrivateHouseholdClient(signer),new PrivateExchangeClient(signer)),new GatewayAuthority(store,new PrivateHouseholdClient(signer),new PrivateAuthorityClient(signer)),new GatewayProof(store,new PrivateHouseholdClient(signer),new PrivateProofClient(signer)));
   const tls=config.listen.tls;
   const server=tls?https.createServer({key:readFileSync(tls.keyFile),cert:readFileSync(tls.certFile),minVersion:'TLSv1.2'},app):http.createServer(app);
   server.requestTimeout=15000;server.headersTimeout=10000;

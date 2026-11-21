@@ -7,6 +7,7 @@ import {consentActions} from './consent-actions.js';
 import {relationshipActions} from './relationship-actions.js';
 import {exchangeActions} from './exchange-actions.js';
 import {authorityActions} from './authority-actions.js';
+import {proofActions} from './proof-actions.js';
 import { readFile } from 'node:fs/promises';
 import { randomUUID,createHash } from 'node:crypto';
 import { importPKCS8, importSPKI, jwtVerify, SignJWT, type CryptoKey } from 'jose';
@@ -16,7 +17,7 @@ export const audience=(instanceId:string)=>`urn:pactaris:instance:${instanceId}`
 export const membershipActions=['memberList','memberAlias','memberRemove','ownerOffer','ownerAccept','ownerDecline','ownerCancel','memberReceipt'] as const;
 export type MembershipAction=typeof membershipActions[number];
 export const isMembershipAction=(value:unknown):value is MembershipAction=>typeof value==='string'&&(membershipActions as readonly string[]).includes(value);
-export const householdActions=['personalExport','create','leave','receipt','inviteCreate','invitePreview','inviteAccept','inviteDecline','inviteRevoke','inviteList','inviteReceipt',...membershipActions,...relationshipActions,...consentActions,...workspaceActions,...libraryActions,...routineActions,...catalogActions,...partnerActions,...exchangeActions,...authorityActions] as const;
+export const householdActions=['personalExport','create','leave','receipt','inviteCreate','invitePreview','inviteAccept','inviteDecline','inviteRevoke','inviteList','inviteReceipt',...membershipActions,...relationshipActions,...consentActions,...workspaceActions,...libraryActions,...routineActions,...catalogActions,...partnerActions,...exchangeActions,...authorityActions,...proofActions] as const;
 export type HouseholdAction=typeof householdActions[number];
 export type InvitationAction=Extract<HouseholdAction,`invite${string}`>;
 export const isHouseholdAction=(value:unknown):value is HouseholdAction=>typeof value==='string'&&(householdActions as readonly string[]).includes(value);
@@ -47,7 +48,7 @@ export class DelegationSigner {
       .setProtectedHeader({alg:'EdDSA',typ:'pactaris-delegation+jwt',kid:this.config.delegation.keyId})
       .setIssuer(this.config.delegation.issuer).setSubject(accountId).setAudience(audience(instanceId)).setJti(randomUUID()).setIssuedAt().setExpirationTime('30s').sign(await this.ready());
   }
-  async signCommand(accountId:string,householdId:string,instanceId:string,action:HouseholdAction,operationId:string,body:string) {
+  async signCommand(accountId:string,householdId:string,instanceId:string,action:HouseholdAction,operationId:string,body:string|Buffer) {
     if(!uuid(accountId)||!uuid(householdId)||!uuid(instanceId)||!uuid(operationId)||!isHouseholdAction(action))throw new DelegationError('command.scope');
     return new SignJWT({household_id:householdId,purpose:'household.command.'+action,method:'POST',path:commandPath(householdId,action),operation_id:operationId,body_sha256:digest(body)})
       .setProtectedHeader({alg:'EdDSA',typ:'pactaris-command+jwt',kid:this.config.delegation.keyId})
@@ -114,8 +115,9 @@ export class AccountVerifier {
 export class CommandVerifier {
   private keys=new Map<string,Promise<CryptoKey>>();
   constructor(private config:InstanceConfig) {}
-  async verify(token:string,householdId:string,action:HouseholdAction,body:Buffer) {
-    if(!this.config.delegation||token.length>8192||body.length>4096||!uuid(householdId)||!isHouseholdAction(action))throw new DelegationError('command.disabled');
+  /** `maxBody` is raised only by the proof upload route; every other command stays at 4 KiB. */
+  async verify(token:string,householdId:string,action:HouseholdAction,body:Buffer,maxBody=4096) {
+    if(!this.config.delegation||token.length>8192||body.length>maxBody||!uuid(householdId)||!isHouseholdAction(action))throw new DelegationError('command.disabled');
     try {
       const {payload}=await jwtVerify(token,async header=>{
         if(header.alg!=='EdDSA'||header.typ!=='pactaris-command+jwt'||!header.kid)throw Error('command.header');

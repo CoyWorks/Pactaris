@@ -34,6 +34,78 @@ export async function privateResponse(placement:Placement,path:string,token:stri
     request.on('close',()=>clearTimeout(deadline));request.on('timeout',()=>request.destroy(Error('routing.timeout')));request.on('error',reject);request.end(body);
   });
 }
+/** Binary-capable variant for completion proof: sends an octet-stream or JSON body and returns raw bytes
+ *  with their content type. Same endpoint pinning, status allow-list and deadlines as privateResponse. */
+export async function privateBinary(placement:Placement,path:string,token:string,body:Buffer,contentType:'application/json'|'application/octet-stream',responseLimit:number):Promise<{status:number;contentType:string;data:Buffer;consumes:boolean}> {
+  const endpoint=new URL(placement.endpoint);
+  if(endpoint.protocol!=='https:'||endpoint.username||endpoint.password||endpoint.search||endpoint.hash||endpoint.pathname!=='/'||!placement.tlsServerName)throw Error('routing.endpoint');
+  const host=endpoint.hostname.replace(/^\[|\]$/g,'');
+  const addresses=isIP(host)?[{address:host,family:isIP(host)}]:await lookup(host,{all:true});
+  if(!addresses.length||addresses.some(a=>!privateAddress(a.address)))throw Error('routing.private_endpoint');
+  const target=addresses[0]!,ca=await readFile(placement.caFile);
+  return new Promise((resolve,reject)=>{
+    const request=https.request(new URL(path,endpoint),{method:'POST',hostname:target.address,family:target.family,ca,servername:placement.tlsServerName,rejectUnauthorized:true,
+      headers:{Host:endpoint.host,Authorization:`Bearer ${token}`,Accept:'application/json, image/jpeg, image/png, image/webp','Content-Type':contentType,'Content-Length':body.length},timeout:10000},response=>{
+      if(![200,400,403,404,409,410].includes(response.statusCode??0)){response.resume();reject(Error('routing.unavailable'));return;}
+      const chunks:Buffer[]=[];let received=0;
+      response.on('data',(chunk:Buffer)=>{received+=chunk.length;if(received>responseLimit)response.destroy(Error('routing.size'));else chunks.push(chunk);});
+      response.on('error',reject);response.on('aborted',()=>reject(Error('routing.incomplete')));
+      response.on('end',()=>resolve({status:response.statusCode!,contentType:String(response.headers['content-type']??'').split(';')[0]!.trim().toLowerCase(),data:Buffer.concat(chunks),consumes:response.headers['x-proof-consumes']==='1'}));
+    });
+    const deadline=setTimeout(()=>request.destroy(Error('routing.timeout')),20000);
+    request.on('close',()=>clearTimeout(deadline));request.on('timeout',()=>request.destroy(Error('routing.timeout')));request.on('error',reject);request.end(body);
+  });
+}
+/** Gateway side of completion proof. The gateway relays bytes and never stores them. */
+export class PrivateProofClient{
+  constructor(private signer:DelegationSigner){}
+  private json(response:{status:number;contentType:string;data:Buffer}){
+    if(response.contentType!=='application/json')throw Error('routing.response');
+    return JSON.parse(response.data.toString('utf8')) as Record<string,unknown>;
+  }
+  private async failure(response:{status:number;contentType:string;data:Buffer}):Promise<never>{
+    const {ProofCommandError}=await import('../auth/proof.js');
+    if(response.status===403||response.status===404)throw new ProofCommandError('denied');
+    if(response.status===400)throw new ProofCommandError('invalid');
+    if(response.status===410)throw new ProofCommandError('gone');
+    if(response.status===409){const code=this.json(response).code;throw new ProofCommandError(code==='proof_paused'?'paused':'conflict');}
+    throw new ProofCommandError('unavailable');
+  }
+  private checkResult(r:Record<string,unknown>,placement:Placement,operationId:string,membershipId:string){
+    if(r.householdId!==placement.householdId||r.operationId!==operationId||r.actorMembershipId!==membershipId||r.status!=='applied'||!uuid(r.proofId)||
+      (r.consumed!==undefined&&typeof r.consumed!=='boolean')||(r.allViewed!==undefined&&typeof r.allViewed!=='boolean'))throw Error('routing.response');
+    return {householdId:r.householdId as string,operationId,actorMembershipId:membershipId,status:'applied' as const,proofId:r.proofId as string,
+      ...(r.consumed!==undefined?{consumed:r.consumed as boolean}:{}),...(r.allViewed!==undefined?{allViewed:r.allViewed as boolean}:{})};
+  }
+  async upload(accountId:string,placement:Placement,header:{operationId:string;membershipId:string;taskId:string;type:string},bytes:Buffer):Promise<import('../auth/proof.js').ProofResult>{
+    const {ProofCommandError,proofUploadBody}=await import('../auth/proof.js');
+    try{
+      const body=proofUploadBody(header,bytes),token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,'proofUpload',header.operationId,body);
+      const response=await privateBinary(placement,commandPath(placement.householdId,'proofUpload'),token,body,'application/octet-stream',16384);
+      if(response.status!==200)await this.failure(response);
+      return this.checkResult(this.json(response),placement,header.operationId,header.membershipId);
+    }catch(error){if(error instanceof ProofCommandError)throw error;throw new ProofCommandError('unavailable');}
+  }
+  async view(accountId:string,placement:Placement,input:{operationId:string;membershipId:string;proofId:string}):Promise<{type:string;bytes:Buffer;consumes:boolean}>{
+    const {ProofCommandError,proofImageTypes,maxProofUpload}=await import('../auth/proof.js');
+    try{
+      const body=Buffer.from(JSON.stringify(input)),token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,'proofView',input.operationId,body);
+      const response=await privateBinary(placement,commandPath(placement.householdId,'proofView'),token,body,'application/json',maxProofUpload);
+      if(response.status!==200)await this.failure(response);
+      if(!(proofImageTypes as readonly string[]).includes(response.contentType)||!response.data.length)throw Error('routing.response');
+      return {type:response.contentType,bytes:response.data,consumes:response.consumes};
+    }catch(error){if(error instanceof ProofCommandError)throw error;throw new ProofCommandError('unavailable');}
+  }
+  async execute(accountId:string,placement:Placement,action:'proofViewed'|'proofRemove',input:{operationId:string;membershipId:string;proofId:string}):Promise<import('../auth/proof.js').ProofResult>{
+    const {ProofCommandError}=await import('../auth/proof.js');
+    try{
+      const body=Buffer.from(JSON.stringify(input)),token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body);
+      const response=await privateBinary(placement,commandPath(placement.householdId,action),token,body,'application/json',16384);
+      if(response.status!==200)await this.failure(response);
+      return this.checkResult(this.json(response),placement,input.operationId,input.membershipId);
+    }catch(error){if(error instanceof ProofCommandError)throw error;throw new ProofCommandError('unavailable');}
+  }
+}
 export class PrivateHouseholdClient implements HouseholdClient {
   constructor(private signer:DelegationSigner) {}
   async summary(accountId:string,placement:Placement):Promise<HouseholdSummary|undefined> {

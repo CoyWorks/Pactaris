@@ -1,4 +1,6 @@
 import {InstancePartner} from './partner.js';
+import {InstanceProof} from './proof.js';
+import type {ProofStore} from './proof-store.js';
 import {InstanceJournal} from './journal.js';
 import {InstanceAccount} from './account.js';
 import type {JournalAction,AccountAction} from '../../packages/auth/delegation.js';
@@ -46,7 +48,8 @@ export class InstanceHouseholds {
   private routineService:InstanceRoutines;
   private journalService:InstanceJournal;
   private accountService:InstanceAccount;
-  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new DelegationVerifier(config);this.exportVerifier=new CommandVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);this.members=new InstanceMembers(pool,config);this.relationships=new InstanceRelationships(pool,config);this.consentService=new InstanceConsent(pool,config);this.workspaceService=new InstanceWorkspace(pool,config);this.exchangeService=new InstanceExchange(pool,config);this.authorityService=new InstanceAuthority(pool,config);this.libraryService=new InstanceLibrary(pool,config);this.routineService=new InstanceRoutines(pool,config);this.catalogService=new InstanceCatalog(pool,config);this.partnerService=new InstancePartner(pool,config);this.journalService=new InstanceJournal(pool,config);this.accountService=new InstanceAccount(pool,config);}
+  private proofService:InstanceProof;
+  constructor(private pool:pg.Pool,private config:InstanceConfig,proofStore?:ProofStore){this.proofService=new InstanceProof(pool,config,proofStore);this.verifier=new DelegationVerifier(config);this.exportVerifier=new CommandVerifier(config);this.commands=new InstanceCommands(pool,config);this.invitations=new InstanceInvitations(pool,config);this.members=new InstanceMembers(pool,config);this.relationships=new InstanceRelationships(pool,config);this.consentService=new InstanceConsent(pool,config);this.workspaceService=new InstanceWorkspace(pool,config);this.exchangeService=new InstanceExchange(pool,config);this.authorityService=new InstanceAuthority(pool,config);this.libraryService=new InstanceLibrary(pool,config);this.routineService=new InstanceRoutines(pool,config);this.catalogService=new InstanceCatalog(pool,config);this.partnerService=new InstancePartner(pool,config);this.journalService=new InstanceJournal(pool,config);this.accountService=new InstanceAccount(pool,config);}
   command(token:string,householdId:string,action:HouseholdAction,body:Buffer){return this.commands.execute(token,householdId,action,body);}
   invitation(token:string,householdId:string,action:InvitationAction,body:Buffer){return this.invitations.execute(token,householdId,action,body);}
   membership(token:string,householdId:string,action:MembershipAction,body:Buffer){return this.members.execute(token,householdId,action,body);}
@@ -56,6 +59,9 @@ export class InstanceHouseholds {
   library(token:string,householdId:string,action:LibraryAction,body:Buffer){return this.libraryService.execute(token,householdId,action,body);}
   exchange(token:string,householdId:string,action:ExchangeAction,body:Buffer){return this.exchangeService.execute(token,householdId,action,body);}
   authority(token:string,householdId:string,action:AuthorityAction,body:Buffer){return this.authorityService.execute(token,householdId,action,body);}
+  proofUpload(token:string,householdId:string,body:Buffer){return this.proofService.upload(token,householdId,body);}
+  proofView(token:string,householdId:string,body:Buffer){return this.proofService.view(token,householdId,body);}
+  proof(token:string,householdId:string,action:'proofViewed'|'proofRemove',body:Buffer){return this.proofService.execute(token,householdId,action,body);}
   partner(token:string,householdId:string,action:PartnerAction,body:Buffer){return this.partnerService.execute(token,householdId,action,body);}
   catalog(token:string,householdId:string,action:CatalogAction,body:Buffer){return this.catalogService.execute(token,householdId,action,body);}
   routine(token:string,householdId:string,action:RoutineAction,body:Buffer){return this.routineService.execute(token,householdId,action,body);}
