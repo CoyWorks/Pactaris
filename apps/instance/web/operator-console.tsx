@@ -35,7 +35,7 @@ const registryStatus:Record<string,MessageKey>={active:'operator.registryActive'
 const resolutions:[string,MessageKey][]=[['actioned','operator.resolutionActioned'],['noAction','operator.resolutionNoAction'],['duplicate','operator.resolutionDuplicate']];
 const resolutionLabels:Record<string,MessageKey>={actioned:'operator.resolvedActioned',noAction:'operator.resolvedNoAction',duplicate:'operator.resolvedDuplicate'};
 const eventLabels:Record<string,MessageKey>={'report.closed':'operator.eventReportClosed','report.reopened':'operator.eventReportReopened','report.noted':'operator.eventReportNoted',
- 'account.suspended':'operator.eventAccountSuspended','account.restored':'operator.eventAccountRestored','settings.updated':'operator.eventSettingsUpdated'};
+ 'account.suspended':'operator.eventAccountSuspended','report.deleted':'operator.eventReportDeleted','operator.granted':'operator.eventOperatorGranted','operator.revoked':'operator.eventOperatorRevoked','account.restored':'operator.eventAccountRestored','settings.updated':'operator.eventSettingsUpdated'};
 
 type Overview={accounts:Record<string,number>;newAccounts:number;signedIn:number;households:Record<string,number>;instances:{id:string;status:string;households:number}[];reports:Record<string,number>;mail:Record<string,number>;observedAt:string};
 export function OverviewTab({refresh,onOpen,...f}:Format&{refresh:number;onOpen:(tab:'reports'|'accounts'|'households'|'settings')=>void}){
@@ -82,7 +82,7 @@ export function ReportsTab({csrf,refresh,onAccount,...f}:Format&{csrf:string;ref
  </>;
 }
 function ReportLayer({id,csrf,onClose,onChanged,onAccount,...f}:Format&{id:string;csrf:string;onClose:()=>void;onChanged:()=>void;onAccount:(id:string)=>void}){
- const t=createTranslator(f.language),[reload,setReload]=useState(0),{data,error}=useLoad<ReportDetail>('/api/operator/reports/'+id,reload);
+ const t=createTranslator(f.language),[reload,setReload]=useState(0),{data,error}=useLoad<ReportDetail>('/api/operator/reports/'+id,reload),[confirmDelete,setConfirmDelete]=useState(false);
  const [note,setNote]=useState(''),[noteId,setNoteId]=useState(()=>crypto.randomUUID()),[busy,setBusy]=useState(false),[message,setMessage]=useState<MessageKey>();
  async function act(path:string,body:unknown,success:MessageKey,after?:()=>void){
   setBusy(true);setMessage(undefined);
@@ -104,6 +104,11 @@ function ReportLayer({id,csrf,onClose,onChanged,onAccount,...f}:Format&{id:strin
    <div className="workspace-actions">{data.state==='open'
     ?resolutions.map(([value,key])=><button key={value} type="button" disabled={busy} onClick={()=>void act(`/api/operator/reports/${id}/close`,{resolution:value},'operator.reportClosed')}>{t(key)}</button>)
     :<button type="button" disabled={busy} onClick={()=>void act(`/api/operator/reports/${id}/reopen`,{},'operator.reportReopened')}>{t('operator.reopen')}</button>}</div>
+   {confirmDelete
+    ?<div className="notice"><p>{t('operator.deleteReportConfirm')}</p>
+      <button type="button" className="danger" disabled={busy} onClick={()=>void act(`/api/operator/reports/${id}/delete`,{},'operator.reportDeleted',onClose)}>{t('operator.deleteReport')}</button>
+      <button type="button" className="secondary" disabled={busy} onClick={()=>setConfirmDelete(false)}>{t('onboarding.cancel')}</button></div>
+    :<button type="button" className="danger" disabled={busy} onClick={()=>setConfirmDelete(true)}>{t('operator.deleteReport')}</button>}
    <h4>{t('operator.notesTitle')}</h4>
    {!data.notes.length&&<p className="muted">{t('operator.notesEmpty')}</p>}
    <ul className="card-list">{data.notes.map(n=><li key={n.id} className="row"><span className="grow"><span className="document-body">{n.body}</span><span className="muted">{short(n.authorId)}{dot}{when(n.createdAt,f)}</span></span></li>)}</ul>
@@ -117,7 +122,7 @@ function ReportLayer({id,csrf,onClose,onChanged,onAccount,...f}:Format&{id:strin
 }
 
 type AccountRow={id:string;name:string;email:string|null;status:string;createdAt:string;households:number};
-type AccountDetail=Omit<AccountRow,'households'>&{lastSignIn:string|null;activeSessions:number;reportsFiled:number;households:{id:string;instanceId:string;status:string;members:number}[];events:{action:string;operatorId:string;at:string}[]};
+type AccountDetail=Omit<AccountRow,'households'>&{operator:'config'|'granted'|null;lastSignIn:string|null;activeSessions:number;reportsFiled:number;households:{id:string;instanceId:string;status:string;members:number}[];events:{action:string;operatorId:string;at:string}[]};
 export function AccountsTab({csrf,refresh,selected,onSelect,...f}:Format&{csrf:string;refresh:number;selected?:string;onSelect:(id:string|undefined)=>void}){
  const t=createTranslator(f.language),[q,setQ]=useState(''),[query,setQuery]=useState(''),[status,setStatus]=useState(''),[after,setAfter]=useState<string>(),[reload,setReload]=useState(0);
  const params=new URLSearchParams();if(query)params.set('q',query);if(status)params.set('status',status);if(after)params.set('after',after);
@@ -140,11 +145,12 @@ export function AccountsTab({csrf,refresh,selected,onSelect,...f}:Format&{csrf:s
 }
 function AccountLayer({id,csrf,onClose,onChanged,...f}:Format&{id:string;csrf:string;onClose:()=>void;onChanged:()=>void}){
  const t=createTranslator(f.language),[reload,setReload]=useState(0),{data,error}=useLoad<AccountDetail>('/api/operator/accounts/'+id,reload);
- const [confirm,setConfirm]=useState<'suspend'|'restore'>(),[busy,setBusy]=useState(false),[message,setMessage]=useState<MessageKey>();
- async function act(action:'suspend'|'restore'){
+ const [confirm,setConfirm]=useState<'suspend'|'restore'|'grant'|'revoke'>(),[busy,setBusy]=useState(false),[message,setMessage]=useState<MessageKey>();
+ async function act(action:'suspend'|'restore'|'grant'|'revoke'){
   setBusy(true);setMessage(undefined);setConfirm(undefined);
-  try{const r=await send(`/api/operator/accounts/${id}/${action}`,csrf,'POST',{});if(r.status===409){setMessage('operator.actionNotApplied');return;}if(!r.ok)throw r.status;
-   setMessage(action==='suspend'?'operator.accountSuspended':'operator.accountRestored');setReload(v=>v+1);onChanged();}
+  const path=action==='grant'||action==='revoke'?`/api/operator/operators/${id}/${action}`:`/api/operator/accounts/${id}/${action}`;
+  try{const r=await send(path,csrf,'POST',{});if(r.status===409){setMessage('operator.actionNotApplied');return;}if(!r.ok)throw r.status;
+   setMessage(({suspend:'operator.accountSuspended',restore:'operator.accountRestored',grant:'operator.operatorGranted',revoke:'operator.operatorRevoked'} as const)[action]);setReload(v=>v+1);onChanged();}
   catch(status){setMessage(failure(status));}finally{setBusy(false);}
  }
  return <Layer title={data?.name||t('operator.accountTitle')} backLabel={t('nav.back')} onClose={onClose} status={message&&<p role="status">{t(message)}</p>}>
@@ -159,11 +165,16 @@ function AccountLayer({id,csrf,onClose,onChanged,...f}:Format&{id:string;csrf:st
     <dt>{t('operator.activeSessions')}</dt><dd>{data.activeSessions}</dd>
     <dt>{t('operator.reportsFiled')}</dt><dd>{data.reportsFiled}</dd>
    </dl>
-   {(data.status==='active'||data.status==='suspended')&&(confirm
-    ?<div className="notice"><p>{t(confirm==='suspend'?'operator.suspendConfirm':'operator.restoreConfirm')}</p>
-      <button type="button" className={confirm==='suspend'?'danger':undefined} disabled={busy} onClick={()=>void act(confirm)}>{t(confirm==='suspend'?'operator.suspend':'operator.restore')}</button>
-      <button type="button" className="secondary" disabled={busy} onClick={()=>setConfirm(undefined)}>{t('onboarding.cancel')}</button></div>
-    :<button type="button" className={data.status==='active'?'danger':undefined} disabled={busy} onClick={()=>setConfirm(data.status==='active'?'suspend':'restore')}>{t(data.status==='active'?'operator.suspend':'operator.restore')}</button>)}
+   <dl><dt>{t('operator.operatorRole')}</dt><dd>{t(data.operator==='config'?'operator.roleConfig':data.operator==='granted'?'operator.roleGranted':'operator.roleNone')}</dd></dl>
+   {confirm?<div className="notice"><p>{t(confirmText[confirm])}</p>
+     <button type="button" className={confirm==='suspend'||confirm==='revoke'?'danger':undefined} disabled={busy} onClick={()=>void act(confirm)}>{t(actionText[confirm])}</button>
+     <button type="button" className="secondary" disabled={busy} onClick={()=>setConfirm(undefined)}>{t('onboarding.cancel')}</button></div>
+    :<div className="workspace-actions">
+     {(data.status==='active'||data.status==='suspended')&&<button type="button" className={data.status==='active'?'danger':undefined} disabled={busy} onClick={()=>setConfirm(data.status==='active'?'suspend':'restore')}>{t(data.status==='active'?'operator.suspend':'operator.restore')}</button>}
+     {data.status==='active'&&data.operator===null&&<button type="button" className="secondary" disabled={busy} onClick={()=>setConfirm('grant')}>{t('operator.grant')}</button>}
+     {data.operator==='granted'&&<button type="button" className="danger" disabled={busy} onClick={()=>setConfirm('revoke')}>{t('operator.revoke')}</button>}
+    </div>}
+   {data.operator==='config'&&<p className="muted">{t('operator.roleConfigHelp')}</p>}
    <h4>{t('operator.householdsTitle')}</h4>
    <p className="muted">{t('operator.householdsPrivacy')}</p>
    {!data.households.length&&<p className="muted">{t('operator.inventoryEmpty')}</p>}
@@ -173,6 +184,21 @@ function AccountLayer({id,csrf,onClose,onChanged,...f}:Format&{id:string;csrf:st
    <ul className="card-list">{data.events.map((e,i)=><li key={i} className="row"><span className="grow"><span>{t(eventLabels[e.action]??'operator.eventSettingsUpdated')}</span><span className="muted">{short(e.operatorId)}{dot}{when(e.at,f)}</span></span></li>)}</ul>
   </article>}
  </Layer>;
+}
+
+const confirmText={suspend:'operator.suspendConfirm',restore:'operator.restoreConfirm',grant:'operator.grantConfirm',revoke:'operator.revokeConfirm'} as const;
+const actionText={suspend:'operator.suspend',restore:'operator.restore',grant:'operator.grant',revoke:'operator.revoke'} as const;
+type OperatorRow={id:string;name:string;email:string|null;status:string;source:'config'|'granted';grantedBy:string|null;grantedAt:string|null};
+/** Who can use this console. Configured operators come from the gateway configuration; the others
+ *  were granted here and can be removed here. */
+export function OperatorsPanel({refresh,onAccount,...f}:Format&{refresh:number;onAccount:(id:string)=>void}){
+ const t=createTranslator(f.language),{data,error}=useLoad<{operators:OperatorRow[]}>('/api/operator/operators',refresh);
+ return <section><h3>{t('operator.operatorsTitle')}</h3><p className="muted">{t('operator.operatorsHelp')}</p>
+  {error&&<p role="alert">{t(error)}</p>}
+  <ul className="card-list">{data?.operators.map(o=><li key={o.id}><button type="button" className="row" onClick={()=>onAccount(o.id)}>
+   <span className="grow"><strong>{o.name||short(o.id)}</strong><span className="muted">{o.email??t('operator.noEmail')}</span>
+    <span className="muted">{t(o.source==='config'?'operator.roleConfig':'operator.roleGranted')}{o.grantedAt&&<>{dot}{when(o.grantedAt,f)}</>}</span></span></button></li>)}</ul>
+ </section>;
 }
 
 export function HouseholdsTab({refresh,...f}:Format&{refresh:number}){
@@ -196,7 +222,7 @@ export function AuditTab({refresh,onAccount,...f}:Format&{refresh:number;onAccou
   {data&&!data.events.length&&<p>{t('operator.auditEmpty')}</p>}
   <ul className="card-list">{data?.events.map(e=><li key={e.id} className="row"><span className="grow"><span>{t(eventLabels[e.action]??'operator.eventSettingsUpdated')}</span>
    <span className="muted">{when(e.at,f)}{dot}{t('operator.byOperator')} <button type="button" className="link-button" onClick={()=>onAccount(e.operatorId)}>{short(e.operatorId)}</button>
-    {e.action.startsWith('account.')&&<>{dot}<button type="button" className="link-button" onClick={()=>onAccount(e.targetId)}>{short(e.targetId)}</button></>}</span></span></li>)}</ul>
+    {(e.action.startsWith('account.')||e.action.startsWith('operator.'))&&<>{dot}<button type="button" className="link-button" onClick={()=>onAccount(e.targetId)}>{short(e.targetId)}</button></>}</span></span></li>)}</ul>
   <Pager next={data?.nextCursor} after={after} onPage={setAfter} language={f.language}/>
  </>;
 }

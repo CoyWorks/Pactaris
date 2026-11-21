@@ -17,12 +17,14 @@ Acceptance on the deployed provider must cover fresh MFA, stale MFA, an ordinary
 | Section | What an operator sees and can do |
 | --- | --- |
 | Overview | Counts: open reports, accounts by status, new accounts in 7 days, accounts signed in, active households, invitation-mail queue, households per instance. |
-| Reports | Open or closed, filtered by category; the report text, reporter account and optional household ID; internal notes (operators only); close as actioned/no action/duplicate; reopen. |
+| Reports | Open or closed, filtered by category; the report text, reporter account and optional household ID; internal notes (operators only); close as actioned/no action/duplicate; reopen; delete for good (notes included; the audit log keeps that it happened). |
 | Accounts | Search by email, name or account ID and filter by status; detail with created, last sign-in, active sessions, reports filed, household IDs with member counts, and operator actions on the account; suspend or restore. |
 | Households | Household ID, instance, registry status and member count. No names or content: those live only on the instances. |
 | Instances | The registry inventory (unchanged). |
-| Settings | New accounts open or closed; a platform-wide announcement (information or warning, at most 300 characters) shown at the top of every page; invitation email (SMTP). |
+| Settings | Operators (see below); new accounts open or closed; a platform-wide announcement (information or warning, at most 300 characters) shown at the top of every page; invitation email (SMTP). |
 | Audit log | Every operator change: report closed, reopened or noted, account suspended or restored, settings changed. |
+
+**Operators.** The `operatorSubjects` in the gateway configuration are the bootstrap operators: an empty list keeps the console off, and they can only be removed in the configuration. From an account's page an operator can **make another account operator** or remove that access again; such grants are stored in `pactaris.operator_grants`, are limited to accounts of the configured issuer, and cannot remove one's own access. Every operator, configured or granted, still needs a multi-factor sign-in within the last five minutes to act.
 
 Settings use a version number, so two operators cannot overwrite each other unnoticed. While new accounts are closed, a person without an account is refused at sign-in (also with an invitation); existing accounts and allow-listed operators can always sign in. Stored SMTP settings that can no longer be decrypted (for example after a key change) no longer break the console: the defaults are shown with a warning and can be saved again. A refused or unreachable relay answers `smtp_failed` instead of a generic error.
 

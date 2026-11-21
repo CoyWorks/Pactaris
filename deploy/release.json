@@ -484,6 +484,13 @@
       "path": "migrations/gateway/0023_admin_console.sql",
       "sha256": "c9e01f4c211a24cdd876c3e3990eb4cb7fcbd020d57c09a5403fbb6b3fa7a549",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0024_operator_grants",
+      "path": "migrations/gateway/0024_operator_grants.sql",
+      "sha256": "21ce747911df3ac33695e2866fbdfcea108e9881461bb446fb51fb9cc22b7a37",
+      "backwardCompatible": true
     }
   ]
 }

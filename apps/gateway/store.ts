@@ -79,10 +79,13 @@ export class PgGatewayStore implements GatewayStore {
     return result.rowCount===1;
   }
   async operatorAuthorized(token:string,issuer:string,subjects:string[]){
+    // The configured subjects bootstrap operator access; without them the console stays off.
+    // Operators granted from the console are accounts of the same issuer.
     if(!subjects.length)return false;
     const result=await this.pool.query(
       `SELECT 1 FROM pactaris.sessions s JOIN pactaris.accounts a ON a.id=s.account_id
-      WHERE s.token_hash=$1 AND a.issuer=$2 AND a.subject=ANY($3::text[]) AND a.status='active'
+      WHERE s.token_hash=$1 AND a.issuer=$2 AND a.status='active'
+      AND (a.subject=ANY($3::text[]) OR EXISTS(SELECT 1 FROM pactaris.operator_grants g WHERE g.account_id=a.id))
       AND s.mfa_at BETWEEN now()-interval '5 minutes' AND now()
       AND LEAST(s.expires_at,s.idle_expires_at)>now()`,[hash(token),issuer,subjects]);
     return result.rowCount===1;

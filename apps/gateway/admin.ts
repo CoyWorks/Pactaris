@@ -52,8 +52,58 @@ export function reportQuery(query:Record<string,unknown>):ReportQuery|undefined{
 const like=(value:string)=>'%'+value.replace(/[\\%_]/g,c=>'\\'+c)+'%';
 const iso=(value:unknown)=>value instanceof Date?value.toISOString():value===null||value===undefined?null:String(value);
 
+export type OperatorSource='config'|'granted';
 export class AdminConsole{
- constructor(private pool:pg.Pool){}
+ /** `issuer` and `subjects` are the configured operator allow-list (the bootstrap operators). */
+ constructor(private pool:pg.Pool,private issuer='',private subjects:string[]=[]){}
+ async operators(){
+  const rows=(await this.pool.query(`SELECT a.id,coalesce(a.preferred_display_name,a.display_name) AS name,a.verified_email AS email,a.status,
+    CASE WHEN a.issuer=$1 AND a.subject=ANY($2::text[]) THEN 'config' ELSE 'granted' END AS source,g.granted_by,g.granted_at
+   FROM pactaris.accounts a LEFT JOIN pactaris.operator_grants g ON g.account_id=a.id
+   WHERE (a.issuer=$1 AND a.subject=ANY($2::text[])) OR g.account_id IS NOT NULL ORDER BY source,name,a.id`,[this.issuer,this.subjects])).rows;
+  return {operators:rows.map(r=>({id:r.id as string,name:r.name as string,email:r.email as string|null,status:r.status as string,source:r.source as OperatorSource,
+   grantedBy:r.granted_by as string|null,grantedAt:iso(r.granted_at)}))};
+ }
+ private async source(id:string):Promise<OperatorSource|null>{
+  const r=(await this.pool.query(`SELECT a.issuer=$2 AND a.subject=ANY($3::text[]) AS configured,EXISTS(SELECT 1 FROM pactaris.operator_grants g WHERE g.account_id=a.id) AS granted
+   FROM pactaris.accounts a WHERE a.id=$1`,[id,this.issuer,this.subjects])).rows[0];
+  return !r?null:r.configured?'config':r.granted?'granted':null;
+ }
+ /** Grants operator access to an active account of the configured issuer. The new operator still
+  *  needs multi-factor authentication at the provider to act. */
+ async grantOperator(operatorId:string,accountId:string):Promise<boolean>{
+  const db=await this.pool.connect();
+  try{
+   await db.query('BEGIN');
+   const r=await db.query(`INSERT INTO pactaris.operator_grants(account_id,granted_by)
+    SELECT id,$2 FROM pactaris.accounts WHERE id=$1 AND status='active' AND issuer=$3 AND NOT (subject=ANY($4::text[])) ON CONFLICT DO NOTHING`,[accountId,operatorId,this.issuer,this.subjects]);
+   if(r.rowCount)await db.query("INSERT INTO pactaris.operator_events(operator_account_id,action,target_id) VALUES($1,'operator.granted',$2)",[operatorId,accountId]);
+   await db.query('COMMIT');return Boolean(r.rowCount);
+  }catch(error){await db.query('ROLLBACK');throw error;}finally{db.release();}
+ }
+ /** Removes a console grant. Configured operators are changed only in the gateway configuration,
+  *  and nobody removes their own access here, so the console cannot lock everyone out by accident. */
+ async revokeOperator(operatorId:string,accountId:string):Promise<boolean>{
+  if(operatorId===accountId)return false;
+  const db=await this.pool.connect();
+  try{
+   await db.query('BEGIN');
+   const r=await db.query('DELETE FROM pactaris.operator_grants WHERE account_id=$1',[accountId]);
+   if(r.rowCount)await db.query("INSERT INTO pactaris.operator_events(operator_account_id,action,target_id) VALUES($1,'operator.revoked',$2)",[operatorId,accountId]);
+   await db.query('COMMIT');return Boolean(r.rowCount);
+  }catch(error){await db.query('ROLLBACK');throw error;}finally{db.release();}
+ }
+ /** Deletes a report and its notes for good; the audit log keeps that it happened. */
+ async deleteReport(operatorId:string,reportId:string):Promise<boolean>{
+  const db=await this.pool.connect();
+  try{
+   await db.query('BEGIN');
+   await db.query('DELETE FROM pactaris.report_notes WHERE report_id=$1',[reportId]);
+   const r=await db.query('DELETE FROM pactaris.abuse_reports WHERE id=$1',[reportId]);
+   if(r.rowCount)await db.query("INSERT INTO pactaris.operator_events(operator_account_id,action,target_id) VALUES($1,'report.deleted',$2)",[operatorId,reportId]);
+   await db.query('COMMIT');return Boolean(r.rowCount);
+  }catch(error){await db.query('ROLLBACK');throw error;}finally{db.release();}
+ }
  async settings():Promise<PlatformSettings>{
   const r=await this.pool.query('SELECT registration,announcement,announcement_level,version,updated_at FROM pactaris.platform_settings WHERE singleton');
   const row=r.rows[0];
@@ -123,7 +173,7 @@ export class AdminConsole{
     FROM pactaris.account_households h JOIN pactaris.placements p ON p.household_id=h.household_id WHERE h.account_id=$1 ORDER BY h.household_id LIMIT 100`,[id]),
    this.pool.query('SELECT count(*)::int AS n FROM pactaris.abuse_reports WHERE reporter_account_id=$1',[id]),
    this.pool.query(`SELECT action,operator_account_id AS "operatorId",created_at FROM pactaris.operator_events WHERE target_id=$1 ORDER BY created_at DESC LIMIT 20`,[id])]);
-  return {id:a.id as string,name:a.name as string,email:a.email as string|null,status:a.status as string,createdAt:iso(a.created_at),lastSignIn:iso(a.last_sign_in),
+  return {id:a.id as string,name:a.name as string,email:a.email as string|null,status:a.status as string,createdAt:iso(a.created_at),lastSignIn:iso(a.last_sign_in),operator:await this.source(id),
    activeSessions:a.sessions as number,reportsFiled:reports.rows[0].n as number,
    households:households.rows.map(r=>({id:r.id as string,instanceId:r.instanceId as string,status:r.status as string,members:r.members as number})),
    events:events.rows.map(r=>({action:r.action as string,operatorId:r.operatorId as string,at:iso(r.created_at)}))};

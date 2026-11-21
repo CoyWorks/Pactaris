@@ -24,6 +24,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 form{display:grid;gap:.8rem}
 input,textarea,select{width:100%;min-height:44px;border:1px solid var(--input-line);border-radius:12px;padding:.65rem .8rem;font:inherit;background:var(--bg);color:var(--text)}
 textarea{min-height:6rem;resize:vertical}input[type=checkbox]{width:22px;height:22px;min-height:auto;accent-color:var(--primary)}
+input[type=radio]{flex:0 0 auto;width:20px;height:20px;min-height:auto;padding:0;margin:0;accent-color:var(--primary)}
+fieldset label:has(>input[type=radio]),fieldset label:has(>input[type=checkbox]){display:flex;align-items:center;gap:.6rem}
 fieldset{border:1px solid var(--input-line);border-radius:12px}fieldset label{display:block;margin:.5rem 0}
 summary{cursor:pointer;padding:.6rem 0;color:var(--accent);min-height:44px;display:flex;align-items:center}
 .icon{flex:none}

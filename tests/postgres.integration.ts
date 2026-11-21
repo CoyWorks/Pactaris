@@ -584,7 +584,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await assert.rejects(gatewayDb.pool.query('DELETE FROM pactaris.operator_events'));
   // Operator console: reports with notes and reopen, account search and detail, households without
   // names, settings with optimistic versioning, the registration gate and the audit log.
-  const admin=new AdminConsole(gatewayDb.pool);
+  const admin=new AdminConsole(gatewayDb.pool,'https://idp.fixture.invalid/',['subject-a']);
   const noteId=randomUUID();
   assert.equal(await admin.addNote(account.id,reportId,noteId,'Checked the logs'),true);assert.equal(await admin.addNote(account.id,reportId,noteId,'Checked the logs'),true);
   assert.equal(await admin.addNote(account.id,randomUUID(),randomUUID(),'Nothing'),false);
@@ -608,7 +608,24 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await admin.saveSettings(account.id,{registration:'open',announcement:null,version:closed.version});
   assert.equal(await admin.registrationClosedFor('https://idp.fixture.invalid/','brand-new-subject'),false);
   assert.deepEqual((await admin.events(null)).events.slice(0,4).map(e=>e.action),['settings.updated','settings.updated','report.reopened','report.noted']);
-  await assert.rejects(gatewayDb.pool.query('DELETE FROM pactaris.report_notes'));
+  // Operators granted in the console act like configured ones (still with fresh MFA); configured
+  // operators and oneself cannot be removed here. Deleting a report removes its notes too.
+  const fresh=Math.floor(Date.now()/1000)-1,granted='granted-operator-fixture';
+  await store.createSession(granted,target,'csrf',60,120,undefined,fresh);
+  assert.equal(await store.operatorAuthorized(granted,'https://idp.fixture.invalid/',['subject-a']),false);
+  assert.equal(await admin.grantOperator(account.id,target.id),true);assert.equal(await admin.grantOperator(account.id,target.id),false);
+  assert.equal(await admin.grantOperator(target.id,account.id),false);
+  assert.ok(await store.operatorAuthorized(granted,'https://idp.fixture.invalid/',['subject-a']));
+  assert.equal(await store.operatorAuthorized(granted,'https://idp.fixture.invalid/',[]),false);
+  assert.deepEqual((await admin.operators()).operators.map(o=>o.id+':'+o.source).sort(),[account.id+':config',target.id+':granted'].sort());
+  assert.equal((await admin.account(target.id))!.operator,'granted');assert.equal((await admin.account(account.id))!.operator,'config');
+  assert.equal(await admin.revokeOperator(target.id,target.id),false);assert.equal(await admin.revokeOperator(target.id,account.id),false);
+  assert.equal(await admin.revokeOperator(account.id,target.id),true);
+  assert.equal(await store.operatorAuthorized(granted,'https://idp.fixture.invalid/',['subject-a']),false);await store.logout(granted);
+  assert.equal(await admin.deleteReport(account.id,reportId),true);assert.equal(await admin.deleteReport(account.id,reportId),false);
+  assert.equal(await admin.report(reportId),undefined);
+  assert.equal((await gatewayDb.owner.query('SELECT count(*)::int n FROM pactaris.report_notes WHERE report_id=$1',[reportId])).rows[0].n,0);
+  assert.deepEqual((await admin.events(null)).events.slice(0,3).map(e=>e.action),['report.deleted','operator.revoked','operator.granted']);
   for(const table of ['audit_events','household_outbox','household_command_receipts'])assert.equal((await a.owner.query(`SELECT count(*)::int AS count FROM pactaris.${table} WHERE household_id=$1`,[created])).rows[0].count,5);
   const audit=(await a.owner.query('SELECT parameters FROM pactaris.audit_events WHERE household_id=$1',[created])).rows;
   assert.ok(audit.every(row=>Object.keys(row.parameters).join(',')==='operationId'));

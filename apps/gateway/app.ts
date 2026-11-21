@@ -210,6 +210,20 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     if(!admin||!uuid(req.params.id)||Object.keys(req.body??{}).length){invalid(res);return;}
     res.status(await admin.reopen(session.account.id,req.params.id as string)?204:409).end();
   }));
+  app.post('/api/operator/reports/:id/delete',express.json({limit:64,strict:true,inflate:false}),operatorRoute('report.delete',async(req,res,session)=>{
+    if(!admin||!uuid(req.params.id)||Object.keys(req.body??{}).length){invalid(res);return;}
+    res.status(await admin.deleteReport(session.account.id,req.params.id as string)?204:404).end();
+  }));
+  app.get('/api/operator/operators',operatorRoute('operators',async(req,res)=>{
+    if(Object.keys(req.query).length){invalid(res);return;}if(!admin){missing(res);return;}res.json(await admin.operators());
+  }));
+  app.post('/api/operator/operators/:id/:action',express.json({limit:64,strict:true,inflate:false}),operatorRoute('operators.change',async(req,res,session)=>{
+    const action=req.params.action;
+    if(!admin||!uuid(req.params.id)||!['grant','revoke'].includes(action as string)||Object.keys(req.body??{}).length){invalid(res);return;}
+    if(!await store.throttle('operator.grants:'+session.account.id,20)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+    const changed=action==='grant'?await admin.grantOperator(session.account.id,req.params.id as string):await admin.revokeOperator(session.account.id,req.params.id as string);
+    res.status(changed?204:409).end();
+  }));
   app.get('/api/operator/overview',operatorRoute('overview',async(req,res)=>{
     if(Object.keys(req.query).length){invalid(res);return;}if(!admin){missing(res);return;}res.json(await admin.overview());
   }));
