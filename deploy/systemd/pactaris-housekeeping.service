@@ -1,0 +1,10 @@
+[Unit]
+Description=Prune old Pactaris checkpoints, releases, build logs and caches
+
+[Service]
+Type=oneshot
+StateDirectory=pactaris-housekeeping
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/bin/python3 /usr/local/lib/pactaris/housekeeping.py --root /opt/pactaris --config /etc/pactaris/housekeeping.json --state-dir /var/lib/pactaris-housekeeping
+TimeoutStartSec=1h
