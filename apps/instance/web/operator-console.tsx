@@ -236,12 +236,13 @@ function Pager({next,after,onPage,language}:{next?:string|null;after?:string;onP
 
 type Run={id?:string;task?:string;trigger:string;dry:boolean;startedAt:string|null;finishedAt?:string|null;ok:boolean|null;details:Record<string,number>};
 type TableSize={name:string;bytes:number;rows:number};
-type InstanceMaintenance={instanceId:string;reachable:boolean;database?:number;runs?:Run[];tables?:TableSize[];proofs?:{files:number;bytes:number}};
+type InstanceMaintenance={instanceId:string;reachable:boolean;database?:number;runs?:Run[];tables?:TableSize[];proofs?:{files:number;bytes:number};
+ households?:{waiting:{id:string;closedAt:string|null;purgeAfter:string|null}[];purged:string[];ownerless:number}};
 type Maintenance={gateway:{runs:Run[];tables:TableSize[];database:number};instances:InstanceMaintenance[]};
 const bytes=(value:number,language:string)=>new Intl.NumberFormat(language,{style:'unit',unit:value>=1073741824?'gigabyte':value>=1048576?'megabyte':'kilobyte',maximumFractionDigits:1})
  .format(value>=1073741824?value/1073741824:value>=1048576?value/1048576:value/1024);
 const countLabels:Record<string,MessageKey>={rateLimits:'maintenance.rateLimits',membershipOperations:'maintenance.membershipOperations',closedReports:'maintenance.closedReports',
- readNotices:'maintenance.readNotices',readTaskInbox:'maintenance.readTaskInbox',usedTokens:'maintenance.usedTokens',orphanFiles:'maintenance.orphanFiles'};
+ closedEmpty:'maintenance.closedEmpty',purgedHouseholds:'maintenance.purgedHouseholds',purgedRows:'maintenance.purgedRows',readNotices:'maintenance.readNotices',readTaskInbox:'maintenance.readTaskInbox',usedTokens:'maintenance.usedTokens',orphanFiles:'maintenance.orphanFiles'};
 /** Receipts are summed into one line; the other counts are shown by name. */
 function summary(details:Record<string,number>,t:(key:MessageKey)=>string){
  const receipts=Object.entries(details).filter(([k])=>k.endsWith('Receipts')).reduce((sum,[,v])=>sum+v,0);
@@ -258,7 +259,7 @@ export function MaintenanceTab({csrf,refresh,...f}:Format&{csrf:string;refresh:n
   catch(status){setMessage(failure(status));}finally{setBusy(undefined);}
  }
  const Runs=({runs}:{runs:Run[]})=>!runs.length?<p className="muted">{t('maintenance.noRuns')}</p>:<ul className="card-list">{runs.slice(0,8).map((r,i)=><li key={r.id??i} className="row"><span className="grow">
-  <span>{when(r.startedAt,f)}{dot}{t(r.trigger==='operator'?'maintenance.byOperator':'maintenance.bySchedule')}{r.dry&&<>{dot}{t('maintenance.dryRun')}</>}{r.task&&<>{dot}{t(r.task==='proofFiles'?'maintenance.taskProofFiles':'maintenance.taskRetention')}</>}</span>
+  <span>{when(r.startedAt,f)}{dot}{t(r.trigger==='operator'?'maintenance.byOperator':'maintenance.bySchedule')}{r.dry&&<>{dot}{t('maintenance.dryRun')}</>}{r.task&&<>{dot}{t(r.task==='proofFiles'?'maintenance.taskProofFiles':r.task==='householdPurge'?'maintenance.taskHouseholdPurge':'maintenance.taskRetention')}</>}</span>
   <span className="muted">{r.ok===false?t('maintenance.failed'):summary(r.details,t).map(([label,value])=>`${label}: ${value}`).join(dot)}</span></span></li>)}</ul>;
  const Tables=({tables,total}:{tables:TableSize[];total:number})=><details><summary>{t('maintenance.storage')} {bytes(total,f.language)}</summary>
   <ul className="card-list">{tables.map(x=><li key={x.name} className="row"><span className="grow"><code>{x.name}</code></span><span className="muted">{bytes(x.bytes,f.language)}{dot}{x.rows}</span></li>)}</ul></details>;
@@ -275,6 +276,12 @@ export function MaintenanceTab({csrf,refresh,...f}:Format&{csrf:string;refresh:n
    {data.instances.map(i=><section key={i.instanceId}><h3>{t('maintenance.instance')} <code>{short(i.instanceId)}</code></h3>
     {!i.reachable?<p role="alert">{t('maintenance.unreachable')}</p>:<>
      <p className="muted">{t('maintenance.proofFiles')} {i.proofs?.files??0}{dot}{bytes(i.proofs?.bytes??0,f.language)}</p>
+     {i.households&&<>
+      <p className="muted">{t('maintenance.ownerless')} {i.households.ownerless}</p>
+      <details><summary>{t('maintenance.waitingPurge')} {i.households.waiting.length}</summary>
+       {!i.households.waiting.length?<p className="muted">{t('maintenance.noneWaiting')}</p>:
+       <ul className="card-list">{i.households.waiting.map(w=><li key={w.id} className="row"><span className="grow"><code>{w.id}</code>
+        <span className="muted">{t('maintenance.closedAt')} {when(w.closedAt,f)}{dot}{t('maintenance.purgeAfter')} {when(w.purgeAfter,f)}</span></span></li>)}</ul>}</details></>}
      <Preview target={i.instanceId}/><Actions target={i.instanceId}/><Runs runs={i.runs??[]}/><Tables tables={i.tables??[]} total={i.database??0}/></>}
    </section>)}
   </>}

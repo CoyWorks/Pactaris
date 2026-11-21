@@ -2283,7 +2283,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    for(const db of [a,b]){
     assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.partner_receipts')).rows[0].n,0);
     assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.member_notices WHERE read')).rows[0].n,0);
-    assert.equal((await db.owner.query("SELECT count(*)::int n FROM pactaris.maintenance_runs WHERE trigger='operator' AND NOT dry AND ok")).rows[0].n,2);
+    assert.equal((await db.owner.query("SELECT count(*)::int n FROM pactaris.maintenance_runs WHERE trigger='operator' AND NOT dry AND ok")).rows[0].n,3);
    }
    await assert.rejects(readFile(join(folder,'proofs-0',strayHousehold,stray)));assert.equal(await readFile(join(folder,'proofs-0',strayHousehold,fresh),'utf8'),'y');
    assert.equal(await maintenance.runInstance(account.id,randomUUID(),false),undefined);
@@ -2299,6 +2299,30 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    assert.equal((await gatewayDb.owner.query('SELECT count(*)::int n FROM pactaris.abuse_reports WHERE id=$1',[oldReport])).rows[0].n,0);
    assert.equal(await maintenance.scheduled(),true);assert.equal(await maintenance.scheduled(),false);
    const view=await maintenance.status();assert.ok(view.runs.length>=3&&view.tables.length>0&&view.database>0);
+   // Dynamics everyone left are purged 30 days after closing: every row in every table with a
+   // household_id goes, a tombstone stays, and the gateway retires the placement. Younger ones wait.
+   const busiest=async(db:typeof a)=>(await db.owner.query(`SELECT household_id AS id FROM pactaris.partner_events GROUP BY household_id ORDER BY count(*) DESC LIMIT 1`)).rows[0]?.id as string|undefined;
+   const index=(await busiest(a))?0:1,db=[a,b][index]!,instanceId=ids[index]!,doomed=(await busiest(db))!;
+   const young=(await db.owner.query(`SELECT id FROM pactaris.households WHERE id<>$1 AND status<>'closed' ORDER BY created_at LIMIT 1`,[doomed])).rows[0].id as string;
+   for(const id of [doomed,young]){
+    await db.owner.query("UPDATE pactaris.memberships SET status='left' WHERE household_id=$1 AND status='active'",[id]);
+    await db.owner.query("UPDATE pactaris.households SET status='closed' WHERE id=$1",[id]);
+   }
+   await db.owner.query("UPDATE pactaris.households SET closed_at=now()-interval '31 days' WHERE id=$1",[doomed]);
+   assert.ok((await db.owner.query(`SELECT closed_at FROM pactaris.households WHERE id=$1`,[young])).rows[0].closed_at);
+   const purgePreview=(await maintenance.runInstance(account.id,instanceId,true))!;assert.ok(purgePreview.purgedHouseholds!>=1);
+   assert.ok((await db.owner.query('SELECT count(*)::int n FROM pactaris.partner_events WHERE household_id=$1',[doomed])).rows[0].n>0);
+   const purge=(await maintenance.runInstance(account.id,instanceId,false))!;assert.ok(purge.purgedHouseholds!>=1&&purge.purgedRows!>0);
+   const tables=(await db.owner.query(`SELECT c.table_name AS name FROM information_schema.columns c JOIN information_schema.tables t ON t.table_schema=c.table_schema AND t.table_name=c.table_name
+    WHERE c.table_schema='pactaris' AND c.column_name='household_id' AND t.table_type='BASE TABLE' AND c.table_name NOT IN ('households','revocation_journal')`)).rows.map(r=>r.name as string);
+   assert.ok(tables.length>50);
+   for(const table of tables)assert.equal((await db.owner.query(`SELECT count(*)::int n FROM pactaris.${table} WHERE household_id=$1`,[doomed])).rows[0].n,0,table);
+   const tomb=(await db.owner.query('SELECT display_name,purged_at,status FROM pactaris.households WHERE id=$1',[doomed])).rows[0];
+   assert.equal(tomb.display_name,'-');assert.ok(tomb.purged_at);assert.equal(tomb.status,'closed');
+   assert.ok((await db.owner.query('SELECT count(*)::int n FROM pactaris.memberships WHERE household_id=$1',[young])).rows[0].n>0);
+   assert.equal((await gatewayDb.owner.query('SELECT status FROM pactaris.placements WHERE household_id=$1',[doomed])).rows[0]?.status??'disabled','disabled');
+   const lifecycle=(await maintenance.instances()).instances.find(i=>i.instanceId===instanceId)!;
+   assert.ok('households' in lifecycle&&lifecycle.households!.purged.includes(doomed)&&lifecycle.households!.waiting.some(w=>w.id===young));
   })();
 
   // Separate concurrent creation IDs are budgeted under the same account lock.

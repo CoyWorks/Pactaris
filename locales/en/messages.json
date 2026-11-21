@@ -1322,5 +1322,14 @@
   "maintenance.readNotices": "Old read notices",
   "maintenance.readTaskInbox": "Old read task notices",
   "maintenance.usedTokens": "Expired request tokens",
-  "maintenance.orphanFiles": "Proof files without a record"
+  "maintenance.orphanFiles": "Proof files without a record",
+  "maintenance.closedEmpty": "Dynamics without members closed",
+  "maintenance.purgedHouseholds": "Dynamics purged",
+  "maintenance.purgedRows": "Rows deleted from purged dynamics",
+  "maintenance.taskHouseholdPurge": "closed dynamics",
+  "maintenance.ownerless": "Dynamics with members but no owner:",
+  "maintenance.waitingPurge": "Closed dynamics waiting to be purged:",
+  "maintenance.noneWaiting": "None.",
+  "maintenance.closedAt": "Closed",
+  "maintenance.purgeAfter": "purged after"
 }
