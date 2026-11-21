@@ -451,6 +451,13 @@
       "backwardCompatible": true
     },
     {
+      "component": "instance",
+      "id": "0045_task_approvals",
+      "path": "migrations/instance/0045_task_approvals.sql",
+      "sha256": "f5a4e153efeb29987013fe76d5fe596104465c894d87fcb8e1e50805f92fd62b",
+      "backwardCompatible": true
+    },
+    {
       "component": "gateway",
       "id": "0020_account_export",
       "path": "migrations/gateway/0020_account_export.sql",
