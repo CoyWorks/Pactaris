@@ -50,17 +50,21 @@ export class SmtpSettings {
     return JSON.parse(Buffer.concat([decipher.update(data.subarray(28)),decipher.final()]).toString()) as Credentials;
   }
   async status(){
-    const {from,username,password}=await this.credentials();
+    // Stored settings sealed with an earlier key cannot be read; show the defaults and let the
+    // operator save again instead of failing the whole console.
+    let stored:Credentials,unreadable=false;
+    try{stored=await this.credentials();}catch{stored=this.defaults;unreadable=true;}
+    const {from,username,password}=stored;
     const counts=await this.pool.query<{status:string;count:number}>(
       'SELECT status,count(*)::int AS count FROM pactaris.invitation_mail GROUP BY status');
-    return {...this.relay,from,username:username??'',hasPassword:!!password,queue:counts.rows};
+    return {...this.relay,from,username:username??'',hasPassword:!!password,queue:counts.rows,...(unreadable?{unreadable:true}:{})};
   }
   async save(actor:string,changes:Changes){
     const db=await this.pool.connect();
     try{
       await db.query('BEGIN');
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended('pactaris.smtp-settings',0))");
-      const current=await this.credentials(db);
+      const current=await this.credentials(db).catch(()=>this.defaults);
       const password=changes.password??(changes.username===current.username?current.password:undefined);
       if((changes.username&&!password)||(!changes.username&&changes.password))return false;
       const value={from:changes.from,...(changes.username?{username:changes.username,password}:{})};

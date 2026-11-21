@@ -477,6 +477,13 @@
       "path": "migrations/gateway/0022_report_categories.sql",
       "sha256": "4e33f87be6b98baad245151115f066941063dab24fbb98b3abd7f6e42b3df76d",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0023_admin_console",
+      "path": "migrations/gateway/0023_admin_console.sql",
+      "sha256": "c9e01f4c211a24cdd876c3e3990eb4cb7fcbd020d57c09a5403fbb6b3fa7a549",
+      "backwardCompatible": true
     }
   ]
 }

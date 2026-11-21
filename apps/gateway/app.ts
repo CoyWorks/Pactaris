@@ -20,6 +20,7 @@ import type {GatewayLibrary} from './library.js';
 import type {GatewayExchange} from './exchange.js';
 import type {GatewayAuthority} from './authority.js';
 import type {GatewayProof} from './proof.js';
+import {accountQuery,reportQuery,settingsInput,type AdminConsole} from './admin.js';
 import {ProofCommandError,proofImageTypes,maxProofUpload,type ProofType} from '../../packages/auth/proof.js';
 import {isAuthorityAction,authorityInput,AuthorityError} from '../../packages/auth/authority.js';
 import {isExchangeAction,exchangeInput,ExchangeError} from '../../packages/auth/exchange.js';
@@ -61,7 +62,7 @@ type OperatorInventory={
   instances:(after:string|null)=>ReturnType<typeof listRegistryInstances>;
   placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
 };
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'|'shop'>,proof?:Pick<GatewayProof,'upload'|'view'|'remove'>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'|'shop'>,proof?:Pick<GatewayProof,'upload'|'view'|'remove'>,admin?:AdminConsole) {
   const app=express();headers(app,new URL(config.publicOrigin).protocol==='https:');app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -78,7 +79,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     // The exact deployed revision is shown to signed-in people only; anonymous callers get the version.
     const id=cookie(req,SESSION);let signedIn=false;
     if(id)try{signedIn=!!await store.session(id,config.session.idleSeconds,config.session.requireVerifiedEmail);}catch{}
-    res.json({component:'gateway',version:manifest.version,readiness,authentication:'oidc',locale:config.locale,deployment:signedIn?await readDeploymentInfo():null});
+    res.json({component:'gateway',version:manifest.version,readiness,authentication:'oidc',locale:config.locale,deployment:signedIn?await readDeploymentInfo():null,announcement:admin?await admin.announcement():null});
   });
   app.get(['/auth/login','/auth/operator','/auth/reauth'],async(req,res)=>{
     if(req.path==='/auth/operator'&&!config.operatorSubjects.length){
@@ -103,6 +104,10 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       const identity=await oidc.finish(url,attempt),email=normalizeEmail(identity.verifiedEmail);
       if(config.session.requireVerifiedEmail&&!email){
         loginFailure(req,res,403,'email_verification_required','account.verifyEmail');return;
+      }
+      const operator=identity.issuer===config.oidc.issuer&&config.operatorSubjects.includes(identity.subject);
+      if(admin&&!operator&&await admin.registrationClosedFor(identity.issuer,identity.subject)){
+        loginFailure(req,res,403,'registration_closed','errors.registrationClosed');return;
       }
       const account=await store.account(identity.issuer,identity.subject,identity.name,email);
       const previous=cookie(req,SESSION);if(previous)await store.logout(previous);
@@ -137,11 +142,10 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     if(!result){res.status(404).json({code:'not_found',messageKey:'errors.notFound'});return;}
     res.json(result);
   });
-  app.get('/api/operator/smtp',async(req,res)=>{
-    const session=await authorizeOperator(req,res);if(!session)return;
+  app.get('/api/operator/smtp',operatorRoute('smtp',async(_req,res)=>{
     if(!smtp){res.json({configured:false});return;}
     res.json({configured:true,...await smtp.status()});
-  });
+  }));
   app.post('/api/operator/smtp/:action',express.json({limit:4096,strict:true,inflate:false}),async(req,res)=>{
     const session=await authorizeOperator(req,res);if(!session)return;
     if(!csrfAllowed(req,session)){
@@ -159,24 +163,82 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     if(!await store.throttle('operator.smtp:'+action,action==='test'?3:10)){
       res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;
     }
-    if(changes){
-      if(!await smtp.save(session.account.id,changes)){
-        res.status(400).json({code:'invalid_smtp_settings',messageKey:'operator.smtpInvalid'});return;
-      }
-    }else if(recipient)await smtp.testMail(recipient);
-    else await smtp.verify();
+    try{
+      if(changes){
+        if(!await smtp.save(session.account.id,changes)){
+          res.status(400).json({code:'invalid_smtp_settings',messageKey:'operator.smtpInvalid'});return;
+        }
+      }else if(recipient)await smtp.testMail(recipient);
+      else await smtp.verify();
+    }catch{
+      // The relay refused or could not be reached; no relay detail is passed to the browser.
+      process.stderr.write(JSON.stringify({code:'operator.failed',section:'smtp.'+action})+'\n');
+      res.status(502).json({code:'smtp_failed',messageKey:'operator.smtpFailed'});return;
+    }
     res.status(204).end();
   });
   // Abuse reports and limited account actions. Operators never receive household content.
-  app.get('/api/operator/reports',async(req,res)=>{
-    if(!await authorizeOperator(req,res))return;
-    const state=req.query.state??'open',after=req.query.after;
-    if(Object.keys(req.query).some(key=>!['state','after'].includes(key))||!['open','closed'].includes(String(state))||(after!==undefined&&!uuid(after))){
-      res.status(400).json({code:'invalid_request',messageKey:'errors.request'});return;
-    }
-    if(!moderation){res.status(404).json({code:'not_found',messageKey:'errors.notFound'});return;}
-    res.json(await moderation.reports(state as 'open'|'closed',(after as string|undefined)??null));
-  });
+  // A failing part of the console answers with its own error and leaves a code in the service log,
+  // so one broken section never hides the rest.
+  function operatorRoute(name:string,handler:(req:express.Request,res:express.Response,session:Session)=>Promise<void>){
+    return async(req:express.Request,res:express.Response)=>{
+      const session=await authorizeOperator(req,res);if(!session)return;
+      if(req.method!=='GET'&&!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+      try{await handler(req,res,session);}
+      catch{process.stderr.write(JSON.stringify({code:'operator.failed',section:name})+'\n');if(!res.headersSent)res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});}
+    };
+  }
+  const invalid=(res:express.Response)=>{res.status(400).json({code:'invalid_request',messageKey:'errors.request'});};
+  const missing=(res:express.Response)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});};
+  app.get('/api/operator/reports',operatorRoute('reports',async(req,res)=>{
+    const query=reportQuery(req.query as Record<string,unknown>);if(!query){invalid(res);return;}
+    if(admin){res.json(await admin.reports(query));return;}
+    if(!moderation||query.category){missing(res);return;}
+    res.json(await moderation.reports(query.state,query.after??null));
+  }));
+  app.get('/api/operator/reports/:id',operatorRoute('report',async(req,res)=>{
+    if(!uuid(req.params.id)||Object.keys(req.query).length){invalid(res);return;}
+    const report=await admin?.report(req.params.id as string);if(!report){missing(res);return;}res.json(report);
+  }));
+  app.post('/api/operator/reports/:id/notes',express.json({limit:4096,strict:true,inflate:false}),operatorRoute('report.note',async(req,res,session)=>{
+    const body=req.body as Record<string,unknown>|undefined;
+    if(!admin||!uuid(req.params.id)||!body||Object.keys(body).sort().join(',')!=='body,operationId'||!uuid(body.operationId)||typeof body.body!=='string'||
+      body.body!==body.body.trim()||!body.body||[...body.body].length>2000||/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u.test(body.body)||disguisedText(body.body)){invalid(res);return;}
+    res.status(await admin.addNote(session.account.id,req.params.id as string,(body.operationId as string).toLowerCase(),body.body)?204:404).end();
+  }));
+  app.post('/api/operator/reports/:id/reopen',express.json({limit:64,strict:true,inflate:false}),operatorRoute('report.reopen',async(req,res,session)=>{
+    if(!admin||!uuid(req.params.id)||Object.keys(req.body??{}).length){invalid(res);return;}
+    res.status(await admin.reopen(session.account.id,req.params.id as string)?204:409).end();
+  }));
+  app.get('/api/operator/overview',operatorRoute('overview',async(req,res)=>{
+    if(Object.keys(req.query).length){invalid(res);return;}if(!admin){missing(res);return;}res.json(await admin.overview());
+  }));
+  app.get('/api/operator/accounts',operatorRoute('accounts',async(req,res)=>{
+    const query=accountQuery(req.query as Record<string,unknown>);if(!query){invalid(res);return;}if(!admin){missing(res);return;}
+    res.json(await admin.accounts(query));
+  }));
+  app.get('/api/operator/accounts/:id',operatorRoute('account',async(req,res)=>{
+    if(!uuid(req.params.id)||Object.keys(req.query).length){invalid(res);return;}
+    const account=await admin?.account(req.params.id as string);if(!account){missing(res);return;}res.json(account);
+  }));
+  app.get('/api/operator/households',operatorRoute('households',async(req,res)=>{
+    const after=req.query.after;if(Object.keys(req.query).some(k=>k!=='after')||(after!==undefined&&!uuid(after))){invalid(res);return;}
+    if(!admin){missing(res);return;}res.json(await admin.households((after as string|undefined)??null));
+  }));
+  app.get('/api/operator/events',operatorRoute('events',async(req,res)=>{
+    const after=req.query.after;if(Object.keys(req.query).some(k=>k!=='after')||(after!==undefined&&!uuid(after))){invalid(res);return;}
+    if(!admin){missing(res);return;}res.json(await admin.events((after as string|undefined)??null));
+  }));
+  app.get('/api/operator/settings',operatorRoute('settings',async(req,res)=>{
+    if(Object.keys(req.query).length){invalid(res);return;}if(!admin){missing(res);return;}res.json(await admin.settings());
+  }));
+  app.put('/api/operator/settings',express.json({limit:2048,strict:true,inflate:false}),operatorRoute('settings.save',async(req,res,session)=>{
+    const input=settingsInput(req.body);if(!input){res.status(400).json({code:'invalid_settings',messageKey:'operator.settingsInvalid'});return;}
+    if(!admin){missing(res);return;}
+    const saved=await admin.saveSettings(session.account.id,input);
+    if(!saved){res.status(409).json({code:'settings_conflict',messageKey:'operator.settingsConflict'});return;}
+    res.json(saved);
+  }));
   app.post('/api/operator/reports/:id/close',express.json({limit:256,strict:true,inflate:false}),async(req,res)=>{
     const session=await authorizeOperator(req,res);if(!session)return;
     if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}

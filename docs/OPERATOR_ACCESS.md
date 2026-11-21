@@ -9,3 +9,20 @@ Sign in at `/auth/operator` to request a fresh Authentik login. `GET /api/operat
 Acceptance on the deployed provider must cover fresh MFA, stale MFA, an ordinary account with MFA, a recovery-code sign-in, session revocation and operator removal. The repository tests exercise the claim and authorization checks. Live Authentik enforcement and recovery need the deployment configuration and test accounts.
 
 [Authentik credentials and recovery codes](https://docs.goauthentik.io/users-sources/user/user-interface/#credentials)
+
+## Operator console
+
+`/operator` is the console. Every section loads on its own and a failing section logs `operator.failed` with its name to the gateway service log, so one fault never hides the rest.
+
+| Section | What an operator sees and can do |
+| --- | --- |
+| Overview | Counts: open reports, accounts by status, new accounts in 7 days, accounts signed in, active households, invitation-mail queue, households per instance. |
+| Reports | Open or closed, filtered by category; the report text, reporter account and optional household ID; internal notes (operators only); close as actioned/no action/duplicate; reopen. |
+| Accounts | Search by email, name or account ID and filter by status; detail with created, last sign-in, active sessions, reports filed, household IDs with member counts, and operator actions on the account; suspend or restore. |
+| Households | Household ID, instance, registry status and member count. No names or content: those live only on the instances. |
+| Instances | The registry inventory (unchanged). |
+| Settings | New accounts open or closed; a platform-wide announcement (information or warning, at most 300 characters) shown at the top of every page; invitation email (SMTP). |
+| Audit log | Every operator change: report closed, reopened or noted, account suspended or restored, settings changed. |
+
+Settings use a version number, so two operators cannot overwrite each other unnoticed. While new accounts are closed, a person without an account is refused at sign-in (also with an invitation); existing accounts and allow-listed operators can always sign in. Stored SMTP settings that can no longer be decrypted (for example after a key change) no longer break the console: the defaults are shown with a warning and can be saved again. A refused or unreachable relay answers `smtp_failed` instead of a generic error.
+
