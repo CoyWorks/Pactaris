@@ -7,6 +7,8 @@ import {isRoutineAction,RoutineError} from '../../packages/auth/routines.js';
 import {isLibraryAction,LibraryError} from '../../packages/auth/library.js';
 import {isExchangeAction,ExchangeError} from '../../packages/auth/exchange.js';
 import {isAuthorityAction,AuthorityError} from '../../packages/auth/authority.js';
+import {isProofAction,ProofCommandError} from '../../packages/auth/proof.js';
+import {maxProofCommandBody} from './proof.js';
 import {isWorkspaceAction,WorkspaceError} from '../../packages/auth/workspace.js';
 import {isConsentAction,ConsentError} from '../../packages/auth/consent.js';
 import {isRelationshipAction,RelationshipError} from '../../packages/auth/relationships.js';
@@ -21,7 +23,7 @@ import { InvitationError } from './invitations.js';
 import { CommandError } from './commands.js';
 import manifest from '../../package.json' with { type: 'json' };
 
-export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web'), households?: Pick<InstanceHouseholds,'summary'> & Partial<Pick<InstanceHouseholds,'command'|'invitation'|'membership'|'relationship'|'consent'|'workspace'|'library'|'exchange'|'authority'|'routine'|'catalog'|'partner'|'personalExport'|'journal'|'fenced'|'account'>>) {
+export function createApp(config: InstanceConfig, probe: () => Promise<void>, webRoot = join(process.cwd(), 'dist/web'), households?: Pick<InstanceHouseholds,'summary'> & Partial<Pick<InstanceHouseholds,'command'|'invitation'|'membership'|'relationship'|'consent'|'workspace'|'library'|'exchange'|'authority'|'routine'|'catalog'|'partner'|'personalExport'|'journal'|'fenced'|'account'|'proofUpload'|'proofView'|'proof'>>) {
   const app = express();
   app.disable('x-powered-by');
   // Identity always comes from the future verified OIDC session, never proxy identity headers.
@@ -58,6 +60,29 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
     if(households?.fenced&&await households.fenced()){res.status(503).json({code:'restore_fenced',messageKey:'errors.unavailable'});return;}
     next();
   });
+  // Completion proof: the upload carries the image in the signed body, the view answers with image bytes.
+  function proofFailure(res:express.Response,error:unknown){
+    if(error instanceof ProofCommandError){res.status({invalid:400,denied:403,conflict:409,paused:409,gone:410,unavailable:503}[error.kind]).json({code:'proof_'+error.kind,messageKey:'proof.'+error.kind});return;}
+    if(error instanceof DelegationError){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});
+  }
+  app.post('/internal/households/:householdId/commands/proofUpload',express.raw({type:'application/octet-stream',limit:maxProofCommandBody,inflate:false}),async(req,res)=>{
+    const id=req.params.householdId,authorization=req.get('authorization');
+    if(!config.delegation||!households?.proofUpload||!uuid(id)||req.originalUrl!==commandPath(id,'proofUpload')||!authorization?.startsWith('Bearer ')||!Buffer.isBuffer(req.body)){
+      res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;
+    }
+    try{res.json(await households.proofUpload(authorization.slice(7),id,req.body));}catch(error){proofFailure(res,error);}
+  });
+  app.post('/internal/households/:householdId/commands/proofView',express.raw({type:'application/json',limit:4096,inflate:false}),async(req,res)=>{
+    const id=req.params.householdId,authorization=req.get('authorization');
+    if(!config.delegation||!households?.proofView||!uuid(id)||req.originalUrl!==commandPath(id,'proofView')||!authorization?.startsWith('Bearer ')||!Buffer.isBuffer(req.body)){
+      res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;
+    }
+    try{
+      const image=await households.proofView(authorization.slice(7),id,req.body);
+      res.set({'Cache-Control':'no-store','X-Proof-Consumes':image.consumes?'1':'0'}).type(image.type).send(image.bytes);
+    }catch(error){proofFailure(res,error);}
+  });
   app.post('/internal/households/:householdId/commands/:action',express.raw({type:'application/json',limit:4096,inflate:false}),async(req,res)=>{
     const id=req.params.householdId,action=req.params.action,authorization=req.get('authorization');
     if(!config.delegation||!households?.command||!uuid(id)||!isHouseholdAction(action)||req.originalUrl!==commandPath(id,action)||!authorization?.startsWith('Bearer ')||!Buffer.isBuffer(req.body)){
@@ -68,6 +93,10 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
       else if(isPartnerAction(action)){if(!households.partner)throw new PartnerError('unavailable');res.json(await households.partner(authorization.slice(7),id,action,req.body));}
       else if(isCatalogAction(action)){if(!households.catalog)throw new CatalogError('unavailable');res.json(await households.catalog(authorization.slice(7),id,action,req.body));}
       else if(isRoutineAction(action)){if(!households.routine)throw new RoutineError('unavailable');res.json(await households.routine(authorization.slice(7),id,action,req.body));}
+      else if(isProofAction(action)){
+        if(action!=='proofViewed'&&action!=='proofRemove')throw new DelegationError('proof.route');
+        if(!households.proof)throw new ProofCommandError('unavailable');res.json(await households.proof(authorization.slice(7),id,action,req.body));
+      }
       else if(isAuthorityAction(action)){if(!households.authority)throw new AuthorityError('unavailable');res.json(await households.authority(authorization.slice(7),id,action,req.body));}
       else if(isExchangeAction(action)){if(!households.exchange)throw new ExchangeError('unavailable');res.json(await households.exchange(authorization.slice(7),id,action,req.body));}
       else if(isLibraryAction(action)){if(!households.library)throw new LibraryError('unavailable');res.json(await households.library(authorization.slice(7),id,action,req.body));}
@@ -79,6 +108,7 @@ export function createApp(config: InstanceConfig, probe: () => Promise<void>, we
       else res.json(await households.command(authorization.slice(7),id,action,req.body));
     }
     catch(error){
+      if(error instanceof ProofCommandError||(isProofAction(action)&&error instanceof DelegationError)){proofFailure(res,error);return;}
       if(error instanceof PartnerError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:409).json({code:'partner_'+error.kind,messageKey:'partner.'+error.kind});return;}
       if(error instanceof CatalogError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:409).json({code:'catalog_'+error.kind,messageKey:'catalog.'+error.kind});return;}
       if(error instanceof RoutineError){res.status(error.kind==='denied'?403:error.kind==='invalid'?400:error.kind==='unavailable'?503:409).json({code:'routines_'+error.kind,messageKey:'routines.'+error.kind});return;}

@@ -21,6 +21,17 @@ For every pair with authority (primary Dom or a delegated right to create tasks 
 
 As a result, shared tasks, task rewards, point balances, reward redemption, task inbox notices, exchanges and the People overview work for linked pairs without further steps. Existing adopted standing authority was converted to Dom links by migration `0037_household_authority`; two-person agreements behind them became backing agreements.
 
+## Approval by several people
+
+Owner decision, 21 November 2026: a task is approved by several people ranked above the sub, with a simple approve button (no signatures).
+
+- When the sub submits, an approval round opens. Its approvers are the task's creator plus every active member who holds the `approve` right over the sub at that moment (the primary Dom has it by default; others through a delegation). Each approver except the creator receives an `approval` notice.
+- The task is done once every approver of the round has approved. One approval of several is recorded on the task history (`partnerApproval`) and the task stays submitted.
+- Any approver may ask for changes. That ends the round: all approvals lapse, the round's photo is deleted, and the next submission opens a new round with the approvers who hold the right then.
+- The right is checked again at each decision; a revoked delegation, a pause or a stop wins. Tasks submitted before approval rounds existed keep the creator-only path.
+- `approvalList` shows the tasks waiting for the caller; `approvalRead` shows one of them (title, description, the submission note, the round and the photo state) to its approvers only, including a reviewer who is neither creator nor assignee.
+- Photo proof follows the round: see [TASK_PROOF.md](TASK_PROOF.md).
+
 ## Direct outcomes
 
 - **Points:** someone with points-and-punishments authority adds or removes points with an optional reason. The balance never shows below zero.

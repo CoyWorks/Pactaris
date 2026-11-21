@@ -62,6 +62,11 @@ test('proof store: sniffing, stripping, round-trip, access and tamper',async()=>
   // An authorized read returns the clean image and its declared type.
   const got=await store.get(hh,id);assert.equal(got.type,'image/jpeg');assert.ok(!got.bytes.toString('latin1').includes('secret'));
 
+  // A second write for the same id keeps the first file.
+  const again=store.prepare('image/jpeg',jpeg(false));
+  assert.equal(await store.write(hh,id,again.type,again.clean),false);
+  assert.ok((await readFile(join(root,hh,id))).equals(onDisk));
+
   // Declared type must match the real bytes; oversize and empty are rejected.
   await assert.rejects(store.put(hh,randomUUID(),'image/png',jpeg(false)),(e:unknown)=>e instanceof ProofError&&e.kind==='type');
   await assert.rejects(store.put(hh,randomUUID(),'image/jpeg',Buffer.alloc(0)),(e:unknown)=>e instanceof ProofError&&e.kind==='size');

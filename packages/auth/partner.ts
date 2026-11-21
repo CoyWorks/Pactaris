@@ -13,10 +13,16 @@ export type TaskSeries={policyId:string;seriesId:string;version:string;creatorId
 export type AssignmentPolicy={policyId:string;version:string;agreementLabel:string;creatorName:string;assigneeName:string;agreementId:string;agreementVersion:string;creatorId:string;assigneeId:string;mode:'direct'|'explicit';state:'proposed'|'active'|'revoked';epoch:string;safetyVersion:string};
 export type PartnerChoice={agreementId:string;agreementVersion:string;label:string;epoch:string;safetyVersion:string;assignees:{membershipId:string;name:string}[]};
 export type PartnerSummary=PartnerFields&{availableAt?:string|null;taskId:string;version:string;state:PartnerState;creatorId:string;assigneeId:string;role:'creator'|'assignee';counterpart:string};
-export type PartnerDetail=PartnerSummary&{sharedReward?:TaskReward;agreementId:string;agreementVersion:string;agreementLabel:string;assignmentMode:'offer'|'direct'|'explicit';policyVersion:string|null;epoch:string;safetyVersion:string;eligible:boolean;events:{version:string;action:PartnerAction|'membershipEnded';actorId:string;note:string;at:string}[];nextEventCursor:string|null};
+export type PartnerDetail=PartnerSummary&{sharedReward?:TaskReward;agreementId:string;agreementVersion:string;agreementLabel:string;assignmentMode:'offer'|'direct'|'explicit';policyVersion:string|null;epoch:string;safetyVersion:string;eligible:boolean;events:{version:string;action:PartnerAction|'membershipEnded'|'partnerApproval';actorId:string;note:string;at:string}[];nextEventCursor:string|null;approvals?:TaskApprover[];proof?:TaskProofState|null};
+/** One approver of the current approval round; `decision` is null until they decide. */
+export type TaskApprover={membershipId:string;name:string;decision:'approved'|'changes'|null;decidedAt:string|null};
+/** The proof this member may see now. `consumes`: opening it uses up their single view. */
+export type TaskProofState={proofId:string;type:'image/jpeg'|'image/png'|'image/webp';state:'stored'|'viewed'|'expired'|'removed';bound:boolean;available:boolean;consumes:boolean;expiresAt:string};
+export type ApprovalItem={taskId:string;version:string;title:string;assigneeId:string;assigneeName:string;creatorName:string;submittedAt:string|null};
+export type ApprovalDetail={taskId:string;version:string;state:PartnerState;title:string;description:string;priority:'low'|'normal'|'high';dueAt:string|null;assigneeId:string;assigneeName:string;creatorId:string;creatorName:string;note:string;epoch:string;safetyVersion:string;canDecide:boolean;approvals:TaskApprover[];proof:TaskProofState|null};
 export type DeliveryPreferences={push:boolean;reminders:boolean;quietStart:string|null;quietEnd:string|null;timeZone:string};
 export type InboxPreferences={assigned:boolean;submitted:boolean;reviewed:boolean};
-export type PartnerResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';scheduling?:boolean;seriesId?:string;series?:TaskSeries[];taskId?:string;policyId?:string;balance?:string;deliveryPreferences?:DeliveryPreferences;pushSequence?:string|null;inboxPreferences?:InboxPreferences;inbox?:{id:string;taskId:string;kind:'assigned'|'submitted'|'reviewed'|'reminder';read:boolean;at:string}[];policies?:AssignmentPolicy[];choices?:PartnerChoice[];tasks?:PartnerSummary[];task?:PartnerDetail;nextCursor?:string|null};
+export type PartnerResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';scheduling?:boolean;seriesId?:string;series?:TaskSeries[];taskId?:string;policyId?:string;balance?:string;deliveryPreferences?:DeliveryPreferences;pushSequence?:string|null;inboxPreferences?:InboxPreferences;inbox?:{id:string;taskId:string;kind:'assigned'|'submitted'|'reviewed'|'reminder';read:boolean;at:string}[];policies?:AssignmentPolicy[];choices?:PartnerChoice[];tasks?:PartnerSummary[];task?:PartnerDetail;nextCursor?:string|null;approvals?:ApprovalItem[];approval?:ApprovalDetail};
 export class PartnerError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'unavailable'){super('partner.'+kind);}}
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 export const validPushSequence=(value:unknown):value is string=>typeof value==='string'&&
@@ -42,7 +48,8 @@ export function partnerInput(action:PartnerAction,value:unknown):Record<string,u
  if(action==='partnerSeriesList')keys.push(...('after'in value?['after']:[]));
  else if(action==='partnerSeriesCancel')keys.push('seriesId','version');
  else if(action==='partnerSeriesCreate'||action==='partnerSeriesUpdate'){keys.push('policyId','policyVersion','fields','schedule','epoch','safetyVersion');if(action==='partnerSeriesUpdate')keys.push('seriesId','version');}
- else if(action==='partnerPoints'||action==='partnerPolicyList'||action==='partnerInboxPreferences'){}
+ else if(action==='partnerPoints'||action==='partnerPolicyList'||action==='partnerInboxPreferences'||action==='approvalList'){}
+ else if(action==='approvalRead')keys.push('taskId');
  else if(action==='partnerDeliveryPreferences'){}
  else if(action==='partnerDeliveryConfigure')keys.push('deliveryPreferences');
  else if(action==='partnerPushStatus')keys.push('pushAfter','pushSince');

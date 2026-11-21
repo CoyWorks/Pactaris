@@ -1,5 +1,5 @@
 import {createCipheriv,createDecipheriv,randomBytes,createHash} from 'node:crypto';
-import {mkdir,writeFile,readFile,rm,rename} from 'node:fs/promises';
+import {mkdir,writeFile,readFile,rm,link} from 'node:fs/promises';
 import {join} from 'node:path';
 
 /** Completion proof is intimate content. It is stored only on the instance's own disk,
@@ -81,22 +81,34 @@ export class ProofStore{
  }
  private dir(householdId:string){if(!uuidLike(householdId))throw new ProofError('missing');return join(this.root,householdId);}
  private path(householdId:string,proofId:string){if(!uuidLike(proofId))throw new ProofError('missing');return join(this.dir(householdId),proofId);}
- /** Validate, strip metadata, encrypt and write. Returns the stored size and a sha256 of the clean image. */
- async put(householdId:string,proofId:string,declaredType:string,bytes:Buffer):Promise<{size:number;sha256:string}>{
+ /** Validate and strip metadata without touching the disk. */
+ prepare(declaredType:string,bytes:Buffer):{type:ProofType;clean:Buffer;size:number;sha256:string}{
   if(bytes.length===0||bytes.length>maxProofBytes)throw new ProofError('size');
   const sniffed=sniffProof(bytes);
   if(!sniffed||sniffed!==declaredType)throw new ProofError('type');
   const clean=stripMetadata(sniffed,bytes);
   if(clean.length===0||clean.length>maxProofBytes)throw new ProofError('size');
+  return {type:sniffed,clean,size:clean.length,sha256:createHash('sha256').update(clean).digest('hex')};
+ }
+ /** Validate, strip metadata, encrypt and write. Returns the stored size and a sha256 of the clean image. */
+ async put(householdId:string,proofId:string,declaredType:string,bytes:Buffer):Promise<{size:number;sha256:string}>{
+  const prepared=this.prepare(declaredType,bytes);
+  await this.write(householdId,proofId,prepared.type,prepared.clean);
+  return {size:prepared.size,sha256:prepared.sha256};
+ }
+ /** Encrypt and write an already prepared image. An existing file is never overwritten: returns false then. */
+ async write(householdId:string,proofId:string,type:ProofType,clean:Buffer):Promise<boolean>{
   // plaintext = type(1 byte index) + image; authenticated as a whole by GCM.
-  const plain=Buffer.concat([Buffer.from([proofTypes.indexOf(sniffed)]),clean]);
+  const plain=Buffer.concat([Buffer.from([proofTypes.indexOf(type)]),clean]);
   const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',this.key,iv);
   const body=Buffer.concat([cipher.update(plain),cipher.final()]),tag=cipher.getAuthTag();
   const file=Buffer.concat([iv,tag,body]);
   const dir=this.dir(householdId);await mkdir(dir,{recursive:true,mode:0o700});
   const target=this.path(householdId,proofId),tmp=target+'.tmp';
-  await writeFile(tmp,file,{mode:0o600});await rename(tmp,target);
-  return {size:clean.length,sha256:createHash('sha256').update(clean).digest('hex')};
+  await rm(tmp,{force:true});await writeFile(tmp,file,{mode:0o600,flag:'wx'});
+  try{await link(tmp,target);return true;}
+  catch(error){if(error&&typeof error==='object'&&'code'in error&&error.code==='EEXIST')return false;throw error;}
+  finally{await rm(tmp,{force:true});}
  }
  /** Decrypt and return the clean image for an already-authorized read. */
  async get(householdId:string,proofId:string):Promise<{type:ProofType;bytes:Buffer}>{

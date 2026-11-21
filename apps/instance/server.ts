@@ -6,12 +6,13 @@ import { database } from '../../packages/db/index.js';
 import { requireSchema } from '../../packages/db/migrations.js';
 import { InstanceHouseholds } from './households.js';
 import { createApp } from './app.js';
+import { loadProofStore } from './proof.js';
 
 try {
   const config = loadConfig(process.env.APP_CONFIG ?? '', process.argv.includes('--development'));
   const db = database(config);
   const probe = async()=>{await db.probe();if(config.delegation)await requireSchema(db.pool,'instance');};
-  const app = createApp(config, probe, undefined, new InstanceHouseholds(db.pool,config));
+  const app = createApp(config, probe, undefined, new InstanceHouseholds(db.pool,config,loadProofStore(config)));
   const tls = config.listen.tls;
   const server = tls ? https.createServer({ key: readFileSync(tls.keyFile), cert: readFileSync(tls.certFile), minVersion: 'TLSv1.2' }, app) : http.createServer(app);
   server.requestTimeout = 15000; server.headersTimeout = 10000;

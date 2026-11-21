@@ -398,6 +398,28 @@ def stage_runtime_secrets(base, cfg, info):
             if not re.fullmatch(r'[a-zA-Z0-9_-]{1,64}', kid):
                 fail('delegation.key_id')
             keys[kid] = copy(source, 'public-' + kid + '.pem')
+        if 'storage' not in cfg:
+            cfg['storage'] = provision_proof_storage(base, directory, info)
+
+def provision_proof_storage(base, directory, info):
+    # Completion-proof photos: one encryption key per instance, generated once and kept across
+    # updates, and a service-owned folder under data/. Proof files are not part of any backup.
+    key = directory / 'proof.key'
+    if key.is_symlink():
+        fail('secret_symlink')
+    if not key.exists():
+        fd = os.open(key, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, 'O_NOFOLLOW', 0), 0o640)
+        with os.fdopen(fd, 'w') as out:
+            out.write(secrets.token_hex(32) + '\n')
+    os.chmod(key, 0o640)
+    shutil.chown(key, 0, info.pw_gid)
+    root = base / 'data' / 'proofs'
+    if root.is_symlink():
+        fail('storage_symlink')
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    root.chmod(0o700)
+    shutil.chown(root, info.pw_uid, info.pw_gid)
+    return {'root': str(root), 'keyFile': str(key)}
 
 def deployment_directory(path):
     # Bootstrap intentionally uses umask 077. Service ancestors still need traversal.
