@@ -5,7 +5,7 @@ import type {ProofStore} from './proof-store.js';
 
 /** Retention on this instance (docs/MAINTENANCE.md). Runs once a day from the worker and on request
  *  from the operator console through the gateway. Nothing here reads household content. */
-export const retentionDays={receipts:90,notices:90} as const;
+export const retentionDays={receipts:90,notices:90,closedHouseholds:30} as const;
 const dayMs=24*60*60*1000,settleMs=60*60*1000;
 export type MaintenanceTrigger='schedule'|'operator';
 export class InstanceMaintenance{
@@ -33,8 +33,27 @@ export class InstanceMaintenance{
   }
   return {orphanFiles:orphans};
  }
+ /** Closes dynamics without active members, then deletes every dynamic that has been closed for
+  *  30 days: all its rows on this instance and its proof folder. Each dynamic is purged on its own. */
+ async householdPurge(trigger:MaintenanceTrigger,dry:boolean):Promise<Record<string,number>>{
+  const grace=retentionDays.closedHouseholds;
+  const candidates=(await this.pool.query('SELECT pactaris.purge_candidates($1,$2,$3) AS result',[this.config.instanceId,grace,dry])).rows[0].result as {closedEmpty:number;due:string[]};
+  let purged=0,rows=0,ok=true;
+  if(!dry)for(const householdId of candidates.due){
+   try{
+    const deleted=Number((await this.pool.query('SELECT pactaris.purge_household($1,$2) AS n',[householdId,grace])).rows[0].n);
+    if(deleted<0)continue;
+    purged++;rows+=deleted;
+    await this.store?.deleteHousehold(householdId);
+   }catch{ok=false;}
+  }
+  const details={closedEmpty:candidates.closedEmpty,purgedHouseholds:dry?candidates.due.length:purged,purgedRows:rows};
+  await this.pool.query('SELECT pactaris.record_maintenance($1,$2,$3,$4,$5,$6)',[randomUUID(),'householdPurge',trigger,dry,ok,details]);
+  if(!ok)throw Error('maintenance.purge');
+  return details;
+ }
  async run(trigger:MaintenanceTrigger,dry:boolean){
-  return {...await this.retention(trigger,dry),...await this.proofFiles(trigger,dry)};
+  return {...await this.retention(trigger,dry),...await this.proofFiles(trigger,dry),...await this.householdPurge(trigger,dry)};
  }
  /** Worker step: at most once a day. */
  async scheduled():Promise<boolean>{
@@ -43,7 +62,9 @@ export class InstanceMaintenance{
   if(last&&Date.now()-Date.parse(last.startedAt)<dayMs)return false;
   await this.run('schedule',false);return true;
  }
- async status():Promise<{runs:unknown[];tables:unknown[];database:number;proofs:unknown}>{
-  return (await this.pool.query('SELECT pactaris.maintenance_status() AS status')).rows[0].status;
+ async status():Promise<{runs:unknown[];tables:unknown[];database:number;proofs:unknown;households?:unknown}>{
+  const status=(await this.pool.query('SELECT pactaris.maintenance_status() AS status')).rows[0].status;
+  const lifecycle=await this.pool.query('SELECT pactaris.household_lifecycle($1,$2) AS result',[this.config.instanceId,retentionDays.closedHouseholds]).then(r=>r.rows[0].result).catch(()=>undefined);
+  return {...status,...(lifecycle?{households:lifecycle}:{})};
  }
 }

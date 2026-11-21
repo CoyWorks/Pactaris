@@ -70,6 +70,8 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0024_operator_grants'))await connection.query(`GRANT DELETE ON pactaris.abuse_reports,pactaris.report_notes TO ${role}`);
       if(entries.some(m=>m.id==='0025_maintenance'))await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.maintenance_runs TO ${role}`);
       if(entries.some(m=>m.id==='0025_maintenance'))await connection.query(`GRANT DELETE ON pactaris.membership_operations TO ${role}`);
+      // Placements of purged dynamics are retired, never deleted: other routing records refer to them.
+      if(entries.some(m=>m.id==='0025_maintenance'))await connection.query(`GRANT UPDATE(status) ON pactaris.placements TO ${role}`);
       if(entries.some(m=>m.id==='0018_revocation_journal'))await connection.query(`GRANT SELECT,INSERT ON pactaris.revocation_journal TO ${role}`);
     } else {
       await connection.query(`GRANT SELECT ON pactaris.households,pactaris.memberships,pactaris.household_entitlements TO ${role}`);
@@ -106,6 +108,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0034_account_erasure'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.account_erasure(uuid,uuid,text) TO ${role}`);
       if(entries.some(m=>m.id==='0043_habit_streaks'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.habit_streaks(uuid,uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0042_reward_shop'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.shop_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);
+      if(entries.some(m=>m.id==='0047_household_purge'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.purge_household(uuid,integer),pactaris.purge_candidates(uuid,integer,boolean),pactaris.household_lifecycle(uuid,integer) TO ${role}`);
       if(entries.some(m=>m.id==='0046_retention'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.run_retention(uuid,uuid,text,boolean,integer,integer),pactaris.proof_files_expected(uuid,uuid[]),pactaris.record_maintenance(uuid,text,text,boolean,boolean,jsonb),pactaris.maintenance_status() TO ${role}`);
       if(entries.some(m=>m.id==='0044_task_proofs'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.proof_command(uuid,uuid,uuid,uuid,text,jsonb,text),pactaris.proof_sweep(uuid),pactaris.proof_mark_purged(uuid,uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0041_progress_board'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.authority_progress_command(uuid,uuid,uuid,uuid,text,jsonb,text) TO ${role}`);

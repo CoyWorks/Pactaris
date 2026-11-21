@@ -15,6 +15,13 @@ const iso=(value:unknown)=>value instanceof Date?value.toISOString():value===nul
 const counts=(value:unknown):value is Record<string,number>=>!!value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length<=40&&
  Object.entries(value).every(([k,v])=>/^[a-zA-Z]{1,40}$/.test(k)&&Number.isInteger(v)&&(v as number)>=0);
 
+/** Closed dynamics waiting for their purge, recently purged ones and the count without an owner. */
+function households(value:unknown){
+ const v=value as Record<string,unknown>|undefined,uuidLike=(x:unknown):x is string=>typeof x==='string'&&/^[0-9a-f-]{36}$/i.test(x);
+ const waiting=Array.isArray(v?.waiting)?v.waiting.slice(0,50).filter((w:Record<string,unknown>)=>w&&uuidLike(w.id)):[];
+ return {waiting:waiting.map((w:Record<string,unknown>)=>({id:w.id as string,closedAt:iso(w.closedAt),purgeAfter:iso(w.purgeAfter)})),
+  purged:Array.isArray(v?.purged)?v.purged.slice(0,200).filter(uuidLike):[],ownerless:Number(v?.ownerless)||0};
+}
 export class GatewayMaintenance{
  constructor(private pool:pg.Pool,private signer?:DelegationSigner){}
  /** Expired rate-limit counters, finished membership operations after 90 days, and closed reports
@@ -42,11 +49,25 @@ export class GatewayMaintenance{
    return result;
   }catch(error){await db.query('ROLLBACK');throw error;}finally{db.release();}
  }
- /** Worker step: at most once a day. */
+ /** Worker step: at most once a day. Also retires the placements of dynamics the instances purged. */
  async scheduled():Promise<boolean>{
   const last=(await this.pool.query(`SELECT started_at FROM pactaris.maintenance_runs WHERE task='gateway' AND trigger='schedule' AND NOT dry ORDER BY started_at DESC LIMIT 1`)).rows[0];
   if(last&&Date.now()-new Date(last.started_at).getTime()<dayMs)return false;
-  await this.gateway('schedule',false);return true;
+  await this.gateway('schedule',false);
+  if(this.signer)await this.retirePurged();
+  return true;
+ }
+ /** A purged dynamic keeps its placement row (other routing records refer to it) but is disabled,
+  *  so it no longer counts or routes. Only placements on the instance that reported the purge change. */
+ async retirePurged():Promise<number>{
+  let retired=0;
+  for(const instance of (await this.instances()).instances){
+   const purged='households' in instance&&instance.households?instance.households.purged:[];
+   if(!purged.length)continue;
+   const r=await this.pool.query(`UPDATE pactaris.placements SET status='disabled' WHERE instance_id=$1 AND household_id=ANY($2::uuid[]) AND status='active'`,[instance.instanceId,purged]);
+   retired+=r.rowCount??0;
+  }
+  return retired;
  }
  async status(){
   const [runs,tables,size]=await Promise.all([
@@ -79,10 +100,11 @@ export class GatewayMaintenance{
     const runs=Array.isArray(status?.runs)?status.runs.slice(0,20).filter((r:Record<string,unknown>)=>r&&typeof r.task==='string'&&counts(r.details)):[];
     const tables=Array.isArray(status?.tables)?status.tables.slice(0,15).filter((t:Record<string,unknown>)=>t&&typeof t.name==='string'&&Number.isFinite(Number(t.bytes))):[];
     const proofs=status?.proofs as Record<string,unknown>|undefined;
+    const lifecycle=households(status?.households);
     out.push({instanceId:instance.instanceId,reachable:true,database:Number(status?.database)||0,
      runs:runs.map((r:Record<string,unknown>)=>({task:r.task as string,trigger:r.trigger as string,dry:r.dry===true,startedAt:iso(r.startedAt),finishedAt:iso(r.finishedAt),ok:r.ok===true,details:r.details as Record<string,number>})),
      tables:tables.map((t:Record<string,unknown>)=>({name:String(t.name),bytes:Number(t.bytes),rows:Number(t.rows)||0})),
-     proofs:{files:Number(proofs?.files)||0,bytes:Number(proofs?.bytes)||0}});
+     proofs:{files:Number(proofs?.files)||0,bytes:Number(proofs?.bytes)||0},households:lifecycle});
    }catch{out.push({instanceId:instance.instanceId,reachable:false});}
   }
   return {instances:out};
@@ -91,7 +113,10 @@ export class GatewayMaintenance{
   const [instance]=await this.endpoints(instanceId);if(!instance)return undefined;
   const result=await this.call(instance,'maintenanceRun',{dry});
   if(!counts(result.counts))throw Error('maintenance.response');
-  if(!dry)await this.pool.query("INSERT INTO pactaris.operator_events(operator_account_id,action,target_id) VALUES($1,'maintenance.run',$2)",[operatorId,instanceId]);
+  if(!dry){
+   await this.pool.query("INSERT INTO pactaris.operator_events(operator_account_id,action,target_id) VALUES($1,'maintenance.run',$2)",[operatorId,instanceId]);
+   await this.retirePurged();
+  }
   return result.counts;
  }
 }

@@ -22,7 +22,7 @@ const onboarding=new OnboardingService(new PgOnboardingStore(db.pool,config.onbo
 const invitationSigner=new DelegationSigner(config),invitations=new GatewayInvitations(db.pool,store,new PrivateHouseholdClient(invitationSigner),new PrivateInvitationClient(invitationSigner),loadInvitationMail(config,db.pool));
 const members=new GatewayMembers(db.pool,store,new PrivateHouseholdClient(invitationSigner),new PrivateMemberClient(invitationSigner));
 const journal=new RevocationJournalSync(db.pool,invitationSigner),deletions=new AccountDeletion(db.pool,invitationSigner);
-const maintenance=new GatewayMaintenance(db.pool);
+const maintenance=new GatewayMaintenance(db.pool,invitationSigner);
 const partner=new GatewayPartner(store,new PrivateHouseholdClient(invitationSigner),new PrivatePartnerClient(invitationSigner));
 async function tick(){
   if(stopped)return;let state='ready';
