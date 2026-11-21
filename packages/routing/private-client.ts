@@ -367,12 +367,23 @@ export class PrivatePartnerClient{
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
    if(response.status===403||response.status===404)throw new PartnerError('denied');if(response.status===400)throw new PartnerError('invalid');if(response.status===409){const code=(response.data as {code?:string})?.code;throw new PartnerError(code==='partner_paused'?'paused':code==='partner_capacity'?'capacity':'conflict');}
    const r=response.data as import('../auth/partner.js').PartnerResult;
-   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['partnerInbox','partnerInboxPreferences','partnerDeliveryPreferences','partnerPushStatus','partnerPoints','partnerSeriesList','partnerPolicyList','partnerOptions','partnerRead','partnerList'].includes(action)?'listed':'applied'))throw Error('routing.response');
+   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['partnerInbox','partnerInboxPreferences','partnerDeliveryPreferences','partnerPushStatus','partnerPoints','partnerSeriesList','partnerPolicyList','partnerOptions','partnerRead','partnerList','approvalList','approvalRead'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/partner.js').PartnerResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
    const summary=(s:import('../auth/partner.js').PartnerSummary)=>{
     if(!s||!uuid(s.taskId)||!uuid(s.creatorId)||!uuid(s.assigneeId)||s.creatorId===s.assigneeId||!documentVersion(s.version)||!partnerStates.includes(s.state)||!documentText(s.title,120)||!documentText(s.description,500,true,true)||!documentText(s.counterpart,80,true)||!['low','normal','high'].includes(s.priority)||(s.dueAt!==null&&!utcInstant(s.dueAt))||!['creator','assignee'].includes(s.role)||s.role!==(s.creatorId===input.membershipId?'creator':s.assigneeId===input.membershipId?'assignee':undefined))throw Error('routing.response');
     if(s.availableAt!==undefined&&s.availableAt!==null&&!utcInstant(s.availableAt))throw Error('routing.response');
     return {availableAt:s.availableAt,taskId:s.taskId,version:s.version,state:s.state,creatorId:s.creatorId,assigneeId:s.assigneeId,role:s.role,counterpart:s.counterpart,title:s.title,description:s.description,priority:s.priority,dueAt:s.dueAt,...(Number.isInteger(s.rewardPoints)&&s.rewardPoints!>=1&&s.rewardPoints!<=10000?{rewardPoints:s.rewardPoints}:{})};
+   };
+   const stamp=(v:unknown):v is string=>typeof v==='string'&&v.length<=40&&Number.isFinite(Date.parse(v));
+   const approvers=(list:unknown)=>{
+    if(!Array.isArray(list)||list.length<1||list.length>25)throw Error('routing.response');
+    return list.map((a:import('../auth/partner.js').TaskApprover)=>{if(!a||!uuid(a.membershipId)||!documentText(a.name,80,true)||![null,'approved','changes'].includes(a.decision)||(a.decidedAt!==null&&!stamp(a.decidedAt))||(a.decision===null)!==(a.decidedAt===null))throw Error('routing.response');
+     return {membershipId:a.membershipId,name:a.name,decision:a.decision,decidedAt:a.decidedAt===null?null:new Date(a.decidedAt).toISOString()};});
+   };
+   const proofState=(p:import('../auth/partner.js').TaskProofState|null|undefined)=>{
+    if(p===null)return null;
+    if(!p||!uuid(p.proofId)||!['image/jpeg','image/png','image/webp'].includes(p.type)||!['stored','viewed','expired','removed'].includes(p.state)||typeof p.bound!=='boolean'||typeof p.available!=='boolean'||typeof p.consumes!=='boolean'||!stamp(p.expiresAt))throw Error('routing.response');
+    return {proofId:p.proofId,type:p.type,state:p.state,bound:p.bound,available:p.available,consumes:p.consumes,expiresAt:new Date(p.expiresAt).toISOString()};
    };
    if(r.scheduling!==undefined){if(typeof r.scheduling!=='boolean')throw Error('routing.response');out.scheduling=r.scheduling;}
    if(r.seriesId!==undefined){if(!uuid(r.seriesId))throw Error('routing.response');out.seriesId=r.seriesId;}
@@ -419,10 +430,21 @@ export class PrivatePartnerClient{
    }
    if(action==='partnerRead'){
     const s=r.task;if(!s||!['offer','direct','explicit'].includes(s.assignmentMode)||(s.policyVersion!==null&&!documentVersion(s.policyVersion))||(s.assignmentMode==='offer')!==(s.policyVersion===null)||!uuid(s.agreementId)||!documentVersion(s.agreementVersion)||!documentText(s.agreementLabel,80)||!documentVersion(s.epoch)||!snapshot(s.safetyVersion)||typeof s.eligible!=='boolean'||!Array.isArray(s.events)||s.events.length>10||(s.nextEventCursor!==null&&!documentVersion(s.nextEventCursor)))throw Error('routing.response');
-    const events=s.events.map(e=>{if(!documentVersion(e.version)||!(isPartnerAction(e.action)||e.action==='membershipEnded')||!uuid(e.actorId)||![s.creatorId,s.assigneeId].includes(e.actorId)||!documentText(e.note,500,true,true)||!Number.isFinite(Date.parse(e.at)))throw Error('routing.response');return {version:e.version,action:e.action,actorId:e.actorId,note:e.note,at:e.at};});
+    // Approvers other than the creator may appear on the history (their approval, or the decision that closed a round).
+    const events=s.events.map(e=>{if(!documentVersion(e.version)||!(isPartnerAction(e.action)||e.action==='membershipEnded'||e.action==='partnerApproval')||!uuid(e.actorId)||!documentText(e.note,500,true,true)||!Number.isFinite(Date.parse(e.at)))throw Error('routing.response');return {version:e.version,action:e.action,actorId:e.actorId,note:e.note,at:e.at};});
     const reward=s.sharedReward;
     if(reward!==undefined&&(!reward||!documentText(reward.title,120)||!documentText(reward.description,500,true,true)))throw Error('routing.response');
-    out.task={...summary(s),...(reward?{sharedReward:{title:reward.title,description:reward.description}}:{}),assignmentMode:s.assignmentMode,policyVersion:s.policyVersion,agreementId:s.agreementId,agreementVersion:s.agreementVersion,agreementLabel:s.agreementLabel,epoch:s.epoch,safetyVersion:s.safetyVersion,eligible:s.eligible,events,nextEventCursor:s.nextEventCursor};
+    out.task={...summary(s),...(reward?{sharedReward:{title:reward.title,description:reward.description}}:{}),assignmentMode:s.assignmentMode,policyVersion:s.policyVersion,agreementId:s.agreementId,agreementVersion:s.agreementVersion,agreementLabel:s.agreementLabel,epoch:s.epoch,safetyVersion:s.safetyVersion,eligible:s.eligible,events,nextEventCursor:s.nextEventCursor,...(s.approvals!==undefined?{approvals:approvers(s.approvals)}:{}),...(s.proof!==undefined?{proof:proofState(s.proof)}:{})};
+   }
+   if(action==='approvalList'){
+    if(!Array.isArray(r.approvals)||r.approvals.length>25)throw Error('routing.response');
+    out.approvals=r.approvals.map(a=>{if(!a||!uuid(a.taskId)||!documentVersion(a.version)||!documentText(a.title,120)||!uuid(a.assigneeId)||a.assigneeId===input.membershipId||!documentText(a.assigneeName,80,true)||!documentText(a.creatorName,80,true)||(a.submittedAt!==null&&!stamp(a.submittedAt)))throw Error('routing.response');
+     return {taskId:a.taskId,version:a.version,title:a.title,assigneeId:a.assigneeId,assigneeName:a.assigneeName,creatorName:a.creatorName,submittedAt:a.submittedAt===null?null:new Date(a.submittedAt).toISOString()};});
+   }
+   if(action==='approvalRead'){
+    const a=r.approval;
+    if(!a||a.taskId!==input.taskId||!documentVersion(a.version)||!partnerStates.includes(a.state)||!documentText(a.title,120)||!documentText(a.description,500,true,true)||!['low','normal','high'].includes(a.priority)||(a.dueAt!==null&&!utcInstant(a.dueAt))||!uuid(a.assigneeId)||!uuid(a.creatorId)||a.assigneeId===input.membershipId||!documentText(a.assigneeName,80,true)||!documentText(a.creatorName,80,true)||!documentText(a.note,500,true,true)||!documentVersion(a.epoch)||!snapshot(a.safetyVersion)||typeof a.canDecide!=='boolean')throw Error('routing.response');
+    out.approval={taskId:a.taskId,version:a.version,state:a.state,title:a.title,description:a.description,priority:a.priority,dueAt:a.dueAt,assigneeId:a.assigneeId,assigneeName:a.assigneeName,creatorId:a.creatorId,creatorName:a.creatorName,note:a.note,epoch:a.epoch,safetyVersion:a.safetyVersion,canDecide:a.canDecide,approvals:approvers(a.approvals),proof:proofState(a.proof)};
    }return out;
   }catch(error){if(error instanceof PartnerError)throw error;throw new PartnerError('unavailable');}
  }
