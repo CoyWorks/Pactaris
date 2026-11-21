@@ -5,10 +5,10 @@ import {Icon,Link} from './navigation.js';
 import {Skeleton} from './today-habits.js';
 import {TaskInbox} from './task-inbox.js';
 const kindKeys:Record<Notice['kind'],MessageKey>={permission:'notices.permission',proposal:'notices.proposal',journal:'notices.journal',breach:'notices.breach',
- answered:'notices.answered',invited:'notices.invited',accepted:'notices.accepted',ended:'notices.ended',delegated:'notices.delegated',points:'notices.points',habit:'notices.habit',purchase:'notices.purchase',transfer:'notices.transfer'};
-export type NoticeTarget='exchange'|'authority'|'home'|'shop';
+ answered:'notices.answered',invited:'notices.invited',accepted:'notices.accepted',ended:'notices.ended',delegated:'notices.delegated',points:'notices.points',habit:'notices.habit',purchase:'notices.purchase',transfer:'notices.transfer',approval:'notices.approval'};
+export type NoticeTarget='exchange'|'authority'|'home'|'shop'|'participantTasks';
 const targets:Record<Notice['kind'],NoticeTarget>={permission:'exchange',proposal:'exchange',journal:'exchange',breach:'exchange',answered:'exchange',
- invited:'authority',accepted:'authority',ended:'authority',delegated:'authority',points:'home',habit:'home',purchase:'shop',transfer:'authority'};
+ invited:'authority',accepted:'authority',ended:'authority',delegated:'authority',points:'home',habit:'home',purchase:'shop',transfer:'authority',approval:'participantTasks'};
 /** Notices for this member; refreshed every minute while the page is visible. */
 export function useNotices(householdId:string,reload:number){
  const [data,setData]=useState<ExchangeResult>(),[tick,setTick]=useState(0);

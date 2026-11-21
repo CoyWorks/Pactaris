@@ -14,7 +14,7 @@ export type ExchangeItem={id:string;kind:ExchangeKind;mine:boolean;counterpartId
 /** holder: this person has authority over you; subject: you have authority over this person. */
 export type ExchangePerson={membershipId:string;name:string;holder:boolean;subject:boolean};
 export type AgreementReview={agreementId:string;relationshipLabel:string;intervalMonths:number|null;nextReview:string|null;lastReviewed:string|null;version:string;due:boolean};
-export const noticeKinds=['permission','proposal','journal','breach','answered','invited','accepted','ended','delegated','points','habit','purchase','transfer'] as const;
+export const noticeKinds=['permission','proposal','journal','breach','answered','invited','accepted','ended','delegated','points','habit','purchase','transfer','approval'] as const;
 export type Notice={id:string;kind:typeof noticeKinds[number];resourceId:string;actorName:string|null;read:boolean;createdAt:string};
 export type ExchangeResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';exchangeId?:string|null;
  exchanges?:ExchangeItem[];people?:ExchangePerson[];nextCursor?:string|null;reviews?:AgreementReview[];terms?:Terms;termsVersion?:string;canEdit?:boolean;notices?:Notice[];unread?:number;muted?:Notice['kind'][]};

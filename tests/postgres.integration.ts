@@ -3,6 +3,9 @@ import {personalExport} from '../apps/gateway/personal-export.js';
 import {SmtpSettings} from '../apps/gateway/smtp-settings.js';
 import {listRegistryInstances,listRegistryPlacements} from '../packages/routing/inventory.js';
 import {GatewayPartner} from '../apps/gateway/partner.js';
+import {GatewayProof} from '../apps/gateway/proof.js';
+import {ProofStore} from '../apps/instance/proof-store.js';
+import {sweepProofs} from '../apps/instance/proof.js';
 import {GatewayCatalog} from '../apps/gateway/catalog.js';
 import {GatewayRoutines} from '../apps/gateway/routines.js';
 import {GatewayLibrary} from '../apps/gateway/library.js';
@@ -27,7 +30,7 @@ import { InstanceHouseholds } from '../apps/instance/households.js';
 import { createApp } from '../apps/instance/app.js';
 import { createGatewayApp } from '../apps/gateway/app.js';
 import { DelegationSigner } from '../packages/auth/delegation.js';
-import { PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient,PrivateCatalogClient,PrivatePartnerClient,PrivateExchangeClient,PrivateAuthorityClient } from '../packages/routing/private-client.js';
+import { PrivateProofClient,PrivateHouseholdClient,PrivateCommandClient,PrivateInvitationClient,PrivateMemberClient,PrivateRelationshipClient,PrivateConsentClient,PrivateWorkspaceClient,PrivateLibraryClient,PrivateRoutineClient,PrivateCatalogClient,PrivatePartnerClient,PrivateExchangeClient,PrivateAuthorityClient } from '../packages/routing/private-client.js';
 import { parseGatewayConfig,parseConfig } from '../packages/config/index.js';
 import { registerInstance } from '../packages/routing/registry.js';
 import { RevocationJournalSync } from '../apps/gateway/revocation-journal.js';
@@ -325,10 +328,11 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const privateKey=join(folder,'delegation.key'),publicKey=join(folder,'delegation.pem');await writeFile(privateKey,await exportPKCS8(keys.privateKey),{mode:0o600});await writeFile(publicKey,await exportSPKI(keys.publicKey));config.delegation.privateKeyFile=privateKey;
   const certificate=join(folder,'backend.crt'),keyFile=join(folder,'backend.key');
   execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-days','1','-keyout',keyFile,'-out',certificate,'-subj','/CN=backend.fixture.invalid','-addext','subjectAltName=DNS:backend.fixture.invalid'],{stdio:'ignore'});
-  const signer=new DelegationSigner(config),services:InstanceHouseholds[]=[];
+  const signer=new DelegationSigner(config),services:InstanceHouseholds[]=[],proofStores:ProofStore[]=[];
   for(const [i,component] of [a,b].entries()){
    const cfg=parseConfig(JSON.parse(await readFile('config/instance.example.json','utf8')));cfg.instanceId=ids[i]!;cfg.delegation={issuer:config.publicOrigin,publicKeys:{'gateway-v1':publicKey}};
-   const service=new InstanceHouseholds(component.pool,cfg);services.push(service);
+   const proofStore=new ProofStore(join(folder,'proofs-'+i),randomBytes(32).toString('hex'));proofStores.push(proofStore);
+   const service=new InstanceHouseholds(component.pool,cfg,proofStore);services.push(service);
    const app=createApp(cfg,()=>requireSchema(component.pool,'instance'),undefined,service);
    const server=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},app);servers.push(server);
    await new Promise<void>((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
@@ -376,7 +380,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const routineService=new GatewayRoutines(store,client,new PrivateRoutineClient(signer));
   const catalogService=new GatewayCatalog(store,client,new PrivateCatalogClient(signer));
   const partnerService=new GatewayPartner(store,client,new PrivatePartnerClient(signer));
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService,partnerService,undefined,undefined,undefined,undefined,undefined,undefined,undefined,exchangeService,authorityService);
+  const proofService=new GatewayProof(store,client,new PrivateProofClient(signer));
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService,partnerService,undefined,undefined,undefined,undefined,undefined,undefined,undefined,exchangeService,authorityService,proofService);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -1903,6 +1908,51 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await au(A,'delegationSet',{linkId,delegateId:C.member,version:'0',tasks:true,approve:false,outcomes:false,endsAt:null})).status,200);
      const delegated=(await view(C)).powers.find((x:any)=>x.membershipId===D.member);assert.deepEqual([delegated.tasks,delegated.outcomes,delegated.manage],[true,false,false]);
      assert.equal((await au(C,'pointsAdjust',{subjectId:D.member,points:1,reason:''})).status,404);
+     // Approval by several people: C also receives the approve right over D, so D's work needs A and C.
+     assert.equal((await au(A,'delegationSet',{linkId,delegateId:C.member,version:'1',tasks:true,approve:true,outcomes:false,endsAt:null})).status,200);
+     const reviewed=await direct();assert.equal(reviewed.status,200,JSON.stringify(reviewed.data));const rid=reviewed.data.taskId as string;
+     const raw=(path:string,p:Person,body:Buffer,headers:Record<string,string>={})=>new Promise<{status:number;type:string;data:Buffer}>((resolve,reject)=>{
+      const request=https.request({hostname:'127.0.0.1',port:gatewayAddress.port,path,method:'POST',servername:'backend.fixture.invalid',ca:readFileSyncFixture,
+       headers:{host:'pactaris.app',cookie:'__Host-pactaris-session='+p.session,origin:'https://pactaris.app','x-csrf-token':'registration-csrf','Content-Length':String(body.length),...headers}},r=>{
+       const chunks:Buffer[]=[];r.on('data',(c:Buffer)=>chunks.push(c));r.on('error',reject);r.on('end',()=>resolve({status:r.statusCode!,type:String(r.headers['content-type']??''),data:Buffer.concat(chunks)}));
+      });request.on('error',reject);request.end(body);
+     });
+     const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64');
+     const upload=(p:Person,bytes:Buffer,type='image/png',operationId=randomUUID())=>raw(base+'/participant-tasks/'+rid+'/proof',p,bytes,{'Content-Type':type,'x-operation-id':operationId});
+     assert.equal((await upload(A,png)).status,404);
+     assert.equal((await upload(D,png,'image/jpeg')).status,400);
+     assert.equal((await upload(D,Buffer.from('not an image'))).status,400);
+     assert.equal((await upload(D,png,'image/gif')).status,400);
+     const proofOperation=randomUUID(),stored=await upload(D,png,'image/png',proofOperation);assert.equal(stored.status,200,stored.data.toString());
+     assert.equal(JSON.parse(stored.data.toString()).proofId,proofOperation);
+     assert.equal((await upload(D,png,'image/png',proofOperation)).status,200);
+     assert.equal((await read(D,rid)).proof.proofId,proofOperation);assert.equal((await read(A,rid)).proof,null);
+     assert.equal((await move(D,'partnerStart',rid)).status,200);
+     assert.equal((await move(D,'partnerSubmit',rid,{note:'Done, photo attached'})).status,200);
+     assert.deepEqual((await read(A,rid)).approvals.map((x:any)=>x.membershipId+':'+x.decision).sort(),[A.member+':null',C.member+':null'].sort());
+     const approvals=await post(C,'approvalList');assert.equal(approvals.status,200,JSON.stringify(approvals.data));assert.deepEqual(approvals.data.approvals.map((x:any)=>x.taskId),[rid]);
+     assert.equal((await post(B,'approvalRead',{taskId:rid})).status,404);
+     const review=async()=>{const r=await post(C,'approvalRead',{taskId:rid});assert.equal(r.status,200,JSON.stringify(r.data));return r.data.approval;};
+     const first=await review();assert.equal(first.note,'Done, photo attached');assert.equal(first.canDecide,true);assert.equal(first.proof.consumes,true);
+     assert.ok((await api(base+'/exchange/notices','GET',undefined,C.session)).data.notices.some((n:any)=>n.kind==='approval'));
+     // Each approver sees the photo once; the view counts after the image was delivered.
+     const viewProof=(p:Person)=>raw(base+'/proofs/'+proofOperation+'/view',p,Buffer.alloc(0));
+     const until=async(check:()=>Promise<boolean>)=>{for(let n=0;n<100;n++){if(await check())return;await new Promise(r=>setTimeout(r,50));}assert.fail('timed out');};
+     assert.equal((await viewProof(B)).status,404);
+     const seen=await viewProof(C);assert.equal(seen.status,200);assert.equal(seen.type,'image/png');assert.ok(seen.data.equals(png));
+     await until(async()=>(await review()).proof.consumes===false);
+     assert.equal((await viewProof(C)).status,410);
+     const decision=await review();
+     assert.equal((await post(C,'partnerApprove',{taskId:rid,version:decision.version,epoch:decision.epoch,safetyVersion:decision.safetyVersion})).status,200);
+     assert.equal((await read(A,rid)).state,'submitted');assert.equal((await review()).canDecide,false);
+     assert.equal((await viewProof(A)).status,200);
+     await until(async()=>(await db.owner.query('SELECT state FROM pactaris.task_proofs WHERE id=$1',[proofOperation])).rows[0].state==='viewed');
+     assert.equal((await move(A,'partnerApprove',rid)).status,200);
+     const done=await read(A,rid);assert.equal(done.state,'done');
+     assert.ok(done.events.some((e:any)=>e.action==='partnerApproval'&&e.actorId===C.member));
+     assert.ok(await sweepProofs(db.pool,place.instanceId,proofStores[ids.indexOf(place.instanceId as typeof ids[number])]!)>=1);
+     assert.equal((await db.owner.query('SELECT file_present FROM pactaris.task_proofs WHERE id=$1',[proofOperation])).rows[0].file_present,false);
+     for(const table of ['task_approvals','approval_receipts','task_proof_views'])await assert.rejects(db.pool.query('SELECT * FROM pactaris.'+table),{code:'42501'});
      // Ranking: only for subs; the owner or the sub's own Dom sets it.
      assert.equal((await au(A,'rankSet',{subjectId:D.member,rank:2})).status,200);
      assert.equal((await au(C,'rankSet',{subjectId:D.member,rank:1})).status,404);

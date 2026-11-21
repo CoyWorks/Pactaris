@@ -448,7 +448,7 @@ export class PrivatePartnerClient{
    };
    const stamp=(v:unknown):v is string=>typeof v==='string'&&v.length<=40&&Number.isFinite(Date.parse(v));
    const approvers=(list:unknown)=>{
-    if(!Array.isArray(list)||list.length<1||list.length>25)throw Error('routing.response');
+    if(!Array.isArray(list)||list.length>25)throw Error('routing.response');
     return list.map((a:import('../auth/partner.js').TaskApprover)=>{if(!a||!uuid(a.membershipId)||!documentText(a.name,80,true)||![null,'approved','changes'].includes(a.decision)||(a.decidedAt!==null&&!stamp(a.decidedAt))||(a.decision===null)!==(a.decidedAt===null))throw Error('routing.response');
      return {membershipId:a.membershipId,name:a.name,decision:a.decision,decidedAt:a.decidedAt===null?null:new Date(a.decidedAt).toISOString()};});
    };

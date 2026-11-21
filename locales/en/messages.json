@@ -1149,5 +1149,6 @@
   "authority.transfers": "Primary Dom changes",
   "authority.transferTitle": "{to} as primary Dom of {sub}",
   "authority.transferWaiting": "Waiting for: {names}",
-  "notices.transfer": "A primary Dom change needs your attention"
+  "notices.transfer": "A primary Dom change needs your attention",
+  "notices.approval": "A task is waiting for your approval"
 }
