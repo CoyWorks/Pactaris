@@ -1,10 +1,13 @@
 import express from 'express';
 import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
-export function headers(app:express.Express) {
+/** `hsts`: send Strict-Transport-Security; only for an HTTPS public origin. `blob:` images are the
+ *  one-time proof photos, decoded in the browser from an authorized response. */
+export function headers(app:express.Express,hsts=false) {
   app.disable('x-powered-by');app.disable('etag');
   app.use((_req,res,next)=>{res.set({'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
-    'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"});next();});
+    'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+    ...(hsts?{'Strict-Transport-Security':'max-age=31536000'}:{})});next();});
 }
 export function frontend(app:express.Express,webRoot:string,paths:string[],head:string) {
   app.use('/assets',express.static(join(webRoot,'assets'),{dotfiles:'deny',fallthrough:false,immutable:true,maxAge:'1y',setHeaders:res=>res.setHeader('Cache-Control','public, max-age=31536000, immutable')}));

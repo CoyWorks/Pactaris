@@ -1,3 +1,4 @@
+import {containsDisguisedText} from './text.js';
 import {uuid} from './delegation.js';
 import {documentText,documentVersion} from './library.js';
 import type {AuthorityAction} from './authority-actions.js';
@@ -48,6 +49,7 @@ export function validShopFields(f:unknown):f is ShopFields{
   Number.isInteger(f.points)&&(f.kind==='consequence'?f.points===0:(f.points as number)>=0&&(f.points as number)<=10000);
 }
 export function authorityInput(action:AuthorityAction,value:unknown):Record<string,unknown>&{operationId:string}{
+ if(containsDisguisedText(value))throw new AuthorityError('invalid');
  if(!record(value)||!uuid(value.operationId))throw new AuthorityError('invalid');
  if(Object.keys(value).sort().join(',')!==['operationId',...shapes[action]].sort().join(','))throw new AuthorityError('invalid');
  const v=value,bad=()=>{throw new AuthorityError('invalid');};

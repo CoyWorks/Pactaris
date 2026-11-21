@@ -1,5 +1,5 @@
 import {RewardRedemptions} from './reward-redemptions.js';
-import {Hint,Layer} from './navigation.js';
+import {Hint,Layer,useFleetingNotice} from './navigation.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import type {CatalogKind,CatalogFields,CatalogDetail,CatalogResult} from '../../../packages/auth/catalog.js';
@@ -9,6 +9,7 @@ const failure=(e:unknown):MessageKey=>['catalog.invalid','catalog.denied','catal
 type Request={action:string;body:Record<string,unknown>};
 export function CatalogPanel({householdId,session,language,format}:{householdId:string;session:{csrfToken:string};language:string;format:string}){
  const t=createTranslator(language),[filter,setFilter]=useState('current'),[cursor,setCursor]=useState<string>(),[listing,setListing]=useState<CatalogResult>(),[detail,setDetail]=useState<CatalogDetail>(),[editor,setEditor]=useState<{fields:CatalogFields;itemId?:string;version?:string}>(),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[draft,setDraft]=useState<Request>(),[refresh,setRefresh]=useState(0);
+ useFleetingNotice(notice,()=>setNotice(undefined));
  const writing=useRef(false),base='/api/households/'+householdId+'/catalog/',number=new Intl.NumberFormat(format);
  const price=(points:number|null,kind:CatalogKind='reward')=>kind==='consequence'?t('catalog.noPointEffect'):
   points===null?t('catalog.noPrice'):t(kind==='grant'?'catalog.pointCredit':'catalog.pointCost',{count:number.format(points)});
@@ -58,6 +59,6 @@ export function CatalogPanel({householdId,session,language,format}:{householdId:
   </article></Layer>}
   <RewardRedemptions base={base} householdId={householdId} csrfToken={session.csrfToken} language={language} format={format}
    detail={detail} refresh={refresh} blocked={blocked} onAction={(action,body)=>void change(action,body)}/>
-  {listing?.nextCursor&&<button type="button" disabled={blocked} onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" disabled={blocked} onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}<button type="button" disabled={busy} onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>
+  {listing?.nextCursor&&<button type="button" disabled={blocked} onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" disabled={blocked} onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}<button type="button" disabled={busy} onClick={()=>setRefresh(v=>v+1)}>{t('common.refresh')}</button>
  </section>;
 }

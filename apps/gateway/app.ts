@@ -1,3 +1,4 @@
+import {disguisedText} from '../../packages/auth/text.js';
 import { readDeploymentInfo } from '../../packages/http/deployment-info.js';
 import {pushEndpoint,pushSubscription,type WebPushDevices} from './web-push.js';
 import type {personalExport} from './personal-export.js';
@@ -61,7 +62,7 @@ type OperatorInventory={
   placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
 };
 export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'|'shop'>,proof?:Pick<GatewayProof,'upload'|'view'|'remove'>) {
-  const app=express();headers(app);app.set('trust proxy',config.trustedProxyAddresses);
+  const app=express();headers(app,new URL(config.publicOrigin).protocol==='https:');app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
       const t=createTranslator(config.locale.language),escape=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
@@ -72,9 +73,12 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
   app.get('/health/live',(_req,res)=>{res.json({status:'alive'});});
   app.get('/health/ready',async(_req,res)=>{try{await store.probe();res.json({status:'ready'});}catch{res.status(503).json({status:'unavailable',messageKey:'errors.unavailable'});}});
   app.use((req,res,next)=>{if(req.get('host')!==new URL(config.publicOrigin).host){res.status(400).json({code:'invalid_host',messageKey:'errors.request'});return;}next();});
-  app.get('/api/status',async(_req,res)=>{
+  app.get('/api/status',async(req,res)=>{
     let readiness='unavailable';try{await store.probe();readiness='ready';}catch{}
-    res.json({component:'gateway',version:manifest.version,readiness,authentication:'oidc',locale:config.locale,deployment:await readDeploymentInfo()});
+    // The exact deployed revision is shown to signed-in people only; anonymous callers get the version.
+    const id=cookie(req,SESSION);let signedIn=false;
+    if(id)try{signedIn=!!await store.session(id,config.session.idleSeconds,config.session.requireVerifiedEmail);}catch{}
+    res.json({component:'gateway',version:manifest.version,readiness,authentication:'oidc',locale:config.locale,deployment:signedIn?await readDeploymentInfo():null});
   });
   app.get(['/auth/login','/auth/operator','/auth/reauth'],async(req,res)=>{
     if(req.path==='/auth/operator'&&!config.operatorSubjects.length){
@@ -373,7 +377,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     const session=await authenticate(req,res);if(!session)return;
     if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
     const input=req.body;
-    if(!input||Object.keys(input).sort().join(',')!=='name,operationId'||!uuid(input.operationId)||typeof input.name!=='string'||!input.name.trim()||input.name!==input.name.trim()||[...input.name].length>120||/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(input.name)){
+    if(!input||Object.keys(input).sort().join(',')!=='name,operationId'||!uuid(input.operationId)||typeof input.name!=='string'||!input.name.trim()||input.name!==input.name.trim()||[...input.name].length>120||(/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(input.name)||disguisedText(input.name))){
       res.status(400).json({code:'request_denied',messageKey:'errors.request'});return;
     }
     if(!onboarding){onboardingFailure(res,undefined);return;}
@@ -475,7 +479,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     if(!uuid(req.params.householdId)||!['alias','remove','offer','accept','decline','cancel'].includes(action)||!input||Object.keys(input).sort().join(',')!==expected||
       !uuid(input.operationId)||((action==='remove'||action==='offer')&&!uuid(input.targetMembershipId))||
       (['accept','decline','cancel'].includes(action)&&!uuid(input.offerId))||
-      (action==='alias'&&(typeof input.name!=='string'||[...input.name].length>80||input.name!==input.name.trim()||/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(input.name)))){memberFailure(res,new MemberError('invalid'));return;}
+      (action==='alias'&&(typeof input.name!=='string'||[...input.name].length>80||input.name!==input.name.trim()||(/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(input.name)||disguisedText(input.name))))){memberFailure(res,new MemberError('invalid'));return;}
     if(!await store.throttle('member:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
     try{
      if(!members)throw new MemberError('unavailable');

@@ -11,7 +11,7 @@ import {SafetyProvider} from './consent.js';
 import {Relationships} from './relationships.js';
 import {InvitationManager} from './invitations.js';
 import {MemberAdministration} from './members.js';
-import {Hint,Icon,Layer,Link,Sheet,navigate,useLocation,type IconName} from './navigation.js';
+import {Hint,Icon,Layer,Link,Sheet,navigate,useLocation,type IconName,useFleetingNotice} from './navigation.js';
 import {QuickAdd,type QuickKind} from './quick-add.js';
 import {Skeleton,TodayCheckins,TodayHabits} from './today-habits.js';
 import {SwipeRow,UndoToast,useUndoable} from './swipe.js';
@@ -53,6 +53,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
  const refreshAll=()=>{setExchangeReload(v=>v+1);setAuthorityReload(v=>v+1);setNoticeReload(v=>v+1);setRefresh(v=>v+1);};
  const [adding,setAdding]=useState<QuickKind|'menu'>(),[habitsReload,setHabitsReload]=useState(0),pendingEditor=useRef<{fields:TaskFields}|undefined>(undefined);
  const t=createTranslator(language),[data,setData]=useState<WorkspaceResult>(),[filter,setFilter]=useState('open'),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[draft,setDraft]=useState<Draft>(),[editor,setEditor]=useState<{fields:TaskFields;taskId?:string;version?:string}>(),[settings,setSettings]=useState<{name:string;timeZone:string;version:string}>();
+ useFleetingNotice(notice,()=>setNotice(undefined));
  const [pointsDraft,setPointsDraft]=useState<PointsSettings & {version:string}>();
  const activeWrite=useRef(false),base='/api/households/'+householdId+'/workspace';
  useEffect(()=>{
@@ -158,12 +159,20 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
  useEffect(()=>{setEditor(pendingEditor.current);pendingEditor.current=undefined;setSettings(undefined);setCursor(undefined);if(view==='home')setFilter('open');},[view]);
  function back(){if(window.history.length>1)window.history.back();else go('dynamic');}
  const tab=tabOf(view),segment=segments[tab],sub=tab==='dynamic'&&view!=='dynamic';
- const {pending,schedule,undo}=useUndoable();
+ const {pending,schedule,undo}=useUndoable(),pendingKind=useRef<'taskComplete'|'taskArchive'>('taskArchive');
  function later(task:TaskSummary,action:'taskComplete'|'taskArchive'){
+  pendingKind.current=action;
   const input={taskId:task.taskId,version:task.version,...(action==='taskComplete'?safety:{})};
   schedule({id:task.taskId,message:t(action==='taskComplete'?'tasks.completed':'tasks.archived'),run:()=>{void change(action,input);}});
  }
  const visible=(task:TaskSummary)=>task.taskId!==pending?.id;
+ // While a completion or archive waits for its undo window, the counters already show its effect.
+ const pendingTask=pending?data?.tasks?.find(task=>task.taskId===pending.id):undefined;
+ const count=(k:'open'|'overdue'|'done')=>{
+  const base=data?.counts?.[k]??0;if(!pendingTask||pendingTask.state!=='open')return base;
+  if(k==='open'||(k==='overdue'&&!!pendingTask.dueAt&&Date.parse(pendingTask.dueAt)<Date.now()))return Math.max(0,base-1);
+  return k==='done'&&pendingKind.current==='taskComplete'?base+1:base;
+ };
  const today=data?.tasks?.filter(task=>task.state==='open'&&visible(task)).slice(0,5)??[];
  function row(task:TaskSummary,compact:boolean){
   const open=task.state==='open',self=task.assignment==='self';
@@ -191,7 +200,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
    {error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}
    {draft&&<div className="notice"><p>{t('workspace.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void change(draft.action,draft.body,draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}
    {loading&&<Skeleton count={4} label={t('workspace.loading')}/>}
-   {!loading&&!data&&<button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>}
+   {!loading&&!data&&<button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('common.refresh')}</button>}
    {h&&view==='home'&&<section className="plain today">
     <p className="muted">{new Intl.DateTimeFormat(format,{weekday:'long',day:'numeric',month:'long',timeZone:h.timeZone}).format(new Date())}</p>
     {h.status==='paused'&&<p className="notice" role="status">{t('consent.householdPaused')}</p>}
@@ -204,7 +213,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
     {authority.data&&<TodayAssignedHabits habits={assignedHabits} me={authority.data.actorMembershipId} householdId={householdId} session={session} language={language} onChanged={()=>setAuthorityReload(v=>v+1)}/>}
     <TodayHabits householdId={householdId} csrfToken={session.csrfToken} language={language} reload={habitsReload} onAdd={()=>setAdding('habit')} onOpen={()=>go('habits')}/>
     <TodayCheckins householdId={householdId} csrfToken={session.csrfToken} language={language} reload={habitsReload} onSaved={()=>setNotice('routines.confirmed')}/>
-    <div className="workspace-stats">{(['open','overdue','done'] as const).map(k=><div key={k}><strong>{data?.counts?.[k]??0}</strong><span>{t(({open:'workspace.open',done:'workspace.done',overdue:'workspace.overdue'} as const)[k])}</span></div>)}</div>
+    <div className="workspace-stats">{(['open','overdue','done'] as const).map(k=><div key={k}><strong>{count(k)}</strong><span>{t(({open:'workspace.open',done:'workspace.done',overdue:'workspace.overdue'} as const)[k])}</span></div>)}</div>
     <div className="tiles"><button type="button" onClick={()=>go('checkins')}><Icon name="routines"/>{t('routines.checkinsTitle')}</button><button type="button" onClick={()=>go('rules')}><Icon name="library"/>{t('library.guidance')}</button><button type="button" onClick={()=>go('notes')}><Icon name="library"/>{t('library.notes')}</button><button type="button" onClick={()=>go('members')}><Icon name="dynamic"/>{t('workspace.invite')}</button></div>
    </section>}
    {view==='exchange'&&h&&<ExchangeView householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} people={exchange.data?.people??[]} onChanged={()=>setExchangeReload(v=>v+1)}/>}
@@ -257,7 +266,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
   </SafetyProvider>
   {editor&&<Layer title={t(editor.taskId?'workspace.taskDetails':'workspace.addPrivateTask')} backLabel={t('nav.back')} onClose={()=>setEditor(undefined)} status={<>{error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}</>}>
    <TaskEditor key={editor.taskId??'new'} fields={editor.fields} language={language} disabled={blocked} onCancel={()=>setEditor(undefined)} onSave={fields=>{void change(editor.taskId?'taskUpdate':'taskCreate',{...safety,fields,...(editor.taskId?{taskId:editor.taskId,version:editor.version}:{})});}}
-    onArchive={editor.taskId?()=>{const taskId=editor.taskId!,version=editor.version!;setEditor(undefined);schedule({id:taskId,message:t('tasks.archived'),run:()=>{void change('taskArchive',{taskId,version});}});}:undefined}/>
+    onArchive={editor.taskId?()=>{const taskId=editor.taskId!,version=editor.version!;setEditor(undefined);pendingKind.current='taskArchive';schedule({id:taskId,message:t('tasks.archived'),run:()=>{void change('taskArchive',{taskId,version});}});}:undefined}/>
   </Layer>}
   {pending&&<UndoToast message={pending.message} undoLabel={t('tasks.undo')} onUndo={undo}/>}
   {tab!=='dynamic'&&<button type="button" className="fab" aria-label={t('workspace.add')} onClick={()=>setAdding('menu')}><Icon name="plus"/></button>}

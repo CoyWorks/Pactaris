@@ -1,3 +1,4 @@
+import {disguisedText} from '../../packages/auth/text.js';
 import type {AccountPresentation} from './store.js';
 
 export function accountPresentation(body:unknown):AccountPresentation|null|undefined {
@@ -21,6 +22,6 @@ export function preferredDisplayName(body:unknown):string|null|undefined {
   const {name}=body;
   if(name===null)return null;
   if(typeof name!=='string'||name!==name.trim()||!name||[...name].length>80||
-    /[\u0000-\u001f\u007f-\u009f\uD800-\uDFFF]/u.test(name))return;
+    /[\u0000-\u001f\u007f-\u009f\uD800-\uDFFF]/u.test(name)||disguisedText(name))return;
   return name;
 }

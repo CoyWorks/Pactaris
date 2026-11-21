@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {Hint,Layer} from './navigation.js';
+import {Hint,Layer,useFleetingNotice} from './navigation.js';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {RoutineKind,RoutineFields,RoutineDetail,RoutineResult} from '../../../packages/auth/routines.js';
 const kindKeys:Record<RoutineKind,MessageKey>={habit:'routines.habits',ritual:'routines.rituals',checkin:'routines.checkins'};
@@ -12,6 +12,7 @@ const blank=(kind:RoutineKind,timeZone:string):RoutineFields=>({title:'',descrip
 type Draft={action:string;body:Record<string,unknown>};
 export function RoutinesPanel({householdId,session,language,format,timeZone,section}:{householdId:string;session:{csrfToken:string};language:string;format:string;timeZone:string;section:'habits'|'checkins'}){
  const t=createTranslator(language),[kind,setKind]=useState<RoutineKind>(section==='habits'?'habit':'checkin'),[filter,setFilter]=useState('current'),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[listing,setListing]=useState<RoutineResult>(),[detail,setDetail]=useState<RoutineDetail>(),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[busy,setBusy]=useState(false),[draft,setDraft]=useState<Draft>(),[editor,setEditor]=useState<{fields:RoutineFields;routineId?:string;version?:string}>(),[day,setDay]=useState(''),[eventTime,setEventTime]=useState(''),[count,setCount]=useState(1),[text,setText]=useState(''),[rating,setRating]=useState(3),[confirmed,setConfirmed]=useState(false),[reverse,setReverse]=useState<string>();
+ useFleetingNotice(notice,()=>setNotice(undefined));
  const [trendRoutineId,setTrendRoutineId]=useState<string>();
  const showTrend=detail?.routineId!==undefined&&trendRoutineId===detail.routineId;
  const writing=useRef(false),base='/api/households/'+householdId+'/routines';
@@ -86,7 +87,7 @@ export function RoutinesPanel({householdId,session,language,format,timeZone,sect
    {reverse&&<div className="notice"><p>{t('routines.reverseNotice')}</p><button type="button" disabled={blocked} onClick={()=>{void change('progressReverse',{routineId:detail.routineId,eventId:reverse});}}>{t('members.confirm')}</button><button type="button" onClick={()=>setReverse(undefined)}>{t('onboarding.cancel')}</button></div>}
    {detail.nextCursor&&<button type="button" disabled={busy} onClick={()=>{void open(detail.routineId,day||null,detail.revision,detail.nextCursor!);}}>{t('portal.more')}</button>}<button type="button" onClick={()=>{setDetail(undefined);setTrendRoutineId(undefined);}}>{t('library.close')}</button>
   </article></Layer>}
-  {listing?.nextCursor&&<button type="button" onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}<button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>
+  {listing?.nextCursor&&<button type="button" onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}<button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('common.refresh')}</button>
  </section>;
 }
 

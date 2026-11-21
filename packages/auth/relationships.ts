@@ -1,3 +1,4 @@
+import {containsDisguisedText} from './text.js';
 import {uuid} from './delegation.js';
 import type {RelationshipAction} from './relationship-actions.js';
 export {relationshipActions,isRelationshipAction,type RelationshipAction} from './relationship-actions.js';
@@ -12,6 +13,7 @@ const keys=(v:Record<string,unknown>,expected:string[])=>Object.keys(v).sort().j
 const text=(v:unknown,max:number,empty=false):v is string=>typeof v==='string'&&(empty||v.length>0)&&[...v].length<=max&&v===v.trim()&&!/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(v);
 /** The public browser cannot choose actor membership, visibility or another person's decision. */
 export function relationshipInput(action:RelationshipAction,value:unknown):RelationshipInput{
+ if(containsDisguisedText(value))throw new RelationshipError('invalid');
  if(!record(value)||!uuid(value.operationId))throw new RelationshipError('invalid');
  if(action==='relationshipList'){
   if(!keys(value,['operationId',...('after'in value?['after']:[])])||('after'in value&&!uuid(value.after)))throw new RelationshipError('invalid');

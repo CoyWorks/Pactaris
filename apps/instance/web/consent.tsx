@@ -58,7 +58,7 @@ export function SafetyProvider({householdId,session,language,children,compact=fa
   {state?.selfPaused&&<button type="button" disabled={busy||!!draft} onClick={()=>{void command('selfResume',{epoch:state.epoch,memberEpoch:state.memberEpoch});}}>{t('consent.resumeSelf')}</button>}
   {state?.householdStatus==='paused'&&<><p>{t('consent.quorum')}</p><button type="button" disabled={busy||!!draft||state.selfPaused} onClick={()=>{void command('householdResume',{epoch:state.epoch,memberEpoch:state.memberEpoch});}}>{t(state.resumeAcknowledged?'consent.reentryAcknowledged':'consent.reentry')}</button></>}
   {draft&&<div><p>{t('consent.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void send(draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}
-  <button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>
+  <button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('common.refresh')}</button>
   {state&&<PersonalLimits state={state} language={language} command={command}/>}
  </section></details>{children}</SafetyContext.Provider>;
 }
@@ -110,6 +110,6 @@ export function Agreements({relationship,language,format,timeZone}:{relationship
    {self&&<button type="button" onClick={()=>{void ctx.read('activityCheck',{agreementId:a.agreementId,version:a.version,activity:'task',epoch:self.epoch}).then(r=>setEligible(r.eligible)).catch(()=>setError('consent.unavailable'));}}>{t('consent.checkTask')}</button>}
   </article>)}
   {eligible!==undefined&&<p role="status">{t(eligible?'consent.eligible':'consent.ineligible')}</p>}
-  <button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>{listing?.nextCursor&&<button type="button" onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}
+  <button type="button" onClick={()=>setRefresh(v=>v+1)}>{t('common.refresh')}</button>{listing?.nextCursor&&<button type="button" onClick={()=>setCursor(listing.nextCursor!)}>{t('portal.more')}</button>}
  </section>;
 }

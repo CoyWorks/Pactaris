@@ -1,3 +1,4 @@
+import {disguisedText} from '../../packages/auth/text.js';
 import type pg from 'pg';
 import type {InstanceConfig} from '../../packages/config/index.js';
 import {CommandVerifier,DelegationError,digest,uuid,type MembershipAction} from '../../packages/auth/delegation.js';
@@ -20,7 +21,7 @@ export class InstanceMembers{
      action==='memberList'?('after'in(input??{})?['after']:[]):['offerId'])];
    if(!input||Array.isArray(input)||Object.keys(input).sort().join(',')!==keys.sort().join(',')||input.operationId!==verified.operationId||
      ['membershipId','targetMembershipId','offerId','after'].some(k=>k in input&&!uuid(input[k]))||
-     (action==='memberAlias'&&(typeof input.name!=='string'||[...input.name].length>80||input.name!==input.name.trim()||/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(input.name))))throw Error('input');
+     (action==='memberAlias'&&(typeof input.name!=='string'||[...input.name].length>80||input.name!==input.name.trim()||(/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(input.name)||disguisedText(input.name)))))throw Error('input');
   }catch{throw new MemberError('invalid');}
   const canonical=Object.fromEntries(Object.keys(input).sort().map(k=>[k,input[k]]));
   const fingerprint=digest(JSON.stringify([householdId,verified.accountId,action,canonical])),db=await this.pool.connect();

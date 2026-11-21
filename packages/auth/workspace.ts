@@ -1,3 +1,4 @@
+import {containsDisguisedText} from './text.js';
 import {validTaskSchedule,type TaskSchedule} from './partner.js';
 import {uuid} from './delegation.js';
 import type {WorkspaceAction} from './workspace-actions.js';
@@ -19,6 +20,7 @@ export function validPointsSettings(value:unknown):value is PointsSettings{
   &&(value.label===null||text(value.label,32));
 }
 export function workspaceInput(action:WorkspaceAction,value:unknown):Record<string,unknown>&{operationId:string}{
+ if(containsDisguisedText(value))throw new WorkspaceError('invalid');
  if(!record(value)||!uuid(value.operationId))throw new WorkspaceError('invalid');
  const names=['operationId'];
  if(action==='workspaceRead')names.push('filter',...('after'in value?['after']:[]));

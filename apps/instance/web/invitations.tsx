@@ -41,7 +41,7 @@ export function InvitationManager({householdId,session,language,format,timeZone}
   {error&&<p role="alert">{t(error)}</p>}
   <form onSubmit={event=>{void create(event);}}><label htmlFor="invite-email">{t('invitations.email')}</label>
    <input id="invite-email" type="email" autoComplete="off" maxLength={254} required value={email} disabled={busy||!!draft} onChange={e=>setEmail(e.target.value)}/>
-   <button type="submit" disabled={busy||!email.trim()||!!link}>{t(draft?'onboarding.retry':'invitations.create')}</button>
+   {!link&&<button type="submit" disabled={busy||!email.trim()}>{t(draft?'onboarding.retry':'invitations.create')}</button>}
   </form>
   {draft&&<button type="button" disabled={busy} onClick={()=>{setDraft(undefined);setEmail('');setLink('');setCopied(false);setError(undefined);}}>{t('invitations.new')}</button>}
   {link&&<div role="status"><p>{t('invitations.shareDescription')}</p><label htmlFor="invite-link">{t('invitations.link')}</label><input id="invite-link" readOnly value={link} onFocus={e=>e.target.select()}/>
