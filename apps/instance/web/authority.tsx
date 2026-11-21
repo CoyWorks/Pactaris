@@ -1,13 +1,12 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {PunishmentPicker} from './shop.js';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
-import type {AuthorityLink,AuthorityPower,AuthorityResult,RankAuthority} from '../../../packages/auth/authority.js';
+import type {AuthorityLink,AuthorityPower,AuthorityResult,AuthorityTransfer} from '../../../packages/auth/authority.js';
 import {Hint,Icon,Layer} from './navigation.js';
 import {Skeleton} from './today-habits.js';
 type Session={csrfToken:string};
 const errors:MessageKey[]=['authority.invalid','authority.denied','authority.conflict','authority.paused','authority.capacity','authority.unavailable','errors.rateLimited','errors.request'];
 const errorKey=(value:unknown):MessageKey=>errors.includes(value as MessageKey)?value as MessageKey:'authority.unavailable';
-const rankKeys:Record<RankAuthority,MessageKey>={off:'authority.rank.off',tasks:'authority.rank.tasks',outcomes:'authority.rank.outcomes'};
 type Outcome={ok:true;data:AuthorityResult}|{ok:false;key:MessageKey;unknown:boolean};
 /** One authority command; an unconfirmed outcome keeps its operation ID for an exact retry. */
 export async function authoritySend(householdId:string,session:Session,action:string,body:Record<string,unknown>):Promise<Outcome>{
@@ -45,13 +44,19 @@ function useCommand(householdId:string,session:Session,onDone:(notice:MessageKey
 }
 function LinkPage({link,data,householdId,session,language,format,timeZone,onClose,onChanged}:{link:AuthorityLink;data:AuthorityResult;householdId:string;session:Session;language:string;format:string;timeZone:string;onClose:()=>void;onChanged:(notice:MessageKey)=>void}){
  const t=createTranslator(language),{busy,error,run}=useCommand(householdId,session,onChanged),[confirmEnd,setConfirmEnd]=useState(false);
- const [delegate,setDelegate]=useState(''),[tasks,setTasks]=useState(true),[outcomes,setOutcomes]=useState(false),[until,setUntil]=useState('');
+ const [delegate,setDelegate]=useState(''),[tasks,setTasks]=useState(true),[approve,setApprove]=useState(false),[outcomes,setOutcomes]=useState(false),[until,setUntil]=useState(''),[transferTo,setTransferTo]=useState('');
  const delegations=(data.delegations??[]).filter(d=>d.linkId===link.linkId),subRank=data.members?.find(m=>m.membershipId===link.subId)?.rank??null;
- const candidates=(data.members??[]).filter(m=>m.membershipId!==link.domId&&m.membershipId!==link.subId&&!delegations.some(d=>d.delegateId===m.membershipId));
+ // Rights only go to members ranked above the sub (the server checks this too).
+ const above=(rank:number|null)=>rank===null||(subRank!==null&&rank<subRank);
+ const candidates=(data.members??[]).filter(m=>m.membershipId!==link.domId&&m.membershipId!==link.subId&&above(m.rank)&&!delegations.some(d=>d.delegateId===m.membershipId));
+ const manages=link.isPrimary||link.legacy,canTransfer=link.isPrimary||!link.subHasPrimary;
+ const transferCandidates=(data.members??[]).filter(m=>m.membershipId!==link.subId&&(link.isPrimary?m.membershipId!==link.domId:true)&&above(m.rank));
+ const openTransfer=(data.transfers??[]).find(x=>x.subId===link.subId);
  const title=link.role==='sub'?link.domName:link.subName;
- const settings={linkId:link.linkId,version:link.version,rankAuthority:link.rankAuthority,private:link.private,canSpendPoints:link.canSpendPoints,canPropose:link.canPropose};
+ const settings={linkId:link.linkId,version:link.version,private:link.private,canSpendPoints:link.canSpendPoints,canPropose:link.canPropose};
  return <Layer title={title||t('partner.unnamed')} backLabel={t('nav.back')} onClose={onClose}>
-  <p className="muted">{[link.label,t(link.role==='dom'?'authority.youAreDom':link.role==='sub'?'authority.youAreSub':'authority.viewOnly'),t(link.state==='invited'?'authority.invited':'authority.active')].filter(Boolean).join(t('catalog.separator'))}</p>
+  <p className="muted">{[link.label,t(link.role==='dom'?'authority.youAreDom':link.role==='sub'?'authority.youAreSub':'authority.viewOnly'),t(link.state==='invited'?'authority.invited':'authority.active'),link.isPrimary&&t('authority.primary')].filter(Boolean).join(t('catalog.separator'))}</p>
+  {link.state==='active'&&link.role==='dom'&&<p className="muted">{t(link.isPrimary?'authority.primaryHelp':link.legacy?'authority.legacyHelp':'authority.secondaryHelp')}</p>}
   {error&&<p role="alert">{t(error)}</p>}
   {link.role==='sub'&&link.state==='invited'&&<div className="notice" role="group"><p>{t('authority.acceptNotice')}</p>
    <div className="workspace-actions"><button type="button" disabled={busy} onClick={()=>{void run('linkAccept',{linkId:link.linkId,version:link.version});}}>{t('authority.accept')}</button>
@@ -59,26 +64,33 @@ function LinkPage({link,data,householdId,session,language,format,timeZone,onClos
   {link.role==='dom'&&link.state==='active'&&<>
    <h3>{t('authority.settings')}</h3>
    <form className="quick-form" onSubmit={e=>e.preventDefault()}>
-    <label>{t('authority.rankAuthority')}<select disabled={busy} value={link.rankAuthority} onChange={e=>{void run('linkSettings',{...settings,rankAuthority:e.target.value});}}>
-     {(Object.keys(rankKeys) as RankAuthority[]).map(k=><option key={k} value={k}>{t(rankKeys[k])}</option>)}</select></label>
     <label className="check"><input type="checkbox" disabled={busy} checked={link.private} onChange={e=>{void run('linkSettings',{...settings,private:e.target.checked});}}/>{t('authority.private')}</label>
     <label className="check"><input type="checkbox" disabled={busy} checked={link.canSpendPoints} onChange={e=>{void run('linkSettings',{...settings,canSpendPoints:e.target.checked});}}/>{t('authority.canSpendPoints')}</label>
     <label className="check"><input type="checkbox" disabled={busy} checked={link.canPropose} onChange={e=>{void run('linkSettings',{...settings,canPropose:e.target.checked});}}/>{t('authority.canPropose')}</label>
-    <label>{t('authority.subRank')}<select disabled={busy} value={subRank??''} onChange={e=>{void run('rankSet',{subjectId:link.subId,rank:e.target.value?Number(e.target.value):null});}}>
-     <option value="">{t('authority.noRank')}</option>{Array.from({length:10},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}</select></label>
+    {manages&&<label>{t('authority.subRank')}<select disabled={busy} value={subRank??''} onChange={e=>{void run('rankSet',{subjectId:link.subId,rank:e.target.value?Number(e.target.value):null});}}>
+     <option value="">{t('authority.noRank')}</option>{Array.from({length:10},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}</select></label>}
    </form>
-   <h3>{t('authority.delegations')}</h3><Hint label={t('hint.more')}>{t('authority.delegationHelp')}</Hint>
+   {manages&&<><h3>{t('authority.delegations')}</h3><Hint label={t('hint.more')}>{t('authority.delegationHelp')}</Hint>
    {!!delegations.length&&<ul className="card-list">{delegations.map(d=><li key={d.delegationId}><span className="grow"><span>{d.delegateName||t('partner.unnamed')}</span>
-    <span className="muted">{[d.tasks&&t('authority.area.tasks'),d.outcomes&&t('authority.area.outcomes')].filter(Boolean).join(t('catalog.separator'))}{d.endsAt&&<>{t('catalog.separator')}{t('authority.until')} <time dateTime={d.endsAt}>{formatTime(new Date(d.endsAt),format,timeZone)}</time></>}</span></span>
+    <span className="muted">{[d.tasks&&t('authority.area.tasks'),d.approve&&t('authority.area.approve'),d.outcomes&&t('authority.area.outcomes')].filter(Boolean).join(t('catalog.separator'))}{d.endsAt&&<>{t('catalog.separator')}{t('authority.until')} <time dateTime={d.endsAt}>{formatTime(new Date(d.endsAt),format,timeZone)}</time></>}</span></span>
     <button type="button" className="secondary" disabled={busy} onClick={()=>{void run('delegationRevoke',{delegationId:d.delegationId,version:d.version});}}>{t('authority.revoke')}</button></li>)}</ul>}
    {!!candidates.length&&<form className="quick-form" onSubmit={e=>{e.preventDefault();if(!delegate)return;const end=until?new Date(until):null;
-     void run('delegationSet',{linkId:link.linkId,delegateId:delegate,version:'0',tasks,outcomes,endsAt:end&&Number.isFinite(end.getTime())?end.toISOString():null}).then(ok=>{if(ok){setDelegate('');setUntil('');}});}}>
+     void run('delegationSet',{linkId:link.linkId,delegateId:delegate,version:'0',tasks,approve,outcomes,endsAt:end&&Number.isFinite(end.getTime())?end.toISOString():null}).then(ok=>{if(ok){setDelegate('');setUntil('');}});}}>
     <label>{t('authority.delegateTo')}<select required disabled={busy} value={delegate} onChange={e=>setDelegate(e.target.value)}><option value="">{t('authority.choose')}</option>{candidates.map(m=><option key={m.membershipId} value={m.membershipId}>{m.name||t('partner.unnamed')}</option>)}</select></label>
     <label className="check"><input type="checkbox" disabled={busy} checked={tasks} onChange={e=>setTasks(e.target.checked)}/>{t('authority.area.tasks')}</label>
+    <label className="check"><input type="checkbox" disabled={busy} checked={approve} onChange={e=>setApprove(e.target.checked)}/>{t('authority.area.approve')}</label>
     <label className="check"><input type="checkbox" disabled={busy} checked={outcomes} onChange={e=>setOutcomes(e.target.checked)}/>{t('authority.area.outcomes')}</label>
     <label>{t('authority.untilOptional')}<input type="datetime-local" disabled={busy} value={until} onChange={e=>setUntil(e.target.value)}/></label>
-    <button type="submit" disabled={busy||!delegate||(!tasks&&!outcomes)}>{t('authority.delegate')}</button>
+    <button type="submit" disabled={busy||!delegate||(!tasks&&!approve&&!outcomes)}>{t('authority.delegate')}</button>
    </form>}
+   {!candidates.length&&<p className="muted">{t('authority.noDelegates')}</p>}</>}
+   {canTransfer&&!openTransfer&&<><h3>{t(link.isPrimary?'authority.transfer':'authority.choosePrimary')}</h3><Hint label={t('hint.more')}>{t('authority.transferHelp')}</Hint>
+    <form className="quick-form" onSubmit={e=>{e.preventDefault();if(transferTo)void run('transferPropose',{subId:link.subId,toId:transferTo},'authority.transferProposed').then(ok=>{if(ok)setTransferTo('');});}}>
+     <label>{t('authority.newPrimary')}<select required disabled={busy} value={transferTo} onChange={e=>setTransferTo(e.target.value)}><option value="">{t('authority.choose')}</option>
+      {transferCandidates.map(m=><option key={m.membershipId} value={m.membershipId}>{m.membershipId===data.actorMembershipId?t('board.you'):m.name||t('partner.unnamed')}</option>)}</select></label>
+     <button type="submit" disabled={busy||!transferTo}>{t('authority.propose')}</button>
+    </form></>}
+   {openTransfer&&<ul className="menu"><TransferRow transfer={openTransfer} householdId={householdId} session={session} language={language} onChanged={onChanged}/></ul>}
   </>}
   {link.role!=='viewer'&&link.state==='active'&&(confirmEnd?<div className="notice" role="group"><p>{t(link.role==='sub'?'authority.endNoticeSub':'authority.endNoticeDom')}</p>
    <button type="button" className="danger" disabled={busy} onClick={()=>{void run('linkEnd',{linkId:link.linkId,version:link.version});}}>{t('authority.end')}</button><button type="button" className="secondary" disabled={busy} onClick={()=>setConfirmEnd(false)}>{t('onboarding.cancel')}</button></div>
@@ -102,7 +114,7 @@ function InvitePage({data,householdId,session,language,onClose,onChanged}:{data:
 }
 function LinkRow({link,language,onOpen}:{link:AuthorityLink;language:string;onOpen:()=>void}){
  const t=createTranslator(language),name=link.role==='sub'?link.domName:link.role==='dom'?link.subName:`${link.domName} → ${link.subName}`;
- return <li><button type="button" onClick={onOpen}><span className="grow"><span>{name||t('partner.unnamed')}</span><span className="muted">{[link.label,t(link.state==='invited'?'authority.invited':'authority.active')].filter(Boolean).join(t('catalog.separator'))}</span></span>
+ return <li><button type="button" onClick={onOpen}><span className="grow"><span>{name||t('partner.unnamed')}</span><span className="muted">{[link.label,t(link.state==='invited'?'authority.invited':'authority.active'),link.isPrimary&&t('authority.primary'),link.legacy&&t('authority.noPrimary')].filter(Boolean).join(t('catalog.separator'))}</span></span>
   {link.role==='sub'&&link.state==='invited'&&<span className="dot" aria-label={t('today.attention')}/>}<Icon name="chevron"/></button></li>;
 }
 /** Doms and subs: links, invitations, delegation, ranking and household visibility. */
@@ -116,6 +128,7 @@ export function AuthorityView({householdId,session,language,format,timeZone,data
  return <section className="plain">
   <Hint label={t('hint.more')}>{t('authority.help')}</Hint>
   {notice&&<p role="status">{t(notice)}</p>}{error&&<p role="alert">{t(error)}</p>}
+  {!!(data.transfers??[]).length&&<><h2 className="group-title">{t('authority.transfers')}</h2><ul className="menu">{(data.transfers??[]).map(x=><TransferRow key={x.transferId} transfer={x} householdId={householdId} session={session} language={language} onChanged={done}/>)}</ul></>}
   <div className="workspace-actions"><button type="button" onClick={()=>{setNotice(undefined);setInviting(true);}}><Icon name="plus"/>{t('authority.invite')}</button></div>
   <h2 className="group-title">{t('authority.yourSubs')}</h2>
   {mine.length?<ul className="menu">{mine.map(l=><LinkRow key={l.linkId} link={l} language={language} onOpen={()=>setOpenId(l.linkId)}/>)}</ul>:<p className="muted">{t('authority.noSubs')}</p>}
@@ -129,9 +142,22 @@ export function AuthorityView({householdId,session,language,format,timeZone,data
 }
 /** Invitations waiting for your answer, for Today. */
 export function pendingInvites(data?:AuthorityResult){return (data?.links??[]).filter(l=>l.role==='sub'&&l.state==='invited');}
+/** Transfers waiting for your acceptance, for Today. */
+export function pendingTransfers(data?:AuthorityResult){return (data?.transfers??[]).filter(x=>x.canAccept);}
+/** One open primary-Dom transfer: who it moves to, who still has to accept, and your actions. */
+export function TransferRow({transfer,householdId,session,language,onChanged}:{transfer:AuthorityTransfer;householdId:string;session:Session;language:string;onChanged:(notice:MessageKey)=>void}){
+ const t=createTranslator(language),{busy,error,run}=useCommand(householdId,session,onChanged),body={transferId:transfer.transferId,version:transfer.version};
+ const waiting=[!transfer.toAccepted&&transfer.toName,!transfer.subAccepted&&transfer.subName].filter(Boolean).join(t('catalog.separator'));
+ return <li className="transfer-row"><span className="grow"><span>{t('authority.transferTitle',{sub:transfer.subName||t('partner.unnamed'),to:transfer.toName||t('partner.unnamed')})}</span>
+  <span className="muted">{t('authority.transferWaiting',{names:waiting||'–'})}</span>{error&&<span role="alert">{t(error)}</span>}</span>
+  <span className="row-actions">{transfer.canAccept&&<><button type="button" disabled={busy} onClick={()=>{void run('transferAccept',body,'authority.transferAccepted');}}>{t('authority.accept')}</button>
+   <button type="button" className="secondary" disabled={busy} onClick={()=>{void run('transferDecline',body,'authority.saved');}}>{t('exchange.decline')}</button></>}
+   {transfer.canCancel&&<button type="button" className="secondary" disabled={busy} onClick={()=>{void run('transferCancel',body,'authority.saved');}}>{t('onboarding.cancel')}</button>}</span></li>;
+}
 export function InviteRows({data,householdId,session,language,format,timeZone,onChanged}:{data?:AuthorityResult;householdId:string;session:Session;language:string;format:string;timeZone:string;onChanged:(notice:MessageKey)=>void}){
  const [openId,setOpenId]=useState<string>(),invites=pendingInvites(data),open=invites.find(l=>l.linkId===openId);
  return <>{invites.map(l=><LinkRow key={l.linkId} link={l} language={language} onOpen={()=>setOpenId(l.linkId)}/>)}
+  {pendingTransfers(data).map(x=><TransferRow key={x.transferId} transfer={x} householdId={householdId} session={session} language={language} onChanged={onChanged}/>)}
   {open&&data&&<LinkPage link={open} data={data} householdId={householdId} session={session} language={language} format={format} timeZone={timeZone} onClose={()=>setOpenId(undefined)} onChanged={notice=>{setOpenId(undefined);onChanged(notice);}}/>}</>;
 }
 /** Points and punishments for someone you hold authority over. */

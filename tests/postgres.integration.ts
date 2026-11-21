@@ -1896,22 +1896,38 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await move(A,'partnerCancel',missed[0].outcome.punishmentTaskId)).status,200);
      // Per-sub permission: proposals can be switched off by the Dom.
      const settings=(await view(A)).links.find((l:any)=>l.linkId===linkId);
-     assert.equal((await au(A,'linkSettings',{linkId,version:settings.version,rankAuthority:'tasks',private:false,canSpendPoints:false,canPropose:false})).status,200);
+     assert.equal((await au(A,'linkSettings',{linkId,version:settings.version,private:false,canSpendPoints:false,canPropose:false})).status,200);
      assert.equal((await api(base+'/exchange/exchangeCreate','POST',{operationId:randomUUID(),kind:'proposal',recipientId:A.member,title:'Idea',body:'',dueAt:null},D.session)).status,404);
      assert.equal((await api(base+'/exchange/exchangeCreate','POST',{operationId:randomUUID(),kind:'permission',recipientId:A.member,title:'May I',body:'',dueAt:null},D.session)).status,200);
      // Delegation per area: tasks only.
-     assert.equal((await au(A,'delegationSet',{linkId,delegateId:C.member,version:'0',tasks:true,outcomes:false,endsAt:null})).status,200);
+     assert.equal((await au(A,'delegationSet',{linkId,delegateId:C.member,version:'0',tasks:true,approve:false,outcomes:false,endsAt:null})).status,200);
      const delegated=(await view(C)).powers.find((x:any)=>x.membershipId===D.member);assert.deepEqual([delegated.tasks,delegated.outcomes,delegated.manage],[true,false,false]);
      assert.equal((await au(C,'pointsAdjust',{subjectId:D.member,points:1,reason:''})).status,404);
      // Ranking: only for subs; the owner or the sub's own Dom sets it.
      assert.equal((await au(A,'rankSet',{subjectId:D.member,rank:2})).status,200);
      assert.equal((await au(C,'rankSet',{subjectId:D.member,rank:1})).status,404);
      assert.equal((await au(A,'rankSet',{subjectId:C.member,rank:1})).status,409);
+     // Primary Dom: A linked first and is primary; a second Dom has no rights until the sub and that Dom accept a transfer.
+     assert.equal((await view(A)).links.find((l:any)=>l.linkId===linkId).isPrimary,true);
+     const second=await au(B,'linkInvite',{subId:D.member,label:''});assert.equal(second.status,200,JSON.stringify(second.data));
+     assert.equal((await au(D,'linkAccept',{linkId:second.data.resourceId,version:'1'})).status,200);
+     assert.equal((await view(B)).powers.some((x:any)=>x.membershipId===D.member),false);
+     assert.equal((await au(B,'delegationSet',{linkId:second.data.resourceId,delegateId:C.member,version:'0',tasks:true,approve:false,outcomes:false,endsAt:null})).status,404);
+     assert.equal((await au(B,'transferPropose',{subId:D.member,toId:B.member})).status,404);
+     const proposal=await au(A,'transferPropose',{subId:D.member,toId:B.member});assert.equal(proposal.status,200,JSON.stringify(proposal.data));
+     assert.equal((await au(A,'transferAccept',{transferId:proposal.data.resourceId,version:'1'})).status,404);
+     assert.equal((await au(D,'transferAccept',{transferId:proposal.data.resourceId,version:'1'})).status,200);
+     assert.equal((await view(A)).powers.find((x:any)=>x.membershipId===D.member)?.manage,true);
+     assert.equal((await au(B,'transferAccept',{transferId:proposal.data.resourceId,version:'2'})).status,200);
+     assert.equal((await view(B)).powers.find((x:any)=>x.membershipId===D.member)?.manage,true);
+     assert.equal((await view(A)).powers.some((x:any)=>x.membershipId===D.member),false);
+     assert.equal((await view(C)).powers.some((x:any)=>x.membershipId===D.member),false);
+     assert.equal((await db.owner.query("SELECT count(*)::int n FROM pactaris.revocation_journal WHERE kind='primary.released' AND subject->>'linkId'=$1",[linkId])).rows[0].n,1);
      // Visibility: owner only.
      assert.equal((await au(B,'visibilitySet',{subsVisible:true,version:'1'})).status,404);
      assert.equal((await au(A,'visibilitySet',{subsVisible:true,version:'1'})).status,200);
      assert.equal((await view(A)).subsVisible,true);
-     for(const table of ['authority_links','authority_delegations','authority_pairs','point_adjustments','authority_punishments','authority_receipts'])await assert.rejects(db.pool.query('SELECT * FROM pactaris.'+table),{code:'42501'});
+     for(const table of ['authority_links','authority_delegations','authority_pairs','point_adjustments','authority_punishments','authority_receipts','authority_transfers'])await assert.rejects(db.pool.query('SELECT * FROM pactaris.'+table),{code:'42501'});
      // The sub can always end the link; authority and the backing policy go with it, and the journal keeps it ended.
      const current=(await view(D)).links.find((l:any)=>l.linkId===linkId);
      assert.equal((await au(D,'linkEnd',{linkId,version:current.version})).status,200);

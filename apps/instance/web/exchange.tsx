@@ -7,7 +7,7 @@ import type {PartnerSummary} from '../../../packages/auth/partner.js';
 import {Hint,Icon,Layer} from './navigation.js';
 import {Skeleton} from './today-habits.js';
 import type {AuthorityResult} from '../../../packages/auth/authority.js';
-import {InviteRows,OutcomeActions,authoritySend,pendingInvites} from './authority.js';
+import {InviteRows,OutcomeActions,authoritySend,pendingInvites,pendingTransfers} from './authority.js';
 import {PersonHabits} from './assigned-habits.js';
 import type {AssignedHabit} from '../../../packages/auth/authority.js';
 const kindKeys:Record<ExchangeKind,MessageKey>={permission:'exchange.kind.permission',proposal:'exchange.kind.proposal',journal:'exchange.kind.journal',breach:'exchange.kind.breach'};
@@ -160,7 +160,7 @@ export function Attention({householdId,session,language,format,timeZone,data,aut
   return()=>{gone=true;controller.abort();};
  },[householdId,reload]);
  const waiting=(data?.exchanges??[]).filter(item=>!item.mine&&(item.state==='open'||item.state==='recorded')),open=waiting.find(i=>i.id===openId);
- if(!waiting.length&&!reviews.length&&!pendingInvites(authority).length)return null;
+ if(!waiting.length&&!reviews.length&&!pendingInvites(authority).length&&!pendingTransfers(authority).length)return null;
  return <>
   <div className="section-head"><h2>{t('today.attention')}</h2></div>
   <ul className="menu">
