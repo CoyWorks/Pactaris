@@ -16,7 +16,7 @@ The gateway serves the same HTML for these paths. Moving between them uses the H
 
 ## Workspace
 
-- **Top bar:** the dynamic's name (opens the switcher list), the notifications bell (dot when something is unread), the safety shield and the avatar (Profile). The shield is on every workspace screen and turns red while the dynamic is paused.
+- **Top bar:** the dynamic's name (opens a menu of your dynamics: choosing one, also the current one, opens its Today page; the menu also creates a new dynamic), the notifications bell (dot when something is unread), the safety shield and the avatar (Profile). The shield is on every workspace screen and turns red while the dynamic is paused.
 - **Bottom tabs:** Today, Tasks (My tasks / Shared tasks), Routines (Habits / Rituals and check-ins), Library (Rules and protocols / Notes and ideas) and Dynamic.
 - **Dynamic tab:** Doms and subs, people (only when you hold authority over someone), household board (when you are part of an active Dom link), requests and journal, members and invitations, relationships and agreements, reward catalog, agreement reviews, safety and my limits, and settings (including your own words for sections, and leave). See [DYNAMIC_EXCHANGES.md](DYNAMIC_EXCHANGES.md).
 - **Household words:** when owners set their own words for Tasks, Routines, Library or Dynamic, the tabs show those.
@@ -56,7 +56,7 @@ From 900 CSS pixels the bottom tabs become a side navigation, the content keeps 
 
 ## Profile
 
-The avatar opens Profile: display name, date and time, notifications, appearance, signed-in sessions, personal export, report a problem, sign out and delete account. These panels used to sit on the household selector.
+The avatar opens Profile. Settings are rows with a chevron that open their own page: display name, date and time, notifications, signed-in devices (sign out this device, one other device, or all other devices) and report a problem or idea. Appearance and personal export stay inline. An **Account** group holds a clearly marked **Sign out** button (this device only) and delete account.
 
 ## Help text
 

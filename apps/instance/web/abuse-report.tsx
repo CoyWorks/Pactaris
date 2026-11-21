@@ -1,14 +1,14 @@
 import React,{useState} from 'react';
-import {Hint} from './navigation.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 
-const categories:[string,MessageKey][]=[['harassment','account.reportHarassment'],['unwantedInvitation','account.reportUnwantedInvitation'],
-  ['nonConsensual','account.reportNonConsensual'],['minorSafety','account.reportMinorSafety'],['impersonation','account.reportImpersonation'],
-  ['spam','account.reportSpam'],['other','account.reportOther']];
+// Mostly about the app itself. What people agree to inside their dynamic is theirs; the one safety
+// category kept is a possible minor, which the platform must act on.
+const categories:[string,MessageKey][]=[['bug','account.reportBug'],['account','account.reportAccount'],['suggestion','account.reportSuggestion'],
+  ['minorSafety','account.reportMinorSafety'],['other','account.reportOther']];
 
 export function ReportPanel({csrfToken,language}:{csrfToken:string;language:string}){
   const t=createTranslator(language);
-  const [category,setCategory]=useState('harassment'),[details,setDetails]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState<MessageKey>();
+  const [category,setCategory]=useState('bug'),[details,setDetails]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState<MessageKey>();
   // Kept for an uncertain retry so the same report is never filed twice.
   const [operationId,setOperationId]=useState(()=>crypto.randomUUID());
   async function send(){
@@ -22,11 +22,11 @@ export function ReportPanel({csrfToken,language}:{csrfToken:string;language:stri
       setMessage('account.reportReceived');setDetails('');setOperationId(crypto.randomUUID());
     }catch{setMessage('errors.unavailable');}finally{setBusy(false);}
   }
-  return <section><h2>{t('account.reportTitle')}</h2><Hint label={t('hint.more')}>{t('account.reportExplanation')}</Hint>
+  return <><p>{t('account.reportExplanation')}</p>
     <label>{t('account.reportCategory')}<select value={category} onChange={event=>setCategory(event.target.value)}>
       {categories.map(([value,key])=><option key={value} value={value}>{t(key)}</option>)}</select></label>
     <label>{t('account.reportDetails')}<textarea value={details} maxLength={1000} onChange={event=>setDetails(event.target.value)}/></label>
     <button type="button" disabled={busy||!details.trim()} onClick={()=>void send()}>{t('account.reportSend')}</button>
-    {message&&<p role="alert">{t(message)}</p>}
-  </section>;
+    {message&&<p role={message==='account.reportReceived'?'status':'alert'}>{t(message)}</p>}
+  </>;
 }

@@ -4,13 +4,13 @@ Platform operators run the hosted service without routine access to household co
 
 ## Reporting
 
-Every signed-in person can open **Report a problem** on the Profile page, choose a category and describe what happened (at most 1000 characters). Categories: harassment, unwanted invitation, non-consensual content or behaviour, possible minor, impersonation, spam, other. The request needs the session, exact Origin and CSRF token and is throttled per account. The operation ID is the report ID, so an uncertain retry cannot file a duplicate.
+Every signed-in person can open **Report a problem or idea** on the Profile page, choose a category and describe what happened (at most 1000 characters). Owner decision, 21 November 2026: reports are mostly about the app itself, and Pactaris does not police what people agree to inside their dynamic. Categories: bug or error, sign-in or account problem, idea or suggestion, possible minor (the one safety category, which the platform must act on), other. Reports filed earlier keep their old abuse categories (harassment, unwanted invitation, non-consensual, impersonation, spam); operators still see and close them. The request needs the session, exact Origin and CSRF token and is throttled per account. The operation ID is the report ID, so an uncertain retry cannot file a duplicate.
 
 A report may name a household only if the reporter can currently access it; the API refuses any other household ID. Operators see the category, the reporter's account ID, the optional household ID, the text and the time. They see no household names, members, tasks, agreements or other content.
 
 ## Operator console
 
-The `/operator` page lists open reports. An operator closes a report as actioned, no action or duplicate. Operators can suspend or restore an account by its account ID:
+Reports arrive only in the operator console at `/operator` (operator allowlist plus a fresh MFA sign-in); nothing is e-mailed. The page lists open reports with their category. An operator closes a report as actioned, no action or duplicate. Operators can suspend or restore an account by its account ID:
 
 - **Suspend** sets the account to `suspended`, ends every Pactaris session and blocks new sign-ins. An operator cannot suspend their own account.
 - **Restore** reverses a suspension only; it cannot reactivate a deleting or deleted account.

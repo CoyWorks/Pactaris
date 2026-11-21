@@ -15,6 +15,7 @@ import {Hint,Icon,Layer,Link,Sheet,navigate,useLocation,type IconName,useFleetin
 import {QuickAdd,type QuickKind} from './quick-add.js';
 import {Skeleton,TodayCheckins,TodayHabits} from './today-habits.js';
 import {SwipeRow,UndoToast,useUndoable} from './swipe.js';
+import {DynamicSwitcher} from './dynamic-switcher.js';
 import {Attention,ExchangeView,Overview,ReviewsView,TermsForm,useExchange,useTerms} from './exchange.js';
 import {AuthorityView,useAuthority} from './authority.js';
 import {TodayAssignedHabits,useAssignedHabits} from './assigned-habits.js';
@@ -187,7 +188,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
  }
  return <div className="workspace" data-view={view}>
   <header className="app-bar">
-   <Link to="/?all" className="title-button" aria-label={t('workspace.switch')}><span>{h?.name??t('workspace.loading')}</span><Icon name="down"/></Link>
+   <DynamicSwitcher householdId={householdId} name={h?.name??t('workspace.loading')} language={language}/>
    <div className="app-bar-actions">
     <button type="button" className="icon-button bell" aria-label={t('notices.title')} aria-pressed={view==='notices'} onClick={()=>go('notices')}><Icon name="bell"/>{(!!notices?.unread||!!data?.hasUnreadTaskInbox)&&<span className="dot" aria-label={t('notices.unread')}/>}</button>
     <button type="button" className={'icon-button shield'+(h?.status==='paused'?' alert':'')} aria-label={t('workspace.safety')} aria-pressed={view==='safety'} onClick={()=>go('safety')}><Icon name="shield"/></button>

@@ -213,3 +213,15 @@ fieldset.picker{border:0;padding:0;margin:.25rem 0}fieldset.picker legend{font-s
 .step-mark{flex:none;width:28px;height:28px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;background:var(--chip-strong);font-weight:600;font-size:.85rem}
 .step-mark.done{background:var(--ok-bg,var(--chip));color:var(--ok-text,var(--text))}
 .proof-image{display:block;max-width:100%;max-height:70vh;object-fit:contain;border-radius:12px;margin:.5rem 0}
+.menu a{width:100%;display:flex;align-items:center;gap:.75rem;min-height:56px;padding:.75rem 1rem;color:var(--text);text-decoration:none}
+.menu a .icon{color:var(--subtle);width:18px}
+button.sign-out{gap:.5rem;background:none;border-color:var(--danger-line);color:var(--danger);margin-bottom:.25rem}
+.sessions li{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;padding:.75rem 1rem}
+.session-actions{display:flex;gap:.5rem}
+.switcher{position:relative;min-width:0}
+.switcher-menu{position:absolute;left:0;top:calc(100% + .25rem);z-index:20;min-width:16rem;max-width:min(22rem,90vw);max-height:60vh;overflow:auto;list-style:none;margin:0;padding:.25rem;background:var(--surface-2);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px var(--shadow)}
+.switcher-menu li+li{border-top:1px solid var(--line)}
+.switcher-menu button{width:100%;display:flex;align-items:center;gap:.6rem;min-height:48px;padding:.5rem .75rem;background:none;border:0;border-radius:10px;color:var(--text);text-align:left;font-weight:400}
+.switcher-menu button[aria-current=true]{font-weight:600}
+.switcher-menu .icon{width:18px;color:var(--accent)}
+.switcher-menu .switcher-heading{padding:.5rem .75rem .25rem;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--subtle)}

@@ -1,26 +1,23 @@
-import React,{useState} from 'react';
+import React,{useEffect,useState} from 'react';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {SessionView} from '../../gateway/store.js';
 
 type Listing={sessions:SessionView[];truncated:boolean};
-export function AccountSessions({csrfToken,language,format,timeZone}:{csrfToken:string;language:string;format:string;timeZone:string}){
+/** Every place this account is signed in. Each can be signed out: this device through the normal
+ *  sign-out, the others one by one or all at once. */
+export function AccountSessions({csrfToken,language,format,timeZone,onSignOut}:{csrfToken:string;language:string;format:string;timeZone:string;onSignOut:()=>void}){
   const t=createTranslator(language);
   const [listing,setListing]=useState<Listing>(),[busy,setBusy]=useState(false);
-  const [error,setError]=useState(false),[notice,setNotice]=useState<MessageKey>();
+  const [error,setError]=useState(false),[notice,setNotice]=useState<MessageKey>(),[confirm,setConfirm]=useState<string|'others'>();
   async function load(){
     const response=await fetch('/api/account/sessions',{cache:'no-store',signal:AbortSignal.timeout(12000)});
     if(!response.ok)throw Error('account.sessions');
     setListing(await response.json() as Listing);
   }
-  async function show(){
-    if(busy)return;
-    if(listing){setListing(undefined);setError(false);setNotice(undefined);return;}
-    setBusy(true);setError(false);setNotice(undefined);
-    try{await load();}catch{setError(true);}finally{setBusy(false);}
-  }
+  useEffect(()=>{setBusy(true);void load().catch(()=>setError(true)).finally(()=>setBusy(false));},[]);// eslint-disable-line react-hooks/exhaustive-deps
   async function revoke(sessionId?:string){
-    if(busy||!window.confirm(t(sessionId?'account.revokeOneConfirm':'account.revokeOtherConfirm')))return;
-    setBusy(true);setError(false);setNotice(undefined);
+    if(busy)return;
+    setBusy(true);setError(false);setNotice(undefined);setConfirm(undefined);
     const path=sessionId?'/api/account/sessions/'+sessionId:'/api/account/revoke-other-sessions';
     try{
       const response=await fetch(path,{method:sessionId?'DELETE':'POST',headers:{'X-CSRF-Token':csrfToken},
@@ -28,25 +25,26 @@ export function AccountSessions({csrfToken,language,format,timeZone}:{csrfToken:
       if(!response.ok)throw Error('account.sessions');
       setNotice(sessionId?'account.sessionRevoked':'account.sessionsRevoked');
       await load();
-    }catch{setError(true);setListing(undefined);}finally{setBusy(false);}
+    }catch{setError(true);}finally{setBusy(false);}
   }
-  return <section>
-    <button type="button" disabled={busy} aria-expanded={!!listing} onClick={()=>void show()}>
-      {t(listing?'account.hideSessions':'account.showSessions')}
-    </button>
+  const others=listing?.sessions.filter(item=>!item.current)??[];
+  return <>
+    <p>{t('account.sessionsDescription')}</p>
     {error&&<p role="alert">{t('errors.unavailable')}</p>}
     {notice&&<p role="status">{t(notice)}</p>}
-    {listing&&<>
-      <p>{t('account.sessionsDescription')}</p>
-      {listing.truncated&&<p>{t('account.sessionsTruncated')}</p>}
-      <ul>{listing.sessions.map(item=><li key={item.id}>
-        <strong>{t(item.current?'account.currentSession':'account.otherSession')}</strong>
-        <dl><dt>{t('account.sessionStarted')}</dt><dd><time dateTime={item.createdAt}>{formatTime(new Date(item.createdAt),format,timeZone)}</time></dd>
-          <dt>{t('account.sessionExpires')}</dt><dd><time dateTime={item.expiresAt}>{formatTime(new Date(item.expiresAt),format,timeZone)}</time></dd></dl>
-        {!item.current&&<button type="button" disabled={busy} onClick={()=>void revoke(item.id)}>{t('account.revokeOne')}</button>}
-      </li>)}</ul>
-      {listing.sessions.some(item=>!item.current)&&
-        <button type="button" disabled={busy} onClick={()=>void revoke()}>{t('account.revokeOtherSessions')}</button>}
-    </>}
-  </section>;
+    {!listing&&busy&&<p role="status">{t('workspace.loading')}</p>}
+    {listing?.truncated&&<p>{t('account.sessionsTruncated')}</p>}
+    {listing&&<ul className="card-list sessions">{listing.sessions.map(item=><li key={item.id}>
+      <span className="grow"><strong>{t(item.current?'account.currentSession':'account.otherSession')}</strong>
+        <span className="muted">{t('account.sessionStarted')} <time dateTime={item.createdAt}>{formatTime(new Date(item.createdAt),format,timeZone)}</time></span>
+        <span className="muted">{t('account.sessionExpires')} <time dateTime={item.expiresAt}>{formatTime(new Date(item.expiresAt),format,timeZone)}</time></span></span>
+      {confirm===item.id?<span className="session-actions"><button type="button" className="danger" disabled={busy} onClick={()=>{if(item.current)onSignOut();else void revoke(item.id);}}>{t('account.signOutConfirm')}</button>
+        <button type="button" className="secondary" disabled={busy} onClick={()=>setConfirm(undefined)}>{t('onboarding.cancel')}</button></span>
+       :<button type="button" className="secondary" disabled={busy} onClick={()=>setConfirm(item.id)}>{t(item.current?'account.signOutHere':'account.revokeOne')}</button>}
+    </li>)}</ul>}
+    {others.length>0&&(confirm==='others'
+      ?<div className="notice"><p>{t('account.revokeOtherConfirm')}</p><button type="button" className="danger" disabled={busy} onClick={()=>void revoke()}>{t('account.revokeOtherSessions')}</button>
+        <button type="button" className="secondary" disabled={busy} onClick={()=>setConfirm(undefined)}>{t('onboarding.cancel')}</button></div>
+      :<button type="button" className="wide" disabled={busy} onClick={()=>setConfirm('others')}>{t('account.revokeOtherSessions')}</button>)}
+  </>;
 }

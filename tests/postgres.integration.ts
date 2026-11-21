@@ -567,7 +567,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   // Moderation: idempotent reports, operator close and account suspension with session revocation.
   const moderation=new Moderation(gatewayDb.pool),reporter=await store.account('https://idp.fixture.invalid/','reporter-subject','Reporter fixture');
   const target=await store.account('https://idp.fixture.invalid/','target-subject','Target fixture'),reportId=randomUUID();
-  const report={operationId:reportId,category:'harassment' as const,householdId:null,details:'Synthetic report'};
+  const report={operationId:reportId,category:'bug' as const,householdId:null,details:'Synthetic report'};
   assert.equal(await moderation.report(reporter.id,report),true);assert.equal(await moderation.report(reporter.id,report),true);
   assert.equal(await moderation.report(target.id,report),false);
   assert.equal((await moderation.reports('open',null)).reports.filter(r=>r.id===reportId).length,1);

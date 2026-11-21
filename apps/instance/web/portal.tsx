@@ -11,7 +11,7 @@ import {HouseholdWorkspace} from './workspace.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import {InvitationJoin} from './invitations.js';
-import {Hint,Icon,Link,navigate,useLocation} from './navigation.js';
+import {Hint,Icon,Layer,Link,navigate,useLocation} from './navigation.js';
 import {Skeleton} from './today-habits.js';
 import {AppearancePanel} from './appearance.js';
 import {NotificationSettings} from './notification-settings.js';
@@ -24,11 +24,14 @@ function writeLast(accountId:string,household:string){try{window.localStorage.se
 function clearLast(){try{window.localStorage.removeItem(lastKey);}catch{/* storage unavailable */}}
 type Listing={households:Summary[];partial:boolean;nextCursor:string|null};
 type Operation={operationId:string;householdId:string;action:'create'|'leave';status:'pending'|'complete'|'released'};
+function ProfileRow({title,detail,onOpen}:{title:string;detail?:string;onOpen:()=>void}){
+ return <li><button type="button" onClick={onOpen}><span className="grow"><span>{title}</span>{detail&&<span className="muted">{detail}</span>}</span><Icon name="chevron"/></button></li>;
+}
 export function Portal({language,format,timeZone}:{language:string;format:string;timeZone:string}) {
   const t=createTranslator(language);
   const [session,setSession]=useState<Session>(),[loading,setLoading]=useState(true),[error,setError]=useState<MessageKey>(),[listing,setListing]=useState<Listing>(),[selected,setSelected]=useState<Summary>(),[busy,setBusy]=useState(false);
   const [name,setName]=useState(''),[createId,setCreateId]=useState<string>(),[createPending,setCreatePending]=useState(false),[leaveId,setLeaveId]=useState<string>(),[confirmLeave,setConfirmLeave]=useState(false),[leavePending,setLeavePending]=useState(false),[refresh,setRefresh]=useState(0);
-  const [loadError,setLoadError]=useState<MessageKey>();
+  const [loadError,setLoadError]=useState<MessageKey>(),[panel,setPanel]=useState<'name'|'time'|'sessions'|'report'>();
   const accountId=useRef<string|undefined>(undefined);
   const {path,search}=useLocation();
   const selectedId=/^\/households\/([a-f0-9-]{36})$/i.exec(path)?.[1];
@@ -134,19 +137,33 @@ export function Portal({language,format,timeZone}:{language:string;format:string
     <div className="profile-card"><span className="avatar large" aria-hidden="true">{initial}</span><strong>{session.account.displayName||t('portal.account')}</strong></div>
     {error&&<p role="alert">{t(error)}</p>}
     <h2 className="group-title">{t('profile.preferences')}</h2>
-    <AccountDisplayName key={'display-name:'+session.account.id} csrfToken={session.csrfToken} language={language}
-      preferredName={session.preferredName} onSave={value=>setSession(current=>current?.account.id===session.account.id
-        ?{...current,account:{...current.account,displayName:value.displayName},preferredName:value.preferredName??undefined}:current)}/>
-    <AccountPresentation key={'presentation:'+session.account.id} csrfToken={session.csrfToken} language={language}
-      saved={session.presentation} defaults={{format,timeZone}} onSave={value=>setSession(current=>
-        current?.account.id===session.account.id?{...current,presentation:value??undefined}:current)}/>
-    <ul className="menu"><li><Link to="/profile/notifications"><span className="grow"><span>{t('notices.title')}</span><span className="muted">{t('notifySettings.summary')}</span></span><Icon name="chevron"/></Link></li></ul>
+    <ul className="menu">
+     <ProfileRow title={t('account.displayNameTitle')} detail={session.account.displayName} onOpen={()=>setPanel('name')}/>
+     <ProfileRow title={t('account.presentationTitle')} detail={`${displayFormat} · ${displayZone}`} onOpen={()=>setPanel('time')}/>
+     <ProfileRow title={t('notices.title')} detail={t('notifySettings.summary')} onOpen={()=>navigate('/profile/notifications')}/>
+    </ul>
     <AppearancePanel language={language}/>
     <h2 className="group-title">{t('profile.privacy')}</h2>
-    <AccountSessions key={'sessions:'+session.account.id} csrfToken={session.csrfToken} language={language} format={displayFormat} timeZone={displayZone}/>
+    <ul className="menu">
+     <ProfileRow title={t('account.sessionsTitle')} onOpen={()=>setPanel('sessions')}/>
+     <ProfileRow title={t('account.reportTitle')} onOpen={()=>setPanel('report')}/>
+    </ul>
     <ExportPanel csrfToken={session.csrfToken} language={language}/>
-    <ReportPanel csrfToken={session.csrfToken} language={language}/>
-    <button type="button" className="wide" disabled={busy} onClick={()=>{void logout();}}>{t('portal.logout')}</button>
+    <h2 className="group-title">{t('profile.account')}</h2>
+    <button type="button" className="wide sign-out" disabled={busy} onClick={()=>{void logout();}}><Icon name="logout"/>{t('portal.logout')}</button>
+    <p className="muted">{t('profile.signOutHelp')}</p>
+    {panel==='name'&&<Layer title={t('account.displayNameTitle')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
+     <AccountDisplayName key={'display-name:'+session.account.id} csrfToken={session.csrfToken} language={language}
+      preferredName={session.preferredName} onSave={value=>setSession(current=>current?.account.id===session.account.id
+        ?{...current,account:{...current.account,displayName:value.displayName},preferredName:value.preferredName??undefined}:current)}/></Layer>}
+    {panel==='time'&&<Layer title={t('account.presentationTitle')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
+     <AccountPresentation key={'presentation:'+session.account.id} csrfToken={session.csrfToken} language={language} embedded
+      saved={session.presentation} defaults={{format,timeZone}} onSave={value=>setSession(current=>
+        current?.account.id===session.account.id?{...current,presentation:value??undefined}:current)}/></Layer>}
+    {panel==='sessions'&&<Layer title={t('account.sessionsTitle')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
+     <AccountSessions key={'sessions:'+session.account.id} csrfToken={session.csrfToken} language={language} format={displayFormat} timeZone={displayZone} onSignOut={()=>{void logout();}}/></Layer>}
+    {panel==='report'&&<Layer title={t('account.reportTitle')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
+     <ReportPanel csrfToken={session.csrfToken} language={language}/></Layer>}
     <DeleteAccountPanel csrfToken={session.csrfToken} language={language}/>
   </main>;
   if(selectedId)return <main className="app">{problem}{error&&<p role="alert">{t(error)}</p>}
@@ -167,7 +184,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
     </section>}
     <section><h2>{t('onboarding.createTitle')}</h2><Hint label={t('hint.more')}>{t('onboarding.createDescription')}</Hint>
       {createPending&&<p role="status">{t('onboarding.createPending')}</p>}
-      <form onSubmit={event=>{void create(event);}}><label htmlFor="dynamic-name">{t('onboarding.name')}</label><input id="dynamic-name" name="dynamicName" value={name} onChange={event=>setName(event.target.value)} maxLength={120} required autoComplete="off" disabled={busy}/>
+      <form onSubmit={event=>{void create(event);}}><label htmlFor="dynamic-name">{t('onboarding.name')}</label><input id="dynamic-name" name="dynamicName" autoFocus={new URLSearchParams(search).has('create')} value={name} onChange={event=>setName(event.target.value)} maxLength={120} required autoComplete="off" disabled={busy}/>
         <button type="submit" disabled={busy||!name.trim()}>{t(busy?'onboarding.saving':createPending?'onboarding.retry':'onboarding.create')}</button>
       </form>
     </section>
