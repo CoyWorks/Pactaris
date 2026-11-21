@@ -10,12 +10,12 @@ A report may name a household only if the reporter can currently access it; the 
 
 ## Operator console
 
-Reports arrive only in the operator console at `/operator` (operator allowlist plus a fresh MFA sign-in); nothing is e-mailed. The page lists open reports with their category. An operator closes a report as actioned, no action or duplicate. Operators can suspend or restore an account by its account ID:
+Reports arrive only in the operator console at `/operator` (operator allowlist plus a fresh MFA sign-in); nothing is e-mailed. The page lists open reports with their category. An operator can add internal notes (never shown to the reporter), close a report as actioned, no action or duplicate, and reopen it. See [OPERATOR_ACCESS.md](OPERATOR_ACCESS.md#operator-console) for the full console. Operators can suspend or restore an account by its account ID:
 
 - **Suspend** sets the account to `suspended`, ends every Pactaris session and blocks new sign-ins. An operator cannot suspend their own account.
 - **Restore** reverses a suspension only; it cannot reactivate a deleting or deleted account.
 
-Every close, suspension and restoration is recorded in `pactaris.operator_events` with the operator account, action, target ID and time. The runtime can insert but not change or delete these records.
+Every close, reopen, note, suspension, restoration and settings change is recorded in `pactaris.operator_events` with the operator account, action, target ID and time. The runtime can insert but not change or delete these records.
 
 ## Policy notes and limits
 
