@@ -160,7 +160,7 @@ journalctl -u pactaris-offsite-backup.service -n 20 --no-pager
 systemctl enable --now pactaris-offsite-backup.timer
 ```
 
-Archives are stored per component as `<component>-<UTC time>-<checkpoint>.tar.age`. They are written under a temporary name and only renamed once complete. After each successful copy, archives beyond `keep` are removed from the target; only names in this format are touched. The encrypted staging copy on this host is removed after every attempt. Local checkpoints under each component's `backups/` directory are not pruned by this tool.
+Archives are stored per component as `<component>-<UTC time>-<checkpoint>.tar.age`. They are written under a temporary name and only renamed once complete. After each successful copy, archives beyond `keep` are removed from the target; only names in this format are touched. The encrypted staging copy on this host is removed after every attempt. Local checkpoints under each component's `backups/` directory are not pruned by this tool; [server housekeeping](SERVER_HOUSEKEEPING.md) does that.
 
 `/var/lib/pactaris-offsite-backup/state.json` records the last success and failure per component, and [local monitoring](OPERATIONS_MONITORING.md) reports `offsiteBackupAgeSeconds`. Alert when it exceeds about 26 hours or is null. The checkpoint shares each component's update lock, so a run that overlaps a deployment fails for that component and is retried the next day.
 
