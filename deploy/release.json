@@ -438,6 +438,13 @@
     },
     {
       "component": "instance",
+      "id": "0044_primary_dom_rights",
+      "path": "migrations/instance/0044_primary_dom_rights.sql",
+      "sha256": "f363a72fd88037bb35f4472765c418a84cee190d7c1f0e570d1b155e1c7c380a",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
       "id": "0044_task_proofs",
       "path": "migrations/instance/0044_task_proofs.sql",
       "sha256": "56ac7d956af0e02d880dab850803e90a035f1837216e2aae824abf1314395679",

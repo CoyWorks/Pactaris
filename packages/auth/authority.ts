@@ -2,14 +2,15 @@ import {uuid} from './delegation.js';
 import {documentText,documentVersion} from './library.js';
 import type {AuthorityAction} from './authority-actions.js';
 export {authorityActions,isAuthorityAction,type AuthorityAction} from './authority-actions.js';
-export type RankAuthority='off'|'tasks'|'outcomes';
 export type AuthorityLink={linkId:string;domId:string;domName:string;subId:string;subName:string;state:'invited'|'active';label:string;
- rankAuthority:RankAuthority;private:boolean;canSpendPoints:boolean;canPropose:boolean;version:string;role:'dom'|'sub'|'viewer'};
+ isPrimary:boolean;legacy:boolean;subHasPrimary:boolean;private:boolean;canSpendPoints:boolean;canPropose:boolean;version:string;role:'dom'|'sub'|'viewer'};
 export type HabitFields={title:string;description:string;period:'daily'|'weekly';mode:'minimum'|'maximum';target:number;timeZone:string;rewardPoints:number|null;penaltyPoints:number|null;punishment:string|null;milestoneEvery:number|null;milestonePoints:number|null};
 export type AssignedHabit=HabitFields&{habitId:string;holderId:string;holderName:string;subjectId:string;subjectName:string;state:'active'|'paused';version:string;periodStart:string;currentTotal:number;canEdit:boolean;canRecord:boolean;streaks:{current:number;longest:number};results:{periodStart:string;total:number;result:'reached'|'missed'|'skipped'}[]};
-export type AuthorityDelegation={delegationId:string;linkId:string;delegateId:string;delegateName:string;tasks:boolean;outcomes:boolean;endsAt:string|null;version:string};
+export type AuthorityDelegation={delegationId:string;linkId:string;delegateId:string;delegateName:string;tasks:boolean;approve:boolean;outcomes:boolean;endsAt:string|null;version:string};
 export type AuthorityMember={membershipId:string;name:string;owner:boolean;rank:number|null};
-export type AuthorityPower={membershipId:string;tasks:boolean;outcomes:boolean;manage:boolean;points:string};
+export type AuthorityPower={membershipId:string;tasks:boolean;approve:boolean;outcomes:boolean;manage:boolean;points:string};
+/** An open proposal to move the primary-Dom role; the new Dom and the sub both accept. */
+export type AuthorityTransfer={transferId:string;subId:string;subName:string;fromId:string|null;fromName:string|null;toId:string;toName:string;proposerId:string;toAccepted:boolean;subAccepted:boolean;version:string;canAccept:boolean;canCancel:boolean};
 export type PointAdjustment={id:string;recipientId:string;issuerId:string;points:number;reason:string;createdAt:string};
 /** Last 14 days, oldest first; `today` is the final day in the household time zone. */
 export type ProgressPerson={membershipId:string;name:string;rank:number|null;self:boolean;doms:string[];balance:string;openTasks:number;tasks:number[];points:number[];reached:number[];missed:number[]};
@@ -19,7 +20,7 @@ export type ShopItem={itemId:string;version:string;kind:'reward'|'consequence';t
 export type ShopRequest={redemptionId:string;version:string;buyerId:string;buyerName:string;title:string;points:number;createdAt:string};
 export type ShopPurchase={redemptionId:string;version:string;title:string;points:number;state:'requested'|'fulfilled'|'declined'|'cancelled'|'reversed'|'expired';createdAt:string};
 export type AuthorityResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';resourceId?:string;
- links?:AuthorityLink[];delegations?:AuthorityDelegation[];members?:AuthorityMember[];powers?:AuthorityPower[];adjustments?:PointAdjustment[];
+ links?:AuthorityLink[];delegations?:AuthorityDelegation[];members?:AuthorityMember[];powers?:AuthorityPower[];adjustments?:PointAdjustment[];transfers?:AuthorityTransfer[];
  subsVisible?:boolean;settingsVersion?:string;canSetVisibility?:boolean;myPoints?:string;myRank?:number|null;habits?:AssignedHabit[];today?:string;people?:ProgressPerson[];
  balance?:string;canSpend?:boolean;pointsEnabled?:boolean;offers?:ShopOffer[];items?:ShopItem[];requests?:ShopRequest[];purchases?:ShopPurchase[]};
 export class AuthorityError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'unavailable'){super('authority.'+kind);}}
@@ -28,11 +29,12 @@ const instant=(v:unknown):v is string=>typeof v==='string'&&v.length<=40&&Number
 const count=(v:unknown):v is string=>typeof v==='string'&&/^(0|[1-9][0-9]{0,14})$/.test(v);
 const rank=(v:unknown)=>v===null||(Number.isInteger(v)&&(v as number)>=1&&(v as number)<=99);
 const shapes:Record<AuthorityAction,string[]>={authorityList:[],linkInvite:['subId','label'],linkAccept:['linkId','version'],linkDecline:['linkId','version'],
- linkEnd:['linkId','version'],linkSettings:['linkId','version','rankAuthority','private','canSpendPoints','canPropose'],delegationSet:['linkId','delegateId','version','tasks','outcomes','endsAt'],
+ linkEnd:['linkId','version'],linkSettings:['linkId','version','private','canSpendPoints','canPropose'],delegationSet:['linkId','delegateId','version','tasks','approve','outcomes','endsAt'],
  delegationRevoke:['delegationId','version'],rankSet:['subjectId','rank'],visibilitySet:['subsVisible','version'],pointsAdjust:['subjectId','points','reason'],
  punishmentGive:['subjectId','title','description','exchangeId'],habitList:[],habitSave:['habitId','subjectId','version','fields'],
  habitState:['habitId','version','state'],habitRecord:['habitId','count'],habitReverse:['entryId'],progressList:[],
- shopList:[],shopSave:['itemId','version','fields','listed','autoGrant','weeklyLimit'],shopArchive:['itemId','version'],shopBuy:['itemId','version']};
+ shopList:[],shopSave:['itemId','version','fields','listed','autoGrant','weeklyLimit'],shopArchive:['itemId','version'],shopBuy:['itemId','version'],
+ transferPropose:['subId','toId'],transferAccept:['transferId','version'],transferDecline:['transferId','version'],transferCancel:['transferId','version']};
 const points=(v:unknown)=>v===null||(Number.isInteger(v)&&(v as number)>=1&&(v as number)<=10000);
 export function validHabitFields(f:unknown):f is HabitFields{
  const milestone=(v:unknown)=>v===null||(Number.isInteger(v)&&(v as number)>=2&&(v as number)<=365);
@@ -49,7 +51,7 @@ export function authorityInput(action:AuthorityAction,value:unknown):Record<stri
  if(!record(value)||!uuid(value.operationId))throw new AuthorityError('invalid');
  if(Object.keys(value).sort().join(',')!==['operationId',...shapes[action]].sort().join(','))throw new AuthorityError('invalid');
  const v=value,bad=()=>{throw new AuthorityError('invalid');};
- for(const key of ['subId','linkId','delegateId','delegationId','entryId'])if(key in v&&!uuid(v[key]))bad();
+ for(const key of ['subId','linkId','delegateId','delegationId','entryId','toId','transferId'])if(key in v&&!uuid(v[key]))bad();
  if('subjectId'in v&&!(action==='habitSave'?v.subjectId===null||uuid(v.subjectId):uuid(v.subjectId)))bad();
  if(action.startsWith('shop')&&'itemId'in v&&!(action==='shopSave'?v.itemId===null||uuid(v.itemId):uuid(v.itemId)))bad();
  if(action==='shopSave'&&(!validShopFields(v.fields)||(v.itemId===null?v.version!==null:!documentVersion(v.version))||typeof v.listed!=='boolean'||typeof v.autoGrant!=='boolean'||
@@ -60,14 +62,14 @@ export function authorityInput(action:AuthorityAction,value:unknown):Record<stri
  if(action==='habitRecord'&&(!Number.isInteger(v.count)||(v.count as number)<1||(v.count as number)>1000))bad();
  if('version'in v&&action!=='habitSave'&&action!=='shopSave'&&!(action==='delegationSet'||action==='visibilitySet'?count(v.version):documentVersion(v.version)))bad();
  if(action==='linkInvite'&&!documentText(v.label,80,true))bad();
- if(action==='linkSettings'&&(!['off','tasks','outcomes'].includes(v.rankAuthority as string)||typeof v.private!=='boolean'||typeof v.canSpendPoints!=='boolean'||typeof v.canPropose!=='boolean'))bad();
- if(action==='delegationSet'&&(typeof v.tasks!=='boolean'||typeof v.outcomes!=='boolean'||(!v.tasks&&!v.outcomes)||(v.endsAt!==null&&(!instant(v.endsAt)||Date.parse(v.endsAt as string)<=Date.now()))))bad();
+ if(action==='linkSettings'&&(typeof v.private!=='boolean'||typeof v.canSpendPoints!=='boolean'||typeof v.canPropose!=='boolean'))bad();
+ if(action==='delegationSet'&&(typeof v.tasks!=='boolean'||typeof v.approve!=='boolean'||typeof v.outcomes!=='boolean'||(!v.tasks&&!v.approve&&!v.outcomes)||(v.endsAt!==null&&(!instant(v.endsAt)||Date.parse(v.endsAt as string)<=Date.now()))))bad();
  if(action==='rankSet'&&!rank(v.rank))bad();
  if(action==='visibilitySet'&&typeof v.subsVisible!=='boolean')bad();
  if(action==='pointsAdjust'&&(!Number.isInteger(v.points)||v.points===0||Math.abs(v.points as number)>10000||!documentText(v.reason,200,true)))bad();
  if(action==='punishmentGive'&&(!documentText(v.title,120)||!documentText(v.description,500,true,true)||(v.exchangeId!==null&&!uuid(v.exchangeId))))bad();
  const lower:Record<string,unknown>={};
- for(const key of ['operationId','subId','linkId','delegateId','delegationId','subjectId','exchangeId','habitId','entryId','itemId'])if(typeof v[key]==='string')lower[key]=(v[key] as string).toLowerCase();
+ for(const key of ['operationId','subId','linkId','delegateId','delegationId','subjectId','exchangeId','habitId','entryId','itemId','toId','transferId'])if(typeof v[key]==='string')lower[key]=(v[key] as string).toLowerCase();
  return {...value,...lower} as Record<string,unknown>&{operationId:string};
 }
 const name=(v:unknown):v is string=>typeof v==='string'&&v.length<=80;
@@ -124,24 +126,30 @@ export function authorityOutput(action:AuthorityAction,input:Record<string,unkno
  }
  out.links=list(v.links,100,x=>{
   if(!uuid(x.linkId)||!uuid(x.domId)||!name(x.domName)||!uuid(x.subId)||!name(x.subName)||!['invited','active'].includes(x.state as string)||!name(x.label)||
-   !['off','tasks','outcomes'].includes(x.rankAuthority as string)||typeof x.private!=='boolean'||typeof x.canSpendPoints!=='boolean'||typeof x.canPropose!=='boolean'||!documentVersion(x.version)||!['dom','sub','viewer'].includes(x.role as string))bad();
-  return {linkId:x.linkId,domId:x.domId,domName:x.domName,subId:x.subId,subName:x.subName,state:x.state,label:x.label,rankAuthority:x.rankAuthority,private:x.private,canSpendPoints:x.canSpendPoints,canPropose:x.canPropose,version:x.version,role:x.role} as AuthorityLink;
+   typeof x.isPrimary!=='boolean'||typeof x.legacy!=='boolean'||typeof x.subHasPrimary!=='boolean'||typeof x.private!=='boolean'||typeof x.canSpendPoints!=='boolean'||typeof x.canPropose!=='boolean'||!documentVersion(x.version)||!['dom','sub','viewer'].includes(x.role as string))bad();
+  return {linkId:x.linkId,domId:x.domId,domName:x.domName,subId:x.subId,subName:x.subName,state:x.state,label:x.label,isPrimary:x.isPrimary,legacy:x.legacy,subHasPrimary:x.subHasPrimary,private:x.private,canSpendPoints:x.canSpendPoints,canPropose:x.canPropose,version:x.version,role:x.role} as AuthorityLink;
  });
  out.delegations=list(v.delegations,200,x=>{
-  if(!uuid(x.delegationId)||!uuid(x.linkId)||!uuid(x.delegateId)||!name(x.delegateName)||typeof x.tasks!=='boolean'||typeof x.outcomes!=='boolean'||(x.endsAt!==null&&!instant(x.endsAt))||!documentVersion(x.version))bad();
-  return {delegationId:x.delegationId,linkId:x.linkId,delegateId:x.delegateId,delegateName:x.delegateName,tasks:x.tasks,outcomes:x.outcomes,endsAt:x.endsAt,version:x.version} as AuthorityDelegation;
+  if(!uuid(x.delegationId)||!uuid(x.linkId)||!uuid(x.delegateId)||!name(x.delegateName)||typeof x.tasks!=='boolean'||typeof x.approve!=='boolean'||typeof x.outcomes!=='boolean'||(x.endsAt!==null&&!instant(x.endsAt))||!documentVersion(x.version))bad();
+  return {delegationId:x.delegationId,linkId:x.linkId,delegateId:x.delegateId,delegateName:x.delegateName,tasks:x.tasks,approve:x.approve,outcomes:x.outcomes,endsAt:x.endsAt,version:x.version} as AuthorityDelegation;
  });
  out.members=list(v.members,100,x=>{
   if(!uuid(x.membershipId)||!name(x.name)||typeof x.owner!=='boolean'||!rank(x.rank))bad();
   return {membershipId:x.membershipId,name:x.name,owner:x.owner,rank:x.rank} as AuthorityMember;
  });
  out.powers=list(v.powers,100,x=>{
-  if(!uuid(x.membershipId)||typeof x.tasks!=='boolean'||typeof x.outcomes!=='boolean'||typeof x.manage!=='boolean'||!count(x.points))bad();
-  return {membershipId:x.membershipId,tasks:x.tasks,outcomes:x.outcomes,manage:x.manage,points:x.points} as AuthorityPower;
+  if(!uuid(x.membershipId)||typeof x.tasks!=='boolean'||typeof x.approve!=='boolean'||typeof x.outcomes!=='boolean'||typeof x.manage!=='boolean'||!count(x.points))bad();
+  return {membershipId:x.membershipId,tasks:x.tasks,approve:x.approve,outcomes:x.outcomes,manage:x.manage,points:x.points} as AuthorityPower;
  });
  out.adjustments=list(v.adjustments,10,x=>{
   if(!uuid(x.id)||!uuid(x.recipientId)||!uuid(x.issuerId)||!Number.isInteger(x.points)||!documentText(x.reason,200,true)||!instant(x.createdAt))bad();
   return {id:x.id,recipientId:x.recipientId,issuerId:x.issuerId,points:x.points,reason:x.reason,createdAt:x.createdAt} as PointAdjustment;
+ });
+ out.transfers=list(v.transfers,100,x=>{
+  if(!uuid(x.transferId)||!uuid(x.subId)||!name(x.subName)||!(x.fromId===null||uuid(x.fromId))||!(x.fromName===null||name(x.fromName))||!uuid(x.toId)||!name(x.toName)||!uuid(x.proposerId)||
+   typeof x.toAccepted!=='boolean'||typeof x.subAccepted!=='boolean'||!documentVersion(x.version)||typeof x.canAccept!=='boolean'||typeof x.canCancel!=='boolean')bad();
+  return {transferId:x.transferId,subId:x.subId,subName:x.subName,fromId:x.fromId,fromName:x.fromName,toId:x.toId,toName:x.toName,proposerId:x.proposerId,
+   toAccepted:x.toAccepted,subAccepted:x.subAccepted,version:x.version,canAccept:x.canAccept,canCancel:x.canCancel} as AuthorityTransfer;
  });
  if(typeof v.subsVisible!=='boolean'||!count(v.settingsVersion)||typeof v.canSetVisibility!=='boolean'||!count(v.myPoints)||!rank(v.myRank??null))bad();
  Object.assign(out,{subsVisible:v.subsVisible,settingsVersion:v.settingsVersion,canSetVisibility:v.canSetVisibility,myPoints:v.myPoints,myRank:v.myRank??null});
