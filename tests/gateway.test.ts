@@ -347,10 +347,10 @@ test('every API response is uncached and carries the restrictive security header
 test('abuse reports bind the reporter, validate input and cannot name an inaccessible household; moderation is operator-only',async()=>{
   const {reportInput}=await import('../apps/gateway/moderation.js');
   const operationId=randomUUID();
-  assert.deepEqual(reportInput({operationId,category:'spam',householdId:null,details:'  Unwanted messages  '}),{operationId,category:'spam',householdId:null,details:'Unwanted messages'});
-  for(const value of [{operationId,category:'spam',householdId:null,details:' '},{operationId,category:'secret',householdId:null,details:'x'},
-    {operationId,category:'spam',householdId:'nope',details:'x'},{operationId,category:'spam',householdId:null,details:'x'.repeat(1001)},
-    {operationId,category:'spam',details:'x'},{operationId,category:'spam',householdId:null,details:'x',reporter:randomUUID()}])assert.equal(reportInput(value),undefined);
+  assert.deepEqual(reportInput({operationId,category:'bug',householdId:null,details:'  Button does nothing  '}),{operationId,category:'bug',householdId:null,details:'Button does nothing'});
+  for(const value of [{operationId,category:'bug',householdId:null,details:' '},{operationId,category:'secret',householdId:null,details:'x'},{operationId,category:'harassment',householdId:null,details:'x'},
+    {operationId,category:'bug',householdId:'nope',details:'x'},{operationId,category:'bug',householdId:null,details:'x'.repeat(1001)},
+    {operationId,category:'bug',details:'x'},{operationId,category:'bug',householdId:null,details:'x',reporter:randomUUID()}])assert.equal(reportInput(value),undefined);
   const store=new FixtureStore(),filed:unknown[]=[],actions:string[]=[];
   const moderation={report:async(reporter:string,input:unknown)=>{filed.push([reporter,input]);return true;},
     reports:async()=>{actions.push('reports');return {reports:[],nextCursor:null};},
@@ -361,9 +361,9 @@ test('abuse reports bind the reporter, validate input and cannot name an inacces
   const token='b'.repeat(43),csrf=randomUUID();await store.createSession(token,{id:accountA,displayName:'Reporter'},csrf);
   const trusted={...headers,cookie:'__Host-pactaris-session='+token,origin:'https://pactaris.app','x-csrf-token':csrf};
   const send=(payload:Record<string,unknown>)=>inject(app,{method:'POST',url:'/api/account/report',headers:trusted,payload});
-  assert.equal((await send({operationId:randomUUID(),category:'harassment',householdId:householdA,details:'Report text',reporterAccountId:accountB})).statusCode,400);
-  assert.equal((await send({operationId:randomUUID(),category:'harassment',householdId:householdB,details:'Report text'})).statusCode,400);
-  assert.equal((await send({operationId:randomUUID(),category:'harassment',householdId:householdA,details:'Report text'})).statusCode,201);
+  assert.equal((await send({operationId:randomUUID(),category:'bug',householdId:householdA,details:'Report text',reporterAccountId:accountB})).statusCode,400);
+  assert.equal((await send({operationId:randomUUID(),category:'bug',householdId:householdB,details:'Report text'})).statusCode,400);
+  assert.equal((await send({operationId:randomUUID(),category:'bug',householdId:householdA,details:'Report text'})).statusCode,201);
   assert.deepEqual((filed[0] as unknown[])[0],accountA);assert.equal(filed.length,1);
   for(const [method,url] of [['GET','/api/operator/reports'],['POST','/api/operator/reports/'+randomUUID()+'/close'],['POST','/api/operator/accounts/'+accountB+'/suspend']] as const)
     assert.equal((await inject(app,{method,url,headers:trusted,...(method==='POST'?{payload:{resolution:'noAction'}}:{})})).statusCode,403);

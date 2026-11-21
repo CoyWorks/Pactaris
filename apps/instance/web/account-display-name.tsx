@@ -25,7 +25,7 @@ export function AccountDisplayName({csrfToken,language,preferredName,onSave}:{
     }catch{setMessage('errors.unavailable');}
     finally{setBusy(false);}
   }
-  return <details><summary>{t('account.displayNameTitle')}</summary>
+  return <>
     <p>{t('account.displayNameDescription')}</p>
     <form onSubmit={event=>{
       event.preventDefault();
@@ -38,5 +38,5 @@ export function AccountDisplayName({csrfToken,language,preferredName,onSave}:{
       {preferredName&&<button type="button" disabled={busy} onClick={()=>void update(null)}>{t('account.displayNameReset')}</button>}
       {message&&<p role="status">{t(message)}</p>}
     </form>
-  </details>;
+  </>;
 }

@@ -3,11 +3,11 @@ import {Hint} from './navigation.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import type {AccountPresentation as Presentation} from '../../gateway/store.js';
 
-export function AccountPresentation({csrfToken,language,saved,defaults,onSave}:{
-  csrfToken:string;language:string;saved?:Presentation;defaults:Presentation;onSave:(value:Presentation|null)=>void
+export function AccountPresentation({csrfToken,language,saved,defaults,onSave,embedded=false}:{
+  csrfToken:string;language:string;saved?:Presentation;defaults:Presentation;onSave:(value:Presentation|null)=>void;embedded?:boolean
 }){
   const t=createTranslator(language);
-  const [open,setOpen]=useState(false),[busy,setBusy]=useState(false);
+  const [open,setOpen]=useState(embedded),[busy,setBusy]=useState(false);
   const [draft,setDraft]=useState(saved??defaults),[error,setError]=useState<MessageKey>(),[done,setDone]=useState(false);
 
   async function save(presentation:Presentation|null){
@@ -25,10 +25,10 @@ export function AccountPresentation({csrfToken,language,saved,defaults,onSave}:{
       setDone(true);
     }catch{setError('errors.unavailable');}finally{setBusy(false);}
   }
-  return <section>
-    <button type="button" aria-expanded={open} disabled={busy} onClick={()=>{
+  return <section className={embedded?'plain':undefined}>
+    {!embedded&&<button type="button" aria-expanded={open} disabled={busy} onClick={()=>{
       setDraft(saved??defaults);setDone(false);setError(undefined);setOpen(!open);
-    }}>{t('account.presentationTitle')}</button>
+    }}>{t('account.presentationTitle')}</button>}
     {open&&<form onSubmit={event=>{
       event.preventDefault();
       if(!busy)void save({format:draft.format.trim(),timeZone:draft.timeZone.trim()});

@@ -1,6 +1,8 @@
 import React,{useEffect,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 
+const categoryLabels:Record<string,MessageKey>={bug:'account.reportBug',account:'account.reportAccount',suggestion:'account.reportSuggestion',minorSafety:'account.reportMinorSafety',other:'account.reportOther',
+ harassment:'account.reportHarassment',unwantedInvitation:'account.reportUnwantedInvitation',nonConsensual:'account.reportNonConsensual',impersonation:'account.reportImpersonation',spam:'account.reportSpam'};
 type Report={id:string;reporterAccountId:string;category:string;householdId:string|null;details:string;createdAt:string};
 const resolutions:[string,MessageKey][]=[['actioned','operator.resolutionActioned'],['noAction','operator.resolutionNoAction'],['duplicate','operator.resolutionDuplicate']];
 const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -29,7 +31,7 @@ export function OperatorModeration({csrf,language}:{csrf:string;language:string}
     {!reports&&<p>{t('errors.unavailable')}</p>}
     {reports&&!reports.length&&<p>{t('operator.reportsEmpty')}</p>}
     {reports?.map(report=><article key={report.id}>
-      <p>{`${report.category} · ${new Date(report.createdAt).toLocaleString(language)}`}</p>
+      <p><strong>{t(categoryLabels[report.category]??'account.reportOther')}</strong> <time dateTime={report.createdAt}>{new Date(report.createdAt).toLocaleString(language)}</time></p>
       <p>{`${t('operator.reporter')}: ${report.reporterAccountId}`}{report.householdId?` · ${report.householdId}`:''}</p>
       <p>{report.details}</p>
       {resolutions.map(([value,key])=><button key={value} type="button" onClick={()=>void post(`/api/operator/reports/${report.id}/close`,{resolution:value},'operator.reportClosed')}>{t(key)}</button>)}

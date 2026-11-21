@@ -470,6 +470,13 @@
       "path": "migrations/gateway/0021_moderation.sql",
       "sha256": "0209ac998cdb9b07b2d7ba0ddedc1a3bed6080c519247ef9f39ab2868dc8a024",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0022_report_categories",
+      "path": "migrations/gateway/0022_report_categories.sql",
+      "sha256": "4e33f87be6b98baad245151115f066941063dab24fbb98b3abd7f6e42b3df76d",
+      "backwardCompatible": true
     }
   ]
 }
