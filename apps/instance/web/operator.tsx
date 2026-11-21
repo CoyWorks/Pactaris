@@ -1,5 +1,5 @@
 import {OperatorInventory} from './operator-inventory.js';
-import {AccountsTab,AuditTab,HouseholdsTab,OverviewTab,ReportsTab,readJson,send} from './operator-console.js';
+import {AccountsTab,AuditTab,HouseholdsTab,OperatorsPanel,OverviewTab,ReportsTab,readJson,send} from './operator-console.js';
 import {navigate,useLocation} from './navigation.js';
 import React,{useEffect,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
@@ -45,7 +45,7 @@ export function OperatorPage({language,format,timeZone}:{language:string;format:
     {tab==='accounts'&&<AccountsTab csrf={csrf} refresh={refresh} selected={account} onSelect={id=>go('accounts',id?{account:id}:{})} {...f}/>}
     {tab==='households'&&<HouseholdsTab refresh={refresh} {...f}/>}
     {tab==='instances'&&<OperatorInventory language={language} refresh={refresh}/>}
-    {tab==='settings'&&<><GeneralSettings csrf={csrf} refresh={refresh} language={language}/><SmtpPanel csrf={csrf} refresh={refresh} language={language}/></>}
+    {tab==='settings'&&<><GeneralSettings csrf={csrf} refresh={refresh} language={language}/><OperatorsPanel refresh={refresh} onAccount={id=>go('accounts',{account:id})} {...f}/><SmtpPanel csrf={csrf} refresh={refresh} language={language}/></>}
     {tab==='audit'&&<AuditTab refresh={refresh} onAccount={id=>go('accounts',{account:id})} {...f}/>}
    </section>
   </>}
