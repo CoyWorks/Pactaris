@@ -1,5 +1,6 @@
 import {GatewayPartner} from './partner.js';
 import {RevocationJournalSync} from './revocation-journal.js';
+import {GatewayMaintenance} from './maintenance.js';
 import {AccountDeletion} from './account-deletion.js';
 import {WebPushDevices} from './web-push.js';
 import {InvitationMail,loadInvitationMail} from './invitation-mail.js';
@@ -21,6 +22,7 @@ const onboarding=new OnboardingService(new PgOnboardingStore(db.pool,config.onbo
 const invitationSigner=new DelegationSigner(config),invitations=new GatewayInvitations(db.pool,store,new PrivateHouseholdClient(invitationSigner),new PrivateInvitationClient(invitationSigner),loadInvitationMail(config,db.pool));
 const members=new GatewayMembers(db.pool,store,new PrivateHouseholdClient(invitationSigner),new PrivateMemberClient(invitationSigner));
 const journal=new RevocationJournalSync(db.pool,invitationSigner),deletions=new AccountDeletion(db.pool,invitationSigner);
+const maintenance=new GatewayMaintenance(db.pool);
 const partner=new GatewayPartner(store,new PrivateHouseholdClient(invitationSigner),new PrivatePartnerClient(invitationSigner));
 async function tick(){
   if(stopped)return;let state='ready';
@@ -31,6 +33,8 @@ async function tick(){
   // Keep the central revocation copy current; a failure defers, never blocks other work.
   if(!stopped)try{const result=await journal.sync();if(result.failedInstances)process.stderr.write(JSON.stringify({code:'journal.sync_deferred',instances:result.failedInstances})+'\n');}catch{process.stderr.write(JSON.stringify({code:'journal.sync_deferred'})+'\n');}
   if(!stopped)try{const result=await deletions.work();if(result.pending)process.stderr.write(JSON.stringify({code:'account.deletion_deferred',accounts:result.pending})+'\n');}catch{process.stderr.write(JSON.stringify({code:'account.deletion_deferred'})+'\n');}
+  // Daily retention (docs/MAINTENANCE.md); a failure defers to the next tick.
+  if(!stopped)try{await maintenance.scheduled();}catch{process.stderr.write(JSON.stringify({code:'maintenance.deferred'})+'\n');}
   if(!stopped)try{await invitations.deliverMail();}catch{process.stderr.write(JSON.stringify({code:'invitation.mail_deferred'})+'\n');}
   if(!stopped&&webPush)try{await webPush.work();}catch{process.stderr.write(JSON.stringify({code:'push.delivery_deferred'})+'\n');}
   if(!stopped&&webPush)try{await webPush.workTaskNotices(store,partner);}catch{process.stderr.write(JSON.stringify({code:'push.task_delivery_deferred'})+'\n');}

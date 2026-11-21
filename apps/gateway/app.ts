@@ -21,6 +21,7 @@ import type {GatewayExchange} from './exchange.js';
 import type {GatewayAuthority} from './authority.js';
 import type {GatewayProof} from './proof.js';
 import {accountQuery,reportQuery,settingsInput,type AdminConsole} from './admin.js';
+import type {GatewayMaintenance} from './maintenance.js';
 import {ProofCommandError,proofImageTypes,maxProofUpload,type ProofType} from '../../packages/auth/proof.js';
 import {isAuthorityAction,authorityInput,AuthorityError} from '../../packages/auth/authority.js';
 import {isExchangeAction,exchangeInput,ExchangeError} from '../../packages/auth/exchange.js';
@@ -62,7 +63,7 @@ type OperatorInventory={
   instances:(after:string|null)=>ReturnType<typeof listRegistryInstances>;
   placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
 };
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'|'shop'>,proof?:Pick<GatewayProof,'upload'|'view'|'remove'>,admin?:AdminConsole) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'|'shop'>,proof?:Pick<GatewayProof,'upload'|'view'|'remove'>,admin?:AdminConsole,maintenance?:Pick<GatewayMaintenance,'gateway'|'status'|'instances'|'runInstance'>) {
   const app=express();headers(app,new URL(config.publicOrigin).protocol==='https:');app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -223,6 +224,19 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     if(!await store.throttle('operator.grants:'+session.account.id,20)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
     const changed=action==='grant'?await admin.grantOperator(session.account.id,req.params.id as string):await admin.revokeOperator(session.account.id,req.params.id as string);
     res.status(changed?204:409).end();
+  }));
+  app.get('/api/operator/maintenance',operatorRoute('maintenance',async(req,res)=>{
+    if(Object.keys(req.query).length){invalid(res);return;}if(!maintenance){missing(res);return;}
+    const [gateway,instances]=await Promise.all([maintenance.status(),maintenance.instances()]);
+    res.json({gateway,...instances});
+  }));
+  app.post('/api/operator/maintenance/run',express.json({limit:256,strict:true,inflate:false}),operatorRoute('maintenance.run',async(req,res,session)=>{
+    const body=req.body as Record<string,unknown>|undefined;
+    if(!maintenance||!body||Object.keys(body).sort().join(',')!=='dry,target'||typeof body.dry!=='boolean'||(body.target!=='gateway'&&!uuid(body.target))){invalid(res);return;}
+    if(!await store.throttle('operator.maintenance:'+session.account.id,10)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+    if(body.target==='gateway'){res.json({target:'gateway',dry:body.dry,counts:await maintenance.gateway('operator',body.dry,session.account.id)});return;}
+    const counts=await maintenance.runInstance(session.account.id,(body.target as string).toLowerCase(),body.dry);
+    if(!counts){missing(res);return;}res.json({target:body.target,dry:body.dry,counts});
   }));
   app.get('/api/operator/overview',operatorRoute('overview',async(req,res)=>{
     if(Object.keys(req.query).length){invalid(res);return;}if(!admin){missing(res);return;}res.json(await admin.overview());

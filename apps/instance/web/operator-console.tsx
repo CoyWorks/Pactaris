@@ -35,7 +35,7 @@ const registryStatus:Record<string,MessageKey>={active:'operator.registryActive'
 const resolutions:[string,MessageKey][]=[['actioned','operator.resolutionActioned'],['noAction','operator.resolutionNoAction'],['duplicate','operator.resolutionDuplicate']];
 const resolutionLabels:Record<string,MessageKey>={actioned:'operator.resolvedActioned',noAction:'operator.resolvedNoAction',duplicate:'operator.resolvedDuplicate'};
 const eventLabels:Record<string,MessageKey>={'report.closed':'operator.eventReportClosed','report.reopened':'operator.eventReportReopened','report.noted':'operator.eventReportNoted',
- 'account.suspended':'operator.eventAccountSuspended','report.deleted':'operator.eventReportDeleted','operator.granted':'operator.eventOperatorGranted','operator.revoked':'operator.eventOperatorRevoked','account.restored':'operator.eventAccountRestored','settings.updated':'operator.eventSettingsUpdated'};
+ 'account.suspended':'operator.eventAccountSuspended','report.deleted':'operator.eventReportDeleted','operator.granted':'operator.eventOperatorGranted','operator.revoked':'operator.eventOperatorRevoked','maintenance.run':'operator.eventMaintenanceRun','account.restored':'operator.eventAccountRestored','settings.updated':'operator.eventSettingsUpdated'};
 
 type Overview={accounts:Record<string,number>;newAccounts:number;signedIn:number;households:Record<string,number>;instances:{id:string;status:string;households:number}[];reports:Record<string,number>;mail:Record<string,number>;observedAt:string};
 export function OverviewTab({refresh,onOpen,...f}:Format&{refresh:number;onOpen:(tab:'reports'|'accounts'|'households'|'settings')=>void}){
@@ -232,4 +232,51 @@ function Pager({next,after,onPage,language}:{next?:string|null;after?:string;onP
  if(!next&&!after)return null;
  return <div className="workspace-actions">{after&&<button type="button" className="secondary" onClick={()=>onPage(undefined)}>{t('workspace.firstPage')}</button>}
   {next&&<button type="button" onClick={()=>onPage(next)}>{t('portal.more')}</button>}</div>;
+}
+
+type Run={id?:string;task?:string;trigger:string;dry:boolean;startedAt:string|null;finishedAt?:string|null;ok:boolean|null;details:Record<string,number>};
+type TableSize={name:string;bytes:number;rows:number};
+type InstanceMaintenance={instanceId:string;reachable:boolean;database?:number;runs?:Run[];tables?:TableSize[];proofs?:{files:number;bytes:number}};
+type Maintenance={gateway:{runs:Run[];tables:TableSize[];database:number};instances:InstanceMaintenance[]};
+const bytes=(value:number,language:string)=>new Intl.NumberFormat(language,{style:'unit',unit:value>=1073741824?'gigabyte':value>=1048576?'megabyte':'kilobyte',maximumFractionDigits:1})
+ .format(value>=1073741824?value/1073741824:value>=1048576?value/1048576:value/1024);
+const countLabels:Record<string,MessageKey>={rateLimits:'maintenance.rateLimits',membershipOperations:'maintenance.membershipOperations',closedReports:'maintenance.closedReports',
+ readNotices:'maintenance.readNotices',readTaskInbox:'maintenance.readTaskInbox',usedTokens:'maintenance.usedTokens',orphanFiles:'maintenance.orphanFiles'};
+/** Receipts are summed into one line; the other counts are shown by name. */
+function summary(details:Record<string,number>,t:(key:MessageKey)=>string){
+ const receipts=Object.entries(details).filter(([k])=>k.endsWith('Receipts')).reduce((sum,[,v])=>sum+v,0);
+ const rest=Object.entries(details).filter(([k])=>!k.endsWith('Receipts')&&countLabels[k]);
+ return [...(Object.keys(details).some(k=>k.endsWith('Receipts'))?[[t('maintenance.receipts'),receipts] as const]:[]),...rest.map(([k,v])=>[t(countLabels[k]!),v] as const)];
+}
+export function MaintenanceTab({csrf,refresh,...f}:Format&{csrf:string;refresh:number}){
+ const t=createTranslator(f.language),[reload,setReload]=useState(0),{data,error}=useLoad<Maintenance>('/api/operator/maintenance',`${refresh}:${reload}`);
+ const [busy,setBusy]=useState<string>(),[preview,setPreview]=useState<{target:string;counts:Record<string,number>}>(),[message,setMessage]=useState<MessageKey>();
+ async function run(target:string,dry:boolean){
+  setBusy(target);setMessage(undefined);if(!dry)setPreview(undefined);
+  try{const r=await send('/api/operator/maintenance/run',csrf,'POST',{target,dry});if(!r.ok)throw r.status;const result=await r.json() as {counts:Record<string,number>};
+   if(dry)setPreview({target,counts:result.counts});else{setMessage('maintenance.done');setReload(v=>v+1);}}
+  catch(status){setMessage(failure(status));}finally{setBusy(undefined);}
+ }
+ const Runs=({runs}:{runs:Run[]})=>!runs.length?<p className="muted">{t('maintenance.noRuns')}</p>:<ul className="card-list">{runs.slice(0,8).map((r,i)=><li key={r.id??i} className="row"><span className="grow">
+  <span>{when(r.startedAt,f)}{dot}{t(r.trigger==='operator'?'maintenance.byOperator':'maintenance.bySchedule')}{r.dry&&<>{dot}{t('maintenance.dryRun')}</>}{r.task&&<>{dot}{t(r.task==='proofFiles'?'maintenance.taskProofFiles':'maintenance.taskRetention')}</>}</span>
+  <span className="muted">{r.ok===false?t('maintenance.failed'):summary(r.details,t).map(([label,value])=>`${label}: ${value}`).join(dot)}</span></span></li>)}</ul>;
+ const Tables=({tables,total}:{tables:TableSize[];total:number})=><details><summary>{t('maintenance.storage')} {bytes(total,f.language)}</summary>
+  <ul className="card-list">{tables.map(x=><li key={x.name} className="row"><span className="grow"><code>{x.name}</code></span><span className="muted">{bytes(x.bytes,f.language)}{dot}{x.rows}</span></li>)}</ul></details>;
+ const Actions=({target}:{target:string})=><div className="workspace-actions">
+  <button type="button" className="secondary" disabled={!!busy} onClick={()=>void run(target,true)}>{t('maintenance.preview')}</button>
+  <button type="button" disabled={!!busy||preview?.target!==target} onClick={()=>void run(target,false)}>{t('maintenance.runNow')}</button></div>;
+ const Preview=({target}:{target:string})=>preview?.target===target?<div className="notice"><p>{t('maintenance.previewIntro')}</p>
+  <ul>{summary(preview.counts,t).map(([label,value])=><li key={label}>{`${label}: ${value}`}</li>)}</ul></div>:null;
+ return <>
+  <p className="muted">{t('maintenance.help')}</p>
+  {error&&<p role="alert">{t(error)}</p>}{message&&<p role="status">{t(message)}</p>}
+  {data&&<>
+   <section><h3>{t('maintenance.gateway')}</h3><Preview target="gateway"/><Actions target="gateway"/><Runs runs={data.gateway.runs}/><Tables tables={data.gateway.tables} total={data.gateway.database}/></section>
+   {data.instances.map(i=><section key={i.instanceId}><h3>{t('maintenance.instance')} <code>{short(i.instanceId)}</code></h3>
+    {!i.reachable?<p role="alert">{t('maintenance.unreachable')}</p>:<>
+     <p className="muted">{t('maintenance.proofFiles')} {i.proofs?.files??0}{dot}{bytes(i.proofs?.bytes??0,f.language)}</p>
+     <Preview target={i.instanceId}/><Actions target={i.instanceId}/><Runs runs={i.runs??[]}/><Tables tables={i.tables??[]} total={i.database??0}/></>}
+   </section>)}
+  </>}
+ </>;
 }

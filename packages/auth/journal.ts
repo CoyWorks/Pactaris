@@ -7,11 +7,21 @@ export type JournalKind=typeof journalKinds[number];
 export const journalBatch=50;
 export type JournalEntry={id:string;householdId:string;kind:JournalKind;subject:Record<string,string>;occurredAt:string};
 export type JournalInput={operationId:string;limit:number}|{operationId:string;entryIds:string[]}|{operationId:string;entries:JournalEntry[];final:boolean};
+/** Instance-scoped maintenance requests from the operator console (docs/MAINTENANCE.md). */
+export type MaintenanceInput={operationId:string;dry?:boolean};
+export function maintenanceInput(action:'maintenanceStatus'|'maintenanceRun',value:unknown):MaintenanceInput{
+  if(!value||typeof value!=='object'||Array.isArray(value))throw new JournalError('invalid');
+  const input=value as Record<string,unknown>,keys=Object.keys(input).sort().join(',');
+  if(!uuid(input.operationId))throw new JournalError('invalid');
+  if(action==='maintenanceStatus'){if(keys!=='operationId')throw new JournalError('invalid');return {operationId:input.operationId};}
+  if(keys!=='dry,operationId'||typeof input.dry!=='boolean')throw new JournalError('invalid');
+  return {operationId:input.operationId,dry:input.dry};
+}
 export class JournalError extends Error {
   constructor(public kind:'denied'|'invalid'|'unavailable'){super('journal.'+kind);}
 }
 
-export function journalInput(action:JournalAction,value:unknown):JournalInput {
+export function journalInput(action:Exclude<JournalAction,'maintenanceStatus'|'maintenanceRun'>,value:unknown):JournalInput {
   if(!value||typeof value!=='object'||Array.isArray(value))throw new JournalError('invalid');
   const input=value as Record<string,unknown>,keys=Object.keys(input).sort().join(',');
   if(!uuid(input.operationId))throw new JournalError('invalid');

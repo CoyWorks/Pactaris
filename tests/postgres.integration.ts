@@ -17,7 +17,7 @@ import {GatewayRelationships} from '../apps/gateway/relationships.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createECDH,randomUUID,randomBytes } from 'node:crypto';
-import { mkdtemp,readFile,writeFile,rm,mkdir,cp } from 'node:fs/promises';
+import { mkdtemp,readFile,writeFile,rm,mkdir,cp,utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -38,6 +38,7 @@ import { AccountDeletion } from '../apps/gateway/account-deletion.js';
 import { streamAccountExport } from '../apps/gateway/account-export.js';
 import { Moderation } from '../apps/gateway/moderation.js';
 import { AdminConsole } from '../apps/gateway/admin.js';
+import { GatewayMaintenance } from '../apps/gateway/maintenance.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
 import {InvitationMail} from '../apps/gateway/invitation-mail.js';
 import { GatewayInvitations } from '../apps/gateway/invitations.js';
@@ -600,12 +601,12 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const page=await admin.households(null);assert.ok(page.households.length>0);assert.ok(page.households.every(h=>Object.keys(h).sort().join(',')==='id,instanceId,members,status'));
   const overview=await admin.overview();assert.ok(overview.accounts.active!>0&&overview.instances.length===2);
   const settings=await admin.settings();assert.equal(settings.registration,'open');
-  assert.equal(await admin.saveSettings(account.id,{registration:'closed',announcement:{text:'Maintenance tonight',level:'warning'},version:String(Number(settings.version)+1)}),undefined);
-  const closed=(await admin.saveSettings(account.id,{registration:'closed',announcement:{text:'Maintenance tonight',level:'warning'},version:settings.version}))!;
+  assert.equal(await admin.saveSettings(account.id,{registration:'closed',announcement:{text:'Maintenance tonight',level:'warning'},closedReportDays:365,version:String(Number(settings.version)+1)}),undefined);
+  const closed=(await admin.saveSettings(account.id,{registration:'closed',announcement:{text:'Maintenance tonight',level:'warning'},closedReportDays:365,version:settings.version}))!;
   assert.equal(closed.registration,'closed');assert.deepEqual(await admin.announcement(),{text:'Maintenance tonight',level:'warning'});
   assert.equal(await admin.registrationClosedFor('https://idp.fixture.invalid/','brand-new-subject'),true);
   assert.equal(await admin.registrationClosedFor('https://idp.fixture.invalid/','target-subject'),false);
-  await admin.saveSettings(account.id,{registration:'open',announcement:null,version:closed.version});
+  await admin.saveSettings(account.id,{registration:'open',announcement:null,closedReportDays:365,version:closed.version});
   assert.equal(await admin.registrationClosedFor('https://idp.fixture.invalid/','brand-new-subject'),false);
   assert.deepEqual((await admin.events(null)).events.slice(0,4).map(e=>e.action),['settings.updated','settings.updated','report.reopened','report.noted']);
   // Operators granted in the console act like configured ones (still with fresh MFA); configured
@@ -2254,6 +2255,50 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    assert.equal((await db.owner.query('SELECT state FROM pactaris.assignment_policies WHERE id=$1',[departurePolicyId])).rows[0].state,'revoked');
    assert.ok((await read(A,atomicTask)).events.some((e:any)=>e.action==='membershipEnded'));
    const rejoined=randomUUID();await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status) VALUES($1,$2,$3,'active')",[home.householdId,rejoined,B.account.id]);await gatewayDb.owner.query('UPDATE pactaris.account_households SET membership_id=$1 WHERE household_id=$2 AND account_id=$3',[rejoined,home.householdId,B.account.id]);assert.equal((await post(B,'partnerRead',{taskId:atomicTask})).status,404);assert.equal((await post(B,'partnerList',{filter:'closed'})).data.tasks.length,0);assert.equal((await post(B,'partnerPolicyList')).data.policies.length,0);
+  })();
+
+  await (async function verifyMaintenance(){
+   // Retention: old receipts (with their outbox rows) and read notices go, recent ones stay; a stray
+   // proof file without a row is deleted once it has settled; the gateway trims its own records.
+   const maintenance=new GatewayMaintenance(gatewayDb.pool,signer);
+   for(const db of [a,b]){
+    await db.owner.query("UPDATE pactaris.partner_receipts SET created_at=now()-interval '100 days'");
+    await db.owner.query("UPDATE pactaris.member_notices SET read=true,created_at=now()-interval '100 days'");
+   }
+   const oldReceipts=(await a.owner.query('SELECT count(*)::int n FROM pactaris.partner_receipts')).rows[0].n+(await b.owner.query('SELECT count(*)::int n FROM pactaris.partner_receipts')).rows[0].n;
+   assert.ok(oldReceipts>0);
+   const stray=randomUUID(),strayHousehold=randomUUID();
+   await mkdir(join(folder,'proofs-0',strayHousehold),{recursive:true});await writeFile(join(folder,'proofs-0',strayHousehold,stray),'x');
+   await utimes(join(folder,'proofs-0',strayHousehold,stray),new Date(Date.now()-2*3600e3),new Date(Date.now()-2*3600e3));
+   const fresh=randomUUID();await writeFile(join(folder,'proofs-0',strayHousehold,fresh),'y');
+   const status=await maintenance.instances();assert.equal(status.instances.length,2);assert.ok(status.instances.every(i=>i.reachable));
+   let removed=0;
+   for(const id of ids){
+    const preview=(await maintenance.runInstance(account.id,id,true))!;removed+=preview.partnerReceipts!;
+    if(id===ids[0])assert.equal(preview.orphanFiles,1);
+   }
+   assert.equal(removed,oldReceipts);
+   assert.equal((await a.owner.query('SELECT count(*)::int n FROM pactaris.partner_receipts')).rows[0].n+(await b.owner.query('SELECT count(*)::int n FROM pactaris.partner_receipts')).rows[0].n,oldReceipts);
+   for(const id of ids){const done=(await maintenance.runInstance(account.id,id,false))!;assert.ok(done.readNotices!>=0);}
+   for(const db of [a,b]){
+    assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.partner_receipts')).rows[0].n,0);
+    assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.member_notices WHERE read')).rows[0].n,0);
+    assert.equal((await db.owner.query("SELECT count(*)::int n FROM pactaris.maintenance_runs WHERE trigger='operator' AND NOT dry AND ok")).rows[0].n,2);
+   }
+   await assert.rejects(readFile(join(folder,'proofs-0',strayHousehold,stray)));assert.equal(await readFile(join(folder,'proofs-0',strayHousehold,fresh),'utf8'),'y');
+   assert.equal(await maintenance.runInstance(account.id,randomUUID(),false),undefined);
+   // Gateway: an expired rate limit, an old finished membership operation and an old closed report.
+   await gatewayDb.owner.query("INSERT INTO pactaris.auth_limits(bucket_hash,attempts,resets_at) VALUES($1,1,now()-interval '2 hours')",['f'.repeat(64)]);
+   const oldReport=randomUUID();
+   await gatewayDb.owner.query(`INSERT INTO pactaris.abuse_reports(id,reporter_account_id,category,household_id,details,state,resolution,closed_at,closed_by)
+    VALUES($1,$2,'bug',NULL,'Old',  'closed','noAction',now()-interval '400 days',$2)`,[oldReport,account.id]);
+   await gatewayDb.owner.query('INSERT INTO pactaris.report_notes(id,report_id,author_account_id,body) VALUES($1,$2,$3,$4)',[randomUUID(),oldReport,account.id,'Note']);
+   const dry=await maintenance.gateway('operator',true,account.id);assert.ok(dry.rateLimits!>=1);assert.equal(dry.closedReports,1);
+   assert.equal((await gatewayDb.owner.query('SELECT count(*)::int n FROM pactaris.abuse_reports WHERE id=$1',[oldReport])).rows[0].n,1);
+   const real=await maintenance.gateway('operator',false,account.id);assert.equal(real.closedReports,1);
+   assert.equal((await gatewayDb.owner.query('SELECT count(*)::int n FROM pactaris.abuse_reports WHERE id=$1',[oldReport])).rows[0].n,0);
+   assert.equal(await maintenance.scheduled(),true);assert.equal(await maintenance.scheduled(),false);
+   const view=await maintenance.status();assert.ok(view.runs.length>=3&&view.tables.length>0&&view.database>0);
   })();
 
   // Separate concurrent creation IDs are budgeted under the same account lock.

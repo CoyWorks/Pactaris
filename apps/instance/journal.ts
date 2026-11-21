@@ -1,18 +1,20 @@
 import type pg from 'pg';
 import type { InstanceConfig } from '../../packages/config/index.js';
 import { DelegationError, JournalVerifier, type JournalAction } from '../../packages/auth/delegation.js';
-import { journalInput, JournalError } from '../../packages/auth/journal.js';
+import { journalInput, maintenanceInput, JournalError } from '../../packages/auth/journal.js';
+import { InstanceMaintenance } from './maintenance.js';
 
 /** Hands out and acknowledges content-free revocation entries for the gateway copy. */
 export class InstanceJournal {
   private verifier:JournalVerifier;
-  constructor(private pool:pg.Pool,private config:InstanceConfig){this.verifier=new JournalVerifier(config);}
+  constructor(private pool:pg.Pool,private config:InstanceConfig,private maintenance?:InstanceMaintenance){this.verifier=new JournalVerifier(config);}
   /** Any failure to read the fence counts as fenced: a restored database must not serve early. */
   async fenced():Promise<boolean>{
     try{return (await this.pool.query('SELECT pactaris.restore_fenced() AS fenced')).rows[0].fenced!==false;}catch{return true;}
   }
   async execute(token:string,action:JournalAction,body:Buffer):Promise<unknown> {
     const verified=await this.verifier.verify(token,action,body);
+    if(action==='maintenanceStatus'||action==='maintenanceRun')return this.maintain(action,body,verified);
     let input:ReturnType<typeof journalInput>;
     try{input=journalInput(action,JSON.parse(body.toString('utf8')));}catch{throw new JournalError('invalid');}
     if(input.operationId!==verified.operationId)throw new JournalError('invalid');
@@ -33,5 +35,17 @@ export class InstanceJournal {
       if(error instanceof DelegationError||error instanceof JournalError)throw error;
       throw new JournalError('unavailable');
     }finally{db.release();}
+  }
+  private async maintain(action:'maintenanceStatus'|'maintenanceRun',body:Buffer,verified:{operationId:string;jti:string;expiresAt:Date}){
+    let input:ReturnType<typeof maintenanceInput>;
+    try{input=maintenanceInput(action,JSON.parse(body.toString('utf8')));}catch{throw new JournalError('invalid');}
+    if(input.operationId!==verified.operationId)throw new JournalError('invalid');
+    if(!this.maintenance)throw new JournalError('unavailable');
+    const used=await this.pool.query('INSERT INTO pactaris.delegation_uses(jti,expires_at) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING jti',[verified.jti,verified.expiresAt]);
+    if(!used.rowCount)throw new DelegationError('journal.replay');
+    try{
+      if(action==='maintenanceStatus')return {operationId:input.operationId,status:await this.maintenance.status()};
+      return {operationId:input.operationId,dry:input.dry,counts:await this.maintenance.run('operator',input.dry===true)};
+    }catch{throw new JournalError('unavailable');}
   }
 }

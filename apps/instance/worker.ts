@@ -4,11 +4,13 @@ import { loadConfig } from '../../packages/config/index.js';
 import { requireSchema } from '../../packages/db/migrations.js';
 import { database } from '../../packages/db/index.js';
 import { loadProofStore, sweepProofs } from './proof.js';
+import { InstanceMaintenance } from './maintenance.js';
 
 // Each scheduler call is one atomic, bounded database job. No browser polling dependency.
 const config = loadConfig(process.env.APP_CONFIG ?? '', process.argv.includes('--development'));
 const db = database(config); let stopped = false;
 const proofStore = loadProofStore(config);
+const maintenance = new InstanceMaintenance(db.pool, config, proofStore);
 async function tick() {
   if (stopped) return;
   let state = 'ready'; try { await db.probe(); if(config.delegation){await requireSchema(db.pool,'instance');await db.pool.query('DELETE FROM pactaris.delegation_uses WHERE expires_at<=now()');
@@ -24,6 +26,9 @@ async function tick() {
     // Proof bytes are deleted once every approver saw them, on expiry, removal or departure.
     const proofs=await db.pool.query("SELECT 1 FROM pactaris_meta.migrations WHERE component='instance' AND id='0044_task_proofs'");
     if(proofs.rowCount&&proofStore){for(let n=0;n<8&&!stopped;n++){if(await sweepProofs(db.pool,config.instanceId,proofStore)<200)break;}}
+    // Daily retention: old receipts, read notices and orphan proof files (docs/MAINTENANCE.md).
+    const retention=await db.pool.query("SELECT 1 FROM pactaris_meta.migrations WHERE component='instance' AND id='0046_retention'");
+    if(retention.rowCount&&!stopped)try{await maintenance.scheduled();}catch{process.stderr.write(JSON.stringify({code:'maintenance.deferred'})+'\n');}
     const reminders=await db.pool.query("SELECT 1 FROM pactaris_meta.migrations WHERE component='instance' AND id='0028_task_notifications'");
     if(reminders.rowCount){for(let n=0;n<16&&!stopped;n++){const result=await db.pool.query('SELECT pactaris.run_task_reminders($1) AS processed',[config.instanceId]);if(!result.rows[0].processed)break;}}
   } } catch { state = 'unavailable'; }
