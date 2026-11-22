@@ -13,6 +13,9 @@ test('pilot creation budget defaults without rewriting installed config and reje
   assert.equal(parseGatewayConfig(c).onboarding.maxOwnedHouseholds,1);
   assert.equal(c.onboarding,undefined);
   for(const value of [0,-1,1.5,100,'4'])assert.throws(()=>parseGatewayConfig({...c,onboarding:{maxOwnedHouseholds:value}}),ConfigError);
+  assert.equal(parseGatewayConfig(c).session.passkeyIsMfa,false);
+  assert.equal(parseGatewayConfig({...c,session:{idleSeconds:1800,absoluteSeconds:28800,passkeyIsMfa:true}}).session.passkeyIsMfa,true);
+  assert.throws(()=>parseGatewayConfig({...c,session:{idleSeconds:1800,absoluteSeconds:28800,passkeyIsMfa:'yes'}}),ConfigError);
 });
 test('production requires TLS; development HTTP is loopback-only', () => {
   const c = sample(); delete c.listen.tls;

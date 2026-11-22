@@ -1,6 +1,7 @@
 import React,{useState} from 'react';
 import {Hint} from './navigation.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
+import {forgetSignedIn} from './auto-sign-in.js';
 
 export function DeleteAccountPanel({csrfToken,language}:{csrfToken:string;language:string}){
   const t=createTranslator(language);
@@ -16,7 +17,7 @@ export function DeleteAccountPanel({csrfToken,language}:{csrfToken:string;langua
       if(response.status===409){setMessage('account.deleteBlocked');return;}
       if(response.status===429){setMessage('errors.rateLimited');return;}
       if(response.status!==202)throw Error('delete.unavailable');
-      setMessage('account.deletePending');
+      setMessage('account.deletePending');forgetSignedIn();
       setTimeout(()=>window.location.assign('/'),3000);
     }catch{setMessage('errors.unavailable');}finally{setBusy(false);}
   }

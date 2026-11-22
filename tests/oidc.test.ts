@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { generateKeyPair,exportJWK,SignJWT } from 'jose';
 import * as oidc from 'openid-client';
-import { OpenIdLogin } from '../packages/auth/oidc.js';
+import { OpenIdLogin, verifiedMfaClaim } from '../packages/auth/oidc.js';
 import { parseGatewayConfig } from '../packages/config/index.js';
 const issuer='https://idp.example.invalid/application/o/fixture/',clientId='fixture-client';
 const attempt={state:'fixture-state',nonce:'fixture-nonce',verifier:'a'.repeat(43)};
@@ -66,3 +66,12 @@ test('malformed verified email does not prevent ordinary subject-based sign-in',
   flags.email='fixture@example.invalid\n';flags.email_verified=true;
   assert.deepEqual(await client.finish(callback(),attempt),{issuer,subject:'fixture-subject',name:'Fixture user'});
 }));
+test('passkey sign-in counts as MFA only when the operator opts in',()=>{
+  const at=Math.floor(Date.now()/1000)-60;
+  assert.equal(verifiedMfaClaim({amr:['pwd','mfa'],auth_time:at}),at);
+  assert.equal(verifiedMfaClaim({amr:['user'],auth_time:at}),undefined);
+  assert.equal(verifiedMfaClaim({amr:['user'],auth_time:at},true),at);
+  assert.equal(verifiedMfaClaim({amr:['pwd'],auth_time:at},true),undefined);
+  assert.equal(verifiedMfaClaim({auth_time:at},true),undefined);
+  assert.equal(verifiedMfaClaim({amr:['user'],auth_time:at+3600},true),undefined);
+});
