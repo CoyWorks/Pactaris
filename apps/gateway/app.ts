@@ -90,7 +90,9 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     const binding=token(),attempt={state:token(),nonce:token(),verifier:token()};
     try {
       const url=await oidc.start(attempt,req.path!=='/auth/login');
-      await store.beginLogin(binding,attempt);
+      // The installed app asks for its longer session; operator sign-in always gets a browser session.
+      const client=req.path!=='/auth/operator'&&req.query.client==='app'?'app':'browser';
+      await store.beginLogin(binding,attempt,client);
       setCookie(res,LOGIN,binding,300);res.redirect(302,url);
     }catch{loginFailure(req,res,503,'login_unavailable','errors.loginUnavailable');}
   });
@@ -112,8 +114,9 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       }
       const account=await store.account(identity.issuer,identity.subject,identity.name,email);
       const previous=cookie(req,SESSION);if(previous)await store.logout(previous);
-      const sessionToken=token();await store.createSession(sessionToken,account,token(),config.session.idleSeconds,config.session.absoluteSeconds,email,identity.mfaAt,identity.authAt);
-      setCookie(res,SESSION,sessionToken,config.session.absoluteSeconds);res.redirect(303,'/');
+      const bounds=attempt.client==='app'?config.session.app:config.session;
+      const sessionToken=token();await store.createSession(sessionToken,account,token(),bounds.idleSeconds,bounds.absoluteSeconds,email,identity.mfaAt,identity.authAt);
+      setCookie(res,SESSION,sessionToken,bounds.absoluteSeconds);res.redirect(303,'/');
     }catch{loginFailure(req,res,400,'login_failed','errors.loginFailed');}
   });
   async function authenticate(req:express.Request,res:express.Response):Promise<Session|undefined> {

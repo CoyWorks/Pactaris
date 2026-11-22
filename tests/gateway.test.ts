@@ -21,10 +21,11 @@ class FixtureStore implements GatewayStore {
   async operatorAuthorized(token:string){return this.operatorAllowed&&this.sessions.has(hash(token));}
   async probe(){}
   async throttle(){return !this.limited;}
-  async beginLogin(cookie:string,a:LoginAttempt){this.attempts.set(hash(cookie),a);}
-  async consumeLogin(cookie:string,state:string){const a=this.attempts.get(hash(cookie));if(a?.state!==state)return;this.attempts.delete(hash(cookie));return a;}
+  clients=new Map<string,string>();bounds:number[][]=[];
+  async beginLogin(cookie:string,a:LoginAttempt,client='browser'){this.attempts.set(hash(cookie),a);this.clients.set(a.state,client);}
+  async consumeLogin(cookie:string,state:string){const a=this.attempts.get(hash(cookie));if(a?.state!==state)return;this.attempts.delete(hash(cookie));return {...a,client:this.clients.get(state) as 'browser'|'app'|undefined};}
   async account(...input:unknown[]):Promise<Account>{this.accountInput=input;return {id:accountA,displayName:'Fixture user'};}
-  async createSession(token:string,account:Account,csrfToken:string){this.sessions.set(hash(token),{account,csrfToken,id:randomUUID(),createdAt:new Date().toISOString(),expiresAt:new Date(Date.now()+100000).toISOString()});}
+  async createSession(token:string,account:Account,csrfToken:string,idle=0,absolute=0){this.bounds.push([idle,absolute]);this.sessions.set(hash(token),{account,csrfToken,id:randomUUID(),createdAt:new Date().toISOString(),expiresAt:new Date(Date.now()+100000).toISOString()});}
   async session(token:string){
     const s=this.sessions.get(hash(token));
     return s&&{account:s.account,expiresAt:s.expiresAt,csrfToken:s.csrfToken,presentation:this.presentation.get(s.account.id)};
@@ -373,4 +374,20 @@ test('abuse reports bind the reporter, validate input and cannot name an inacces
   assert.equal((await inject(app,{method:'POST',url:'/api/operator/reports/'+randomUUID()+'/close',headers:trusted,payload:{resolution:'deleted'}})).statusCode,400);
   assert.equal((await inject(app,{method:'POST',url:'/api/operator/accounts/'+accountB+'/suspend',headers:trusted,payload:{}})).statusCode,204);
   assert.deepEqual(actions,['reports','suspend']);
+});
+
+test('installed app sign-in gets the app session bounds; operator sign-in never does',async()=>{
+  const f=fixture(),bounds=config().session;
+  for(const [url,expected] of [['/auth/login',[bounds.idleSeconds,bounds.absoluteSeconds]],
+    ['/auth/login?client=app',[bounds.app.idleSeconds,bounds.app.absoluteSeconds]],
+    ['/auth/login?client=other',[bounds.idleSeconds,bounds.absoluteSeconds]]] as const){
+    const first=await inject(f.app,{url,headers});
+    const state=new URL(String(first.headers.location)).searchParams.get('state');
+    const callback=await inject(f.app,{url:'/auth/oidc/callback?code=x&state='+state,headers:{...headers,cookie:cookies(first).join('; ')}});
+    assert.equal(callback.statusCode,303);
+    assert.deepEqual(f.store.bounds.at(-1),[...expected]);
+    const sessionCookie=String((callback.headers['set-cookie'] as string[]).find(v=>v.startsWith('__Host-pactaris-session=')));
+    assert.match(sessionCookie,new RegExp('Max-Age='+expected[1]+'(;|$)'));
+  }
+  assert.equal(bounds.app.idleSeconds,604800);
 });
