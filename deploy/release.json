@@ -519,6 +519,13 @@
       "path": "migrations/gateway/0026_app_sessions.sql",
       "sha256": "7f627c0801d17e00ffa191e13eae196b4891f6d9303f93c1fc9a52ce9ab4e4c5",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0027_identity_user",
+      "path": "migrations/gateway/0027_identity_user.sql",
+      "sha256": "6ba3a9d76b8cb65fcb1b825689b693c1b2ce2362163a452d04e78f0af55da3e1",
+      "backwardCompatible": true
     }
   ]
 }

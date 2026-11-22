@@ -16,7 +16,8 @@ export interface GatewayStore {
   updatePreferredName?(accountId:string,value:string|null):Promise<string|undefined>;
   beginLogin(cookie:string, attempt:LoginAttempt, client?:LoginClient):Promise<void>;
   consumeLogin(cookie:string,state:string):Promise<(LoginAttempt&{client?:LoginClient})|undefined>;
-  account(issuer:string,subject:string,name:string,verifiedEmail?:string):Promise<Account>;
+  account(issuer:string,subject:string,name:string,verifiedEmail?:string,identityUser?:number):Promise<Account>;
+  identityUser?(accountId:string):Promise<number|undefined>;
   createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number,verifiedEmail?:string,mfaAt?:number,authAt?:number):Promise<void>;
   session(token:string,idle:number,requireVerifiedEmail?:boolean):Promise<Session|undefined>;
   recentlyAuthenticated?(token:string):Promise<boolean>;
@@ -44,13 +45,14 @@ export class PgGatewayStore implements GatewayStore {
     const r=await this.pool.query('DELETE FROM pactaris.login_attempts WHERE cookie_hash=$1 AND state=$2 AND expires_at>now() RETURNING state,nonce,verifier,client',[hash(cookie),state]);
     return r.rows[0] as (LoginAttempt&{client:LoginClient})|undefined;
   }
-  async account(issuer:string,subject:string,name:string,verifiedEmail?:string) {
+  async account(issuer:string,subject:string,name:string,verifiedEmail?:string,identityUser?:number) {
     const email=normalizeEmail(verifiedEmail)??null;
-    const r=await this.pool.query(`INSERT INTO pactaris.accounts(id,issuer,subject,display_name,verified_email,verified_email_asserted_at)
-      VALUES($1,$2,$3,$4,$5,CASE WHEN $5::text IS NULL THEN NULL ELSE statement_timestamp() END)
+    const r=await this.pool.query(`INSERT INTO pactaris.accounts(id,issuer,subject,display_name,verified_email,verified_email_asserted_at,identity_user_id)
+      VALUES($1,$2,$3,$4,$5,CASE WHEN $5::text IS NULL THEN NULL ELSE statement_timestamp() END,$6)
       ON CONFLICT(issuer,subject) DO UPDATE SET display_name=EXCLUDED.display_name,
-      verified_email=EXCLUDED.verified_email,verified_email_asserted_at=EXCLUDED.verified_email_asserted_at
-      WHERE pactaris.accounts.status='active' RETURNING id,display_name,status`,[randomUUID(),issuer,subject,name,email]);
+      verified_email=EXCLUDED.verified_email,verified_email_asserted_at=EXCLUDED.verified_email_asserted_at,
+      identity_user_id=COALESCE(EXCLUDED.identity_user_id,pactaris.accounts.identity_user_id)
+      WHERE pactaris.accounts.status='active' RETURNING id,display_name,status`,[randomUUID(),issuer,subject,name,email,identityUser??null]);
     if(r.rows[0]?.status!=='active')throw Error('authentication.suspended');
     return {id:r.rows[0].id,displayName:r.rows[0].display_name};
   }
@@ -71,6 +73,10 @@ export class PgGatewayStore implements GatewayStore {
     const row=r.rows[0];return row?{account:{id:row.id,displayName:row.display_name},csrfToken:row.csrf_token,expiresAt:row.expires_at.toISOString(),
       ...(row.preferred_display_name?{preferredName:row.preferred_display_name}:{}),
       ...(row.locale_format&&row.time_zone?{presentation:{format:row.locale_format,timeZone:row.time_zone}}:{})}:undefined;
+  }
+  async identityUser(accountId:string){
+    const r=await this.pool.query(`SELECT identity_user_id FROM pactaris.accounts WHERE id=$1 AND status='active'`,[accountId]);
+    const value=r.rows[0]?.identity_user_id;return value==null?undefined:Number(value);
   }
   async recentlyAuthenticated(token:string){
     const result=await this.pool.query(

@@ -54,7 +54,7 @@ const config=()=>parseGatewayConfig(JSON.parse(readFileSync('config/gateway.exam
 const headers={host:'pactaris.app'};
 function fixture(onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,options:{requireVerifiedEmail?:boolean;omitEmail?:boolean}={}){
   const store=new FixtureStore();let finish=0,summary=0,unavailable=false,revoked=false;
-  const oidc:OidcLogin={start:async a=>'https://identity.example.invalid/authorize?state='+a.state,finish:async()=>{finish++;return {issuer:'https://identity.example.invalid/',subject:'subject',name:'Fixture user',verifiedEmail:options.omitEmail?undefined:'private-fixture@example.invalid'};}};
+  const oidc:OidcLogin={start:async a=>'https://identity.example.invalid/authorize?state='+a.state,finish:async()=>{finish++;return {issuer:'https://identity.example.invalid/',subject:'subject',name:'Fixture user',identityUser:42,verifiedEmail:options.omitEmail?undefined:'private-fixture@example.invalid'};}};
   const gatewayConfig=config();
   gatewayConfig.session.requireVerifiedEmail=options.requireVerifiedEmail??false;
   const app=createGatewayApp(gatewayConfig,store,oidc,{summary:async(account,p)=>{summary++;if(unavailable)throw Error('https://secret:password@private-node.invalid');if(revoked)return;return {id:p.householdId,name:'Fixture dynamic'};}},undefined,onboarding);
@@ -74,7 +74,7 @@ test('browser-bound one-time login rotates sessions and ignores forged identity 
   assert.equal((await inject(f.app,{url:'/api/session',headers:{...headers,'x-forwarded-user':'admin','oai-authenticated-user-email':'fixture@example.invalid'}})).statusCode,401);
   const {cookie,first,state}=await login(f);
   const session=await inject(f.app,{url:'/api/session',headers:{...headers,cookie}});assert.equal(session.statusCode,200);assert.equal(session.json().account.id,accountA);
-  assert.deepEqual(f.store.accountInput,['https://identity.example.invalid/','subject','Fixture user','private-fixture@example.invalid']);
+  assert.deepEqual(f.store.accountInput,['https://identity.example.invalid/','subject','Fixture user','private-fixture@example.invalid',42]);
   assert.deepEqual(Object.keys(session.json().account).sort(),['displayName','id']);
   assert.ok(!session.payload.includes('private-fixture@example.invalid'));
   assert.equal(f.finish,1);
@@ -390,4 +390,35 @@ test('installed app sign-in gets the app session bounds; operator sign-in never 
     assert.match(sessionCookie,new RegExp('Max-Age='+expected[1]+'(;|$)'));
   }
   assert.equal(bounds.app.idleSeconds,604800);
+});
+
+test('sign-in security: own devices only, CSRF and fresh sign-in before removal',async()=>{
+  const store=new FixtureStore() as FixtureStore&{identityUser:(id:string)=>Promise<number|undefined>;recentlyAuthenticated:(t:string)=>Promise<boolean>};
+  let identity:number|undefined=42,recent=false;const removed:string[]=[];
+  store.identityUser=async()=>identity;store.recentlyAuthenticated=async()=>recent;
+  const links={password:'https://identity.example.invalid/if/flow/p/',totp:'t',passkey:'k',recovery:'r'};
+  const security={links:()=>links,
+    overview:async(user:number)=>{assert.equal(user,42);return {links,devices:[{id:'webauthn:7',kind:'webauthn' as const,name:'Phone',createdAt:null,lastUsedAt:null}]};},
+    remove:async(user:number,id:string)=>{assert.equal(user,42);if(id!=='webauthn:7')return 'not_found' as const;removed.push(id);return 'removed' as const;}};
+  const u=undefined;
+  const app=createGatewayApp(config(),store,{start:async()=>'',finish:async()=>{throw Error('fixture');}},{summary:async()=>undefined},
+    u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,security);
+  const token='c'.repeat(43),csrf=randomUUID();await store.createSession(token,{id:accountA,displayName:'Fixture'},csrf);
+  const trusted={...headers,cookie:'__Host-pactaris-session='+token,origin:'https://pactaris.app','x-csrf-token':csrf};
+  assert.equal((await inject(app,{url:'/api/account/security',headers})).statusCode,401);
+  const overview=await inject(app,{url:'/api/account/security',headers:trusted});
+  assert.equal(overview.statusCode,200);assert.equal(overview.headers['cache-control'],'no-store');
+  assert.deepEqual(overview.json().devices.map((d:{id:string})=>d.id),['webauthn:7']);
+  const del=(id:string,h:Record<string,string>=trusted)=>inject(app,{method:'DELETE',url:'/api/account/security/devices/'+id,headers:h});
+  assert.equal((await del('webauthn:7',{...trusted,'x-csrf-token':''})).statusCode,403);
+  const stale=await del('webauthn:7');assert.equal(stale.statusCode,403);assert.equal(stale.json().messageKey,'security.reauthenticate');
+  recent=true;
+  assert.equal((await del('webauthn:8')).statusCode,404);
+  assert.equal((await del('webauthn:7')).statusCode,204);
+  assert.deepEqual(removed,['webauthn:7']);
+  identity=undefined;
+  assert.deepEqual((await inject(app,{url:'/api/account/security',headers:trusted})).json(),{available:true,links,devices:null,signInAgain:true});
+  assert.equal((await del('webauthn:7')).statusCode,404);
+  const plain=fixture(),{cookie}=await login(plain);
+  assert.deepEqual((await inject(plain.app,{url:'/api/account/security',headers:{...headers,cookie}})).json(),{available:false});
 });

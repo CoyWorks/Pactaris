@@ -128,6 +128,12 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const proof=()=>gatewayDb.pool.query('SELECT verified_email,verified_email_asserted_at FROM pactaris.accounts WHERE id=$1',[account.id]);
   const email='Fixture+invite@example.invalid';
   assert.deepEqual(await store.account('https://idp.fixture.invalid/','subject-a','Fixture user',email),account);
+  // Identity's user number is kept across sign-ins that omit it, and is per account.
+  assert.equal(await store.identityUser(account.id),undefined);
+  await store.account('https://idp.fixture.invalid/','subject-a','Fixture user',email,4242);
+  await store.account('https://idp.fixture.invalid/','subject-a','Fixture user',email);
+  assert.equal(await store.identityUser(account.id),4242);
+  assert.equal(await store.identityUser(other.id),undefined);
   assert.equal((await proof()).rows[0].verified_email,email);assert.ok((await proof()).rows[0].verified_email_asserted_at instanceof Date);
   assert.equal((await store.account('https://idp.fixture.invalid/','subject-b','Other fixture',email)).id,other.id);
   assert.equal((await store.account('https://other-idp.fixture.invalid/','subject-a','Fixture user',email)).id,sameSubjectOtherIssuer.id);

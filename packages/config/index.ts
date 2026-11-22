@@ -88,7 +88,31 @@ export type GatewayConfig = Omit<InstanceConfig, 'instanceId' | 'oidc' | 'delega
   trustedProxyAddresses: string[];
   session: { idleSeconds: number; absoluteSeconds: number; requireVerifiedEmail: boolean; passkeyIsMfa: boolean; app: { idleSeconds: number; absoluteSeconds: number } };
   onboarding: { maxOwnedHouseholds: number };
+  accountSecurity?: AccountSecurityConfig;
 };
+export const accountFlowKinds = ['password','totp','passkey','recovery'] as const;
+export type AccountFlowKind = typeof accountFlowKinds[number];
+export type AccountSecurityConfig = { identityOrigin: string; tokenFile: string; loginFlow: string; flows: Record<AccountFlowKind,string> };
+const defaultAccountFlows: Record<AccountFlowKind,string> = {
+  password:'pactaris-account-password',totp:'pactaris-account-totp',passkey:'pactaris-account-passkey',recovery:'pactaris-account-recovery',
+};
+// Self-service sign-in security through Identity (docs/ACCOUNT_SECURITY.md). Off unless configured.
+function parseAccountSecurity(value: unknown, issuer: string, development: boolean): AccountSecurityConfig|undefined {
+  if (value === undefined) return undefined;
+  const a = object(value,'accountSecurity');
+  const identityOrigin = origin(a.identityOrigin ?? new URL(issuer).origin + '/','accountSecurity.identityOrigin',development);
+  const given = a.flows === undefined ? {} : object(a.flows,'accountSecurity.flows');
+  if (Object.keys(given).some(key => !(accountFlowKinds as readonly string[]).includes(key))) invalid('accountSecurity.flows');
+  const flows = {...defaultAccountFlows};
+  for (const kind of accountFlowKinds) {
+    const slug = given[kind] ?? defaultAccountFlows[kind];
+    if (typeof slug !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,99}$/.test(slug)) invalid('accountSecurity.flows.'+kind);
+    flows[kind] = slug;
+  }
+  const loginFlow = a.loginFlow ?? 'default-authentication-flow';
+  if (typeof loginFlow !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,99}$/.test(loginFlow)) invalid('accountSecurity.loginFlow');
+  return { identityOrigin, tokenFile: file(a.tokenFile,'accountSecurity.tokenFile'), loginFlow, flows };
+}
 export function parseGatewayConfig(value: unknown, development = false): GatewayConfig {
   const c = object(value, 'root'), o = object(c.oidc,'oidc'), d = object(c.delegation,'delegation');
   const base = parseConfig({ ...c, instanceId: c.gatewayId, delegation: undefined }, development);
@@ -108,6 +132,7 @@ export function parseGatewayConfig(value: unknown, development = false): Gateway
   const appSession=object(session.app ?? {idleSeconds:604800,absoluteSeconds:7776000},'session.app');
   const appIdle=integer(appSession.idleSeconds,'session.app.idleSeconds',idleSeconds,2592000);
   const appAbsolute=integer(appSession.absoluteSeconds,'session.app.absoluteSeconds',Math.max(appIdle,absoluteSeconds),31536000);
+  const accountSecurity=parseAccountSecurity(c.accountSecurity,oidc.issuer,development);
   const operatorSubjects=c.operatorSubjects??[];
   if(!Array.isArray(operatorSubjects)||operatorSubjects.length>50||
     operatorSubjects.some(subject=>typeof subject!=='string'||!subject.trim()||subject.length>255))
@@ -117,7 +142,7 @@ export function parseGatewayConfig(value: unknown, development = false): Gateway
     webPushFile: c.webPushFile===undefined?undefined:file(c.webPushFile,'webPushFile'),
     invitationMailFile: c.invitationMailFile===undefined ? undefined : file(c.invitationMailFile,'invitationMailFile'), oidc: { ...oidc, clientSecretFile: file(o.clientSecretFile,'oidc.clientSecretFile') },
     delegation: { issuer: base.publicOrigin, keyId, privateKeyFile: file(d.privateKeyFile,'delegation.privateKeyFile') },
-    trustedProxyAddresses: proxies, session: {idleSeconds,absoluteSeconds,requireVerifiedEmail,passkeyIsMfa,app:{idleSeconds:appIdle,absoluteSeconds:appAbsolute}},onboarding:{maxOwnedHouseholds:integer(onboarding.maxOwnedHouseholds,'onboarding.maxOwnedHouseholds',1,20)} };
+    trustedProxyAddresses: proxies, ...(accountSecurity?{accountSecurity}:{}), session: {idleSeconds,absoluteSeconds,requireVerifiedEmail,passkeyIsMfa,app:{idleSeconds:appIdle,absoluteSeconds:appAbsolute}},onboarding:{maxOwnedHouseholds:integer(onboarding.maxOwnedHouseholds,'onboarding.maxOwnedHouseholds',1,20)} };
 }
 export function loadGatewayConfig(path: string, development = false): GatewayConfig {
   try { return parseGatewayConfig(JSON.parse(readFileSync(path,'utf8')),development); }

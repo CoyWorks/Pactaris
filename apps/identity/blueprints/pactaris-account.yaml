@@ -1,0 +1,165 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+# Self-service sign-in security for Pactaris (docs/ACCOUNT_SECURITY.md), authentik 2026.8.5.
+# Short flows that people reach from their Pactaris profile and that end back there, plus a
+# service account that can only list and remove authenticator devices. No token belongs here:
+# create the service account's API token in authentik and store it in the gateway token file.
+version: 1
+metadata:
+  name: Pactaris-Account-Security
+  labels:
+    blueprints.goauthentik.io/instantiate: "false"
+context:
+  # Where every flow ends. Must be the configured Pactaris public origin.
+  return_url: https://pactaris.app/profile
+  service_account: pactaris-gateway-account
+entries:
+  - model: authentik_stages_redirect.redirectstage
+    id: return
+    state: present
+    identifiers:
+      name: pactaris-account-return
+    attrs:
+      mode: static
+      target_static: !Context return_url
+      keep_context: false
+
+  # Checks the current password before it can be changed.
+  - model: authentik_stages_password.passwordstage
+    id: current-password
+    state: present
+    identifiers:
+      name: pactaris-account-current-password
+    attrs:
+      backends:
+        - authentik.core.auth.InbuiltBackend
+      failed_attempts_before_cancel: 5
+      allow_show_password: true
+
+  # Before adding a sign-in method, people who already have one confirm it, unless they used
+  # it in the last five minutes. People without one continue (nothing to confirm with).
+  - model: authentik_stages_authenticator_validate.authenticatorvalidatestage
+    id: reverify
+    state: present
+    identifiers:
+      name: pactaris-account-reverify
+    attrs:
+      device_classes: [static, totp, webauthn]
+      not_configured_action: skip
+      last_auth_threshold: minutes=5
+      webauthn_user_verification: required
+
+  - model: authentik_flows.flow
+    id: password-flow
+    state: present
+    identifiers:
+      slug: pactaris-account-password
+    attrs:
+      name: Pactaris - change password
+      title: Change your password
+      designation: stage_configuration
+      authentication: require_authenticated
+      # Without an Identity session, follow the link's relative `next` to sign in first.
+      denied_action: message_continue
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf password-flow, stage: !KeyOf current-password}
+    attrs: {order: 10}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf password-flow, stage: !Find [authentik_stages_prompt.promptstage, [name, default-password-change-prompt]]}
+    attrs: {order: 20}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf password-flow, stage: !Find [authentik_stages_user_write.userwritestage, [name, default-password-change-write]]}
+    attrs: {order: 30}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf password-flow, stage: !KeyOf return}
+    attrs: {order: 100}
+
+  - model: authentik_flows.flow
+    id: passkey-flow
+    state: present
+    identifiers:
+      slug: pactaris-account-passkey
+    attrs:
+      name: Pactaris - add passkey
+      title: Add a passkey
+      designation: stage_configuration
+      authentication: require_authenticated
+      # Without an Identity session, follow the link's relative `next` to sign in first.
+      denied_action: message_continue
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf passkey-flow, stage: !KeyOf reverify}
+    attrs: {order: 10}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf passkey-flow, stage: !Find [authentik_stages_authenticator_webauthn.authenticatorwebauthnstage, [name, default-authenticator-webauthn-setup]]}
+    attrs: {order: 20}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf passkey-flow, stage: !KeyOf return}
+    attrs: {order: 100}
+
+  - model: authentik_flows.flow
+    id: totp-flow
+    state: present
+    identifiers:
+      slug: pactaris-account-totp
+    attrs:
+      name: Pactaris - add authenticator app
+      title: Add an authenticator app
+      designation: stage_configuration
+      authentication: require_authenticated
+      # Without an Identity session, follow the link's relative `next` to sign in first.
+      denied_action: message_continue
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf totp-flow, stage: !KeyOf reverify}
+    attrs: {order: 10}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf totp-flow, stage: !Find [authentik_stages_authenticator_totp.authenticatortotpstage, [name, default-authenticator-totp-setup]]}
+    attrs: {order: 20}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf totp-flow, stage: !KeyOf return}
+    attrs: {order: 100}
+
+  - model: authentik_flows.flow
+    id: recovery-flow
+    state: present
+    identifiers:
+      slug: pactaris-account-recovery
+    attrs:
+      name: Pactaris - create recovery codes
+      title: Create recovery codes
+      designation: stage_configuration
+      authentication: require_authenticated
+      # Without an Identity session, follow the link's relative `next` to sign in first.
+      denied_action: message_continue
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf recovery-flow, stage: !KeyOf reverify}
+    attrs: {order: 10}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf recovery-flow, stage: !Find [authentik_stages_authenticator_static.authenticatorstaticstage, [name, default-authenticator-static-setup]]}
+    attrs: {order: 20}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf recovery-flow, stage: !KeyOf return}
+    attrs: {order: 100}
+
+  # The gateway's API identity: list and remove authenticator devices, nothing else.
+  - model: authentik_rbac.role
+    id: device-role
+    state: present
+    identifiers:
+      name: pactaris-gateway-account-devices
+    attrs:
+      permissions:
+        - authentik_stages_authenticator_totp.view_totpdevice
+        - authentik_stages_authenticator_totp.delete_totpdevice
+        - authentik_stages_authenticator_webauthn.view_webauthndevice
+        - authentik_stages_authenticator_webauthn.delete_webauthndevice
+        - authentik_stages_authenticator_static.view_staticdevice
+        - authentik_stages_authenticator_static.delete_staticdevice
+  - model: authentik_core.user
+    state: present
+    identifiers:
+      username: !Context service_account
+    attrs:
+      name: Pactaris gateway (account security)
+      type: service_account
+      path: pactaris
+      roles:
+        - !KeyOf device-role

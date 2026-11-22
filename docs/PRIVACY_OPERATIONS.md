@@ -8,7 +8,7 @@ Pactaris processes data about sexual practices and intimate relationships. Treat
 
 | Category | Stored where | Contents | Purpose | Who can access through the application |
 | --- | --- | --- | --- | --- |
-| Account identity | Gateway DB | Issuer and subject, provider display name, optional preferred name, verified email and assertion time, formatting locale and time zone | Sign-in, invitations, presentation | The account holder; never other members |
+| Account identity | Gateway DB | Issuer and subject, Identity user number (for self-service sign-in devices), provider display name, optional preferred name, verified email and assertion time, formatting locale and time zone | Sign-in, invitations, presentation | The account holder; never other members |
 | Sessions and devices | Gateway DB | Hashed session tokens, expiry, recent-authentication times, Web Push endpoints and keys (encrypted) | Sessions, MFA freshness, notifications | The account holder (session list) |
 | Routing metadata | Gateway DB | Registered Instances, household placements, account-household visibility hints, operation records | Hidden routing, recovery | Operators (counts and IDs only) |
 | Invitation mail queue | Gateway DB | Encrypted recipient address and token until delivery or expiry | Invitation delivery | Nobody; removed at terminal state |
