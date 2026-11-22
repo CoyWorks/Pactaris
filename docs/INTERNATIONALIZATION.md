@@ -42,6 +42,8 @@ Treat these as independent preferences:
 
 Declare explicit configurable formatting/timezone defaults in the scaffold; do not infer language from region or use server locale/timezone implicitly. Store instants consistently and keep recurrence timezone/wall-clock rules separate. Display-format changes must not reschedule tasks. Use shared standard locale-aware formatters, not manual date strings or hardcoded currency symbols. Technical exports use stable machine-readable formats; human-readable headings are localized.
 
+On the **Date and time** profile page, the formatting locale and the personal time zone are dropdowns. The locale list is a curated set in `apps/instance/web/presentation-options.ts`, filtered to the locales the browser supports and labelled with `Intl.DisplayNames`. Time zones come from `Intl.supportedValuesOf('timeZone')`, grouped by IANA region with UTC first, and each one shows its current UTC offset. A saved value that is missing from either list stays selectable. Below the locale, a live clock shows the current time with the chosen locale and zone. The gateway still validates what is saved.
+
 ## Fallback and rollout
 
 Explicit supported user preference wins; otherwise use validated supported browser/application defaults. Ship only English initially and fall back to the complete English catalog for unsupported languages. Never silently substitute Dutch or activate an incomplete safety translation.
