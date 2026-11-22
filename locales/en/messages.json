@@ -654,7 +654,7 @@
   "cli.brandFlowMismatch": "The flow does not match the selected UUID and slug, or it is not an authentication, authorization or invalidation flow.",
   "cli.brandFlowPlan": "Flow title preview for {slug}. Fields to change: {fields}.",
   "cli.brandFlowApplied": "Updated flow title {slug}. Fields changed: {fields}.",
-  "identity.redirectTitle": "Opening Pactaris",
+  "identity.redirectTitle": "Loading Pactaris",
   "identity.signedOutTitle": "You have signed out of Pactaris",
   "cli.brandVerify": "Identity did not return the expected Brand settings. Review the protected backup.",
   "cli.brandAssets": "Versioned Authentik media files to upload: {files}.",
