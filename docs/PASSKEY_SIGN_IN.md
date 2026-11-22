@@ -1,11 +1,18 @@
-# Passkey sign-in and automatic sign-in in the app
+# App sessions, automatic sign-in and passkeys
 
-Browser sessions keep their short default bounds (30 minutes idle, 8 hours absolute; see [LOGIN_GATEWAY.md](LOGIN_GATEWAY.md)). Signing in again should be quick instead. Two parts make that work:
+Browser sessions keep their short default bounds (30 minutes idle, 8 hours absolute; see [LOGIN_GATEWAY.md](LOGIN_GATEWAY.md)). The installed app works differently: the device screen lock protects it, so it may stay signed in.
 
-1. **Automatic sign-in in the installed app.** When Pactaris runs as an installed app (standalone display mode) and finds no session, it goes straight to sign-in instead of showing the sign-in page. This happens only if this device signed in successfully before. An explicit **Sign out**, or deleting the account, turns it off until the next successful sign-in. A failed attempt is not repeated for two minutes, so a broken sign-in cannot loop. Ordinary browser tabs keep the sign-in button.
-2. **Passkey sign-in in Identity.** If Identity still has its own session, sign-in finishes without a prompt. Otherwise the Identity sign-in page offers the device passkey (Face ID, fingerprint or device PIN) as the first factor, without a password.
+1. **App sessions.** In standalone display mode, every sign-in link adds `client=app`, and the gateway creates a session with `session.app` bounds. The defaults are **one week without activity** and **90 days at most**. Any use of the app within the week extends the session. Only a week without contact (phone off, no internet, app not used) ends it. Each session stores its own idle bound, so later changes to the browser bounds do not shorten existing app sessions. `client=app` is a convenience signal from the client, not a security boundary: anyone can request it for their own sign-in. Operator sign-in (`/auth/operator`) always gets browser bounds.
+2. **Automatic sign-in.** When an app session has ended, the installed app goes straight to sign-in instead of showing the sign-in page. This happens only if this device signed in successfully before. An explicit **Sign out**, or deleting the account, turns it off until the next successful sign-in. A failed attempt is not repeated for two minutes, so a broken sign-in cannot loop. Ordinary browser tabs keep the sign-in button.
+3. **Passkeys (optional, recommended).** If Identity still has its own session, sign-in finishes without a prompt. Otherwise people can sign in with a passkey (Face ID, fingerprint or device PIN) instead of a password, if they have added one. Passkeys are not required. Password plus the existing MFA keeps working.
 
-The device screen lock protects the installed app. A session that was revoked elsewhere (**Manage sessions**) still ends the Pactaris session. The app then signs in again only through Identity, which applies its own session and passkey checks. To stop a lost device completely, also end its Identity session or remove its passkey in Identity.
+A session revoked elsewhere (**Manage sessions**) still ends the Pactaris session. The app then signs in again only through Identity, which applies its own session and passkey checks. To lock out a lost device completely, also end its Identity session or remove its passkey in Identity.
+
+```json
+"session": {"idleSeconds":1800,"absoluteSeconds":28800,"app":{"idleSeconds":604800,"absoluteSeconds":7776000}}
+```
+
+The app idle bound must be at least the browser idle bound and at most 30 days. The app absolute bound must be at least the app idle bound and the browser absolute bound, and at most 365 days.
 
 ## Identity configuration (Authentik)
 
@@ -15,7 +22,7 @@ Authentik 2026.8 supports passkeys as a first factor in the Identification stage
 2. **Validation stage.** Create an Authenticator Validation stage, for example `pactaris-passkey-validation`. Set **Device classes** to WebAuthn only and **WebAuthn user verification** to `required`.
 3. **Identification stage.** Edit the Identification stage of `default-authentication-flow`. Set **WebAuthn Authenticator Validation Stage** to the stage from step 2.
 4. **Skip later factors after a passkey.** The default authentication flow already skips the password and MFA validation stages when `auth_method` is `auth_webauthn_pwl`. If the flow has been customised, check that these policy bindings still exist.
-5. **Users add a passkey** under **Settings > MFA Devices** on Identity, from each phone or computer they use.
+5. **Users who want a passkey add one** under **Settings > MFA Devices** on Identity, from each phone or computer they use. This is optional and recommended.
 
 The passkey is bound to the Identity hostname. Create it on the same Identity origin that the app redirects to.
 
@@ -31,8 +38,10 @@ With `passkeyIsMfa`, an `amr` that contains `user`, together with a valid `auth_
 
 ## Testing
 
-- Unit tests: `tests/auto-sign-in.test.ts` (device memory, standalone only, no loop, sign-out stops it) and `tests/oidc.test.ts` (`passkeyIsMfa` is off by default and requires `user` in `amr`).
+- Unit tests: `tests/auto-sign-in.test.ts` (device memory, standalone only, no loop, sign-out stops it, app sign-in links), `tests/gateway.test.ts` (app and browser bounds; operator never gets app bounds), `tests/config.test.ts` (app bound validation) and `tests/oidc.test.ts` (`passkeyIsMfa` is off by default and requires `user` in `amr`).
+- `tests/postgres.integration.ts`: a session keeps its own idle bound, and the login attempt carries the client.
 - Live acceptance after configuration, on an installed iPhone and Android app:
+  - The app stays signed in across days of normal use, and a browser tab still expires after 30 minutes.
   - The session expires, Identity's session is still valid, and the app is back without a prompt.
   - Identity's session has also expired, and a passkey prompt signs the user in.
   - After an explicit sign-out, the app shows the sign-in page.

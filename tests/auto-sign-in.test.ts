@@ -32,3 +32,10 @@ test('missing storage never redirects',()=>{
   assert.equal(claimAutoSignIn(true,1_000,local,undefined),false);
   assert.equal(claimAutoSignIn(true,1_000,undefined,memory()),false);
 });
+
+test('installed app sign-in links ask for an app session',async()=>{
+  const {signInHref}=await import('../apps/instance/web/auto-sign-in.js');
+  assert.equal(signInHref('/auth/login',true),'/auth/login?client=app');
+  assert.equal(signInHref('/auth/reauth',true),'/auth/reauth?client=app');
+  assert.equal(signInHref('/auth/login',false),'/auth/login');
+});

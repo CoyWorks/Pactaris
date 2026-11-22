@@ -16,6 +16,9 @@ test('pilot creation budget defaults without rewriting installed config and reje
   assert.equal(parseGatewayConfig(c).session.passkeyIsMfa,false);
   assert.equal(parseGatewayConfig({...c,session:{idleSeconds:1800,absoluteSeconds:28800,passkeyIsMfa:true}}).session.passkeyIsMfa,true);
   assert.throws(()=>parseGatewayConfig({...c,session:{idleSeconds:1800,absoluteSeconds:28800,passkeyIsMfa:'yes'}}),ConfigError);
+  assert.deepEqual(parseGatewayConfig(c).session.app,{idleSeconds:604800,absoluteSeconds:7776000});
+  assert.throws(()=>parseGatewayConfig({...c,session:{idleSeconds:1800,absoluteSeconds:28800,app:{idleSeconds:60,absoluteSeconds:7776000}}}),ConfigError,'app idle below browser idle');
+  assert.throws(()=>parseGatewayConfig({...c,session:{idleSeconds:1800,absoluteSeconds:28800,app:{idleSeconds:604800,absoluteSeconds:3600}}}),ConfigError,'app absolute below app idle');
 });
 test('production requires TLS; development HTTP is loopback-only', () => {
   const c = sample(); delete c.listen.tls;

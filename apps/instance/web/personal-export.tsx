@@ -1,6 +1,7 @@
 import React,{useState} from 'react';
 import {Hint} from './navigation.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
+import {signInHref} from './auto-sign-in.js';
 
 export function ExportPanel({csrfToken,language}:{csrfToken:string;language:string}){
   const t=createTranslator(language);
@@ -21,6 +22,6 @@ export function ExportPanel({csrfToken,language}:{csrfToken:string;language:stri
   return <section><h2>{t('account.exportTitle')}</h2><Hint label={t('hint.more')}>{t('account.exportLimited')}</Hint>
     <button type="button" disabled={busy} onClick={()=>void download()}>{t('account.exportDownload')}</button>
     {message&&<p role="alert">{t(message)}</p>}
-    {message==='account.exportReauthenticate'&&<a href="/auth/reauth" target="_blank" rel="noopener">{t('account.exportSignIn')}</a>}
+    {message==='account.exportReauthenticate'&&<a href={signInHref('/auth/reauth')} target="_blank" rel="noopener">{t('account.exportSignIn')}</a>}
   </section>;
 }
