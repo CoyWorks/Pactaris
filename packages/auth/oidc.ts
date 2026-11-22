@@ -48,7 +48,7 @@ export class OpenIdLogin implements OidcLogin {
     // No tokens persist. Email is a provider assertion, never an account key or
     // membership grant. Omit malformed/unverified claims without blocking login.
     const verifiedEmail=verifiedEmailClaim(claims);
-    const authAt=verifiedAuthTime(claims.auth_time),mfaAt=verifiedMfaClaim(claims);
+    const authAt=verifiedAuthTime(claims.auth_time),mfaAt=verifiedMfaClaim(claims,this.config.session.passkeyIsMfa);
     return {issuer:claims.iss,subject:claims.sub,name:typeof claims.name==='string'?claims.name.slice(0,120):'',
       ...(verifiedEmail?{verifiedEmail}:{}),...(mfaAt===undefined?{}:{mfaAt}),...(authAt===undefined?{}:{authAt})};
   }
@@ -57,6 +57,10 @@ export class OpenIdLogin implements OidcLogin {
 function verifiedAuthTime(time:unknown):number|undefined {
   if(typeof time==='number'&&Number.isSafeInteger(time)&&time>0&&time<=Math.floor(Date.now()/1000))return time;
 }
-export function verifiedMfaClaim(claims:Record<string,unknown>):number|undefined {
-  if(Array.isArray(claims.amr)&&claims.amr.includes('mfa'))return verifiedAuthTime(claims.auth_time);
+// Authentik reports a passkey (WebAuthn first-factor) sign-in as amr ["user"] without "mfa".
+// A passkey that requires user verification is possession plus biometric or PIN, so the
+// operator can opt in to treating it as MFA once Identity enforces user verification.
+export function verifiedMfaClaim(claims:Record<string,unknown>,passkeyIsMfa=false):number|undefined {
+  if(!Array.isArray(claims.amr))return;
+  if(claims.amr.includes('mfa')||(passkeyIsMfa&&claims.amr.includes('user')))return verifiedAuthTime(claims.auth_time);
 }

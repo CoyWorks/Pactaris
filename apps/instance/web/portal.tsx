@@ -1,6 +1,7 @@
 import {useSelectorInbox} from './selector-inbox.js';
 import {AccountDisplayName} from './account-display-name.js';
 import {announceSignOut} from './session-invalidation.js';
+import {claimAutoSignIn,forgetSignedIn,rememberSignedIn,standalone} from './auto-sign-in.js';
 import {ExportPanel} from './personal-export.js';
 import {DeleteAccountPanel} from './account-deletion.js';
 import {ReportPanel} from './abuse-report.js';
@@ -54,7 +55,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
           window.location.reload();return;
         }
         accountId.current=current.account.id;
-        setSession(current);
+        setSession(current);rememberSignedIn();
         const data=await fetch(selectedId?`/api/households/${selectedId}`:'/api/households',{cache:'no-store',signal:active.signal});
         if(data.status===404){if(!gone){setSelected(undefined);setLoadError('portal.notFound');}return;}
         if(!data.ok)throw Error('households');
@@ -102,7 +103,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   }
   async function logout(){
     if(!session||busy)return;setBusy(true);
-    try{const r=await fetch('/auth/logout',{method:'POST',headers:{'X-CSRF-Token':session.csrfToken}});if(!r.ok)throw Error('logout');clearLast();announceSignOut();window.location.assign('/');}
+    try{const r=await fetch('/auth/logout',{method:'POST',headers:{'X-CSRF-Token':session.csrfToken}});if(!r.ok)throw Error('logout');clearLast();forgetSignedIn();announceSignOut();window.location.assign('/');}
     catch{setError('errors.unavailable');setBusy(false);}
   }
   async function more(){
@@ -116,6 +117,8 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   const autoOpen=!!only&&!selectedId&&!profile&&!showAll&&!createPending;
   useEffect(()=>{if(autoOpen&&only)navigate('/households/'+only.id,true);},[autoOpen,only]);
   useEffect(()=>{if(session&&selectedId&&selected)writeLast(session.account.id,selectedId);},[session,selectedId,selected]);
+  const signedOut=!loading&&!session&&!loadError&&path!=='/join';
+  useEffect(()=>{if(signedOut&&claimAutoSignIn(standalone(),Date.now()))window.location.assign('/auth/login');},[signedOut]);
   if(path==='/join')return <InvitationJoin session={session} loading={loading} language={language} format={session?.presentation?.format??format} timeZone={session?.presentation?.timeZone??timeZone}/>;
   const displayFormat=session?.presentation?.format??format,displayZone=session?.presentation?.timeZone??timeZone;
   const initial=(session?.account.displayName.trim()||t('portal.account')).slice(0,1).toUpperCase();

@@ -86,7 +86,7 @@ export type GatewayConfig = Omit<InstanceConfig, 'instanceId' | 'oidc' | 'delega
   oidc: { issuer: string; clientId: string; clientSecretFile: string };
   delegation: { issuer: string; keyId: string; privateKeyFile: string };
   trustedProxyAddresses: string[];
-  session: { idleSeconds: number; absoluteSeconds: number; requireVerifiedEmail: boolean };
+  session: { idleSeconds: number; absoluteSeconds: number; requireVerifiedEmail: boolean; passkeyIsMfa: boolean };
   onboarding: { maxOwnedHouseholds: number };
 };
 export function parseGatewayConfig(value: unknown, development = false): GatewayConfig {
@@ -102,6 +102,8 @@ export function parseGatewayConfig(value: unknown, development = false): Gateway
   const absoluteSeconds = integer(session.absoluteSeconds,'session.absoluteSeconds',idleSeconds,604800);
   const requireVerifiedEmail=session.requireVerifiedEmail===undefined?false:session.requireVerifiedEmail;
   if(typeof requireVerifiedEmail!=='boolean')invalid('session.requireVerifiedEmail');
+  const passkeyIsMfa=session.passkeyIsMfa===undefined?false:session.passkeyIsMfa;
+  if(typeof passkeyIsMfa!=='boolean')invalid('session.passkeyIsMfa');
   const operatorSubjects=c.operatorSubjects??[];
   if(!Array.isArray(operatorSubjects)||operatorSubjects.length>50||
     operatorSubjects.some(subject=>typeof subject!=='string'||!subject.trim()||subject.length>255))
@@ -111,7 +113,7 @@ export function parseGatewayConfig(value: unknown, development = false): Gateway
     webPushFile: c.webPushFile===undefined?undefined:file(c.webPushFile,'webPushFile'),
     invitationMailFile: c.invitationMailFile===undefined ? undefined : file(c.invitationMailFile,'invitationMailFile'), oidc: { ...oidc, clientSecretFile: file(o.clientSecretFile,'oidc.clientSecretFile') },
     delegation: { issuer: base.publicOrigin, keyId, privateKeyFile: file(d.privateKeyFile,'delegation.privateKeyFile') },
-    trustedProxyAddresses: proxies, session: {idleSeconds,absoluteSeconds,requireVerifiedEmail},onboarding:{maxOwnedHouseholds:integer(onboarding.maxOwnedHouseholds,'onboarding.maxOwnedHouseholds',1,20)} };
+    trustedProxyAddresses: proxies, session: {idleSeconds,absoluteSeconds,requireVerifiedEmail,passkeyIsMfa},onboarding:{maxOwnedHouseholds:integer(onboarding.maxOwnedHouseholds,'onboarding.maxOwnedHouseholds',1,20)} };
 }
 export function loadGatewayConfig(path: string, development = false): GatewayConfig {
   try { return parseGatewayConfig(JSON.parse(readFileSync(path,'utf8')),development); }
