@@ -13,7 +13,7 @@ export function TodayHabits({householdId,csrfToken,language,reload,onAdd,onOpen}
    try{
     const r=await fetch(`/api/households/${householdId}/routines?kind=habit&filter=current`,{cache:'no-store',signal:controller.signal});
     const listing=await r.json() as RoutineResult;if(!r.ok)throw listing;
-    const active=(listing.routines??[]).filter(item=>item.state==='active').slice(0,shown);
+    const active=(listing.routines??[]).filter(item=>{const day=Number(new Intl.DateTimeFormat('en-US',{timeZone:item.timeZone,weekday:'short'}).format(new Date())==='Sun'?7:['Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(new Intl.DateTimeFormat('en-US',{timeZone:item.timeZone,weekday:'short'}).format(new Date()))+1);return item.state==='active'&&(item.period!=='daily'||(item.weekdays??[1,2,3,4,5,6,7]).includes(day));}).slice(0,shown);
     const details=await Promise.all(active.map(async item=>{
      const read=await post(householdId,csrfToken,'routines','routineRead',{operationId:crypto.randomUUID(),routineId:item.routineId,day:null});
      if(!read.ok)throw Error('routineRead');return read.data.routine as RoutineDetail;

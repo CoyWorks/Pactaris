@@ -17,7 +17,7 @@ All period calculation runs in one Instance calendar helper, shared by these thr
 
 An omitted entry timestamp means server time. A manually selected timestamp uses the device's local timezone and is displayed in the definition's timezone. The selected history date is a viewer, not an implicit backdated write: choose an explicit entry time for a prior period. Future entries and entries more than 90 days in the past are rejected; older saved history remains readable. Single-date definitions accept entries only within that configured local day. Changing a timezone/period/target creates a new configuration revision instead of rebucketing historical entries.
 
-Maximum goals are descriptive totals, not a promise of compliance or a trigger for punishment. Empty/missed periods have no automatic outcomes. Scheduled vacations/custom periods remain open #63/#18 work.
+Maximum goals are descriptive totals, not a promise of compliance or a trigger for punishment. Empty/missed periods have no automatic outcomes. Personal habits can be manually paused; scheduled breaks for assigned habits are documented in HOUSEHOLD_AUTHORITY.md.
 
 ## Privacy and safety
 
@@ -39,7 +39,7 @@ Local validation covers strict input, keyed owner-only screens, translations/bui
 
 ## Remaining scope
 
-Custom periods, scheduled breaks, partner assignment/review/sharing, reminders/job scheduling, Web Push, charts, exports/retention/deletion and agreed outcomes remain open under #18/#19/#20/#22/#23/#29/#41/#63. The next everyday feature is private reward catalog preparation #64, without automatic grants or consequences. No paid/free quota decision is introduced here.
+Reminders and other follow-up capabilities remain covered by their respective issues. Assigned habits and their outcomes are documented in HOUSEHOLD_AUTHORITY.md. The next everyday feature is private reward catalog preparation #64, without automatic grants or consequences. No paid/free quota decision is introduced here.
 
 ## Private habit count chart
 
@@ -50,3 +50,9 @@ The chart is optional and uses only counts from the current habit owner's exact 
 ## One-off check-ins with an optional reviewer
 
 A member writes their own one-off check-in and chooses sole access or one active reviewer. The app displays the audience before saving. The selected reviewer can mark that exact submission reviewed. The author can withdraw it, clearing its title and response from the live record. Membership departure removes access for the affected member and stops disclosure to any reviewer of an ended author. Pause prevents new shared submissions and reviews, while private entries and withdrawal stay available. No recurring assignment, external notification or consequence is generated.
+
+## Personal habit weekdays
+
+Personal daily habits can select weekdays. Older definitions remain daily. Changes create a new revision, preserving the schedule and totals of the earlier revision. Progress on an unselected day is rejected, including manually timestamped entries; weekly totals remain unchanged. A personal habit has no automatic outcomes and can be paused or resumed by its owner.
+
+Migration 0051 redeclares `routine_command` from 0011 to return the revision-specific weekday selection and reject entries outside it. Existing revisions default to all weekdays.

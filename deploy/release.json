@@ -547,6 +547,20 @@
       "path": "migrations/instance/0050_habit_breaks.sql",
       "sha256": "f701c75ca7e400fc4eb0b32d0d203c4883500c2c034737d86d3be2859c589f6c",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0051_personal_habit_weekdays",
+      "path": "migrations/instance/0051_personal_habit_weekdays.sql",
+      "sha256": "5ad2f0b74c9488ffeb5abbddb8b102e61dd1aaae5d4bdfa8f08ed72a18dcc11a",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0052_habit_history",
+      "path": "migrations/instance/0052_habit_history.sql",
+      "sha256": "cf6a30992bfb81de00bf41e7ca78144dc1bbafa0dd8f897beacb178843a77142",
+      "backwardCompatible": true
     }
   ]
 }

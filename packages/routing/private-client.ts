@@ -358,7 +358,8 @@ export class PrivateRoutineClient{
    const out:import('../auth/routines.js').RoutineResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
    const summary=(s:import('../auth/routines.js').RoutineSummary)=>{
     if(!s||!uuid(s.routineId)||!documentVersion(s.version)||!documentVersion(s.revision)||!documentText(s.title,120)||!documentText(s.category,60,true)||!['habit','ritual','checkin'].includes(s.kind)||!['draft','active','paused','archived'].includes(s.state)||!['daily','weekly','once'].includes(s.period)||!['minimum','maximum'].includes(s.mode)||!Number.isInteger(s.target)||s.target<1||s.target>10000||typeof s.timeZone!=='string')throw Error('routing.response');
-    new Intl.DateTimeFormat('en',{timeZone:s.timeZone});return {routineId:s.routineId,kind:s.kind,version:s.version,revision:s.revision,state:s.state,title:s.title,category:s.category,timeZone:s.timeZone,period:s.period,mode:s.mode,target:s.target};
+    if(s.weekdays!==undefined&&(!Array.isArray(s.weekdays)||s.weekdays.length<1||s.weekdays.length>7||new Set(s.weekdays).size!==s.weekdays.length||s.weekdays.some(d=>!Number.isInteger(d)||d<1||d>7)))throw Error('routing.response');
+    new Intl.DateTimeFormat('en',{timeZone:s.timeZone});return {weekdays:s.weekdays,routineId:s.routineId,kind:s.kind,version:s.version,revision:s.revision,state:s.state,title:s.title,category:s.category,timeZone:s.timeZone,period:s.period,mode:s.mode,target:s.target};
    };
    for(const k of ['routineId','eventId'] as const)if(r[k]!==undefined){if(!uuid(r[k]))throw Error('routing.response');out[k]=r[k];}
    if(action==='checkinList'){

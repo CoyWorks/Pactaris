@@ -1597,6 +1597,11 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    const make=async(kind='habit',patch:Record<string,unknown>={})=>{const id=randomUUID();assert.equal((await post('routineCreate',{operationId:id,kind,fields:{...fields,...patch}})).status,200);return id;};
    const activate=async(id:string)=>{const d=await detail(id);assert.equal((await post('routineActivate',{routineId:id,version:d.version,epoch:d.epoch,memberEpoch:d.memberEpoch})).status,200);return detail(id);};
    const record=(d:any,input:Record<string,unknown>={})=>post('progressRecord',{routineId:d.routineId,version:d.version,revision:d.revision,epoch:d.epoch,memberEpoch:d.memberEpoch,occurredAt:null,entry,...input});
+   const nowDay=Number((await db.owner.query("SELECT extract(isodow from now() AT TIME ZONE 'Europe/Amsterdam')::integer AS day")).rows[0].day);
+   const selectedDays=[1,2,3,4,5,6,7].filter(day=>day!==nowDay);
+   const selective=await make('habit',{weekdays:selectedDays});let selectiveDetail=await activate(selective);
+   assert.deepEqual(selectiveDetail.weekdays,selectedDays);assert.equal((await record(selectiveDetail)).data.code,'routines_paused');
+   assert.equal((await post('routineArchive',{routineId:selective,version:selectiveDetail.version})).status,200);
    const habit=await make();let d=await detail(habit);assert.equal(d.state,'draft');assert.equal(d.result,'pending');
    assert.equal((await record(d)).status,409);d=await activate(habit);
    const event=randomUUID();assert.equal((await record(d,{operationId:event})).status,200);assert.equal((await record(d,{operationId:event})).status,200);
@@ -1903,6 +1908,13 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await au(D,'habitRecord',{habitId:habit.data.resourceId,count:1})).status,200);
      assert.equal((await au(B,'habitRecord',{habitId:habit.data.resourceId,count:1})).status,404);
      const habits=(await api(base+'/authority/habits','GET',undefined,D.session)).data.habits;assert.equal(habits[0].currentTotal,1);assert.equal(habits[0].canEdit,false);assert.deepEqual(habits[0].streaks,{current:0,longest:0});
+     const recorded=await au(D,'habitRecord',{habitId:habit.data.resourceId,count:2});assert.equal(recorded.status,200);
+     const history=(await api(base+'/authority/habits','GET',undefined,D.session)).data.habits.find((x:any)=>x.habitId===habit.data.resourceId);
+     assert.equal(history.currentTotal,3);assert.equal(history.entries.find((e:any)=>e.id===recorded.data.resourceId).canReverse,true);
+     assert.equal((await au(B,'habitReverse',{entryId:recorded.data.resourceId})).status,404);
+     assert.equal((await au(D,'habitReverse',{entryId:recorded.data.resourceId})).status,200);
+     const corrected=(await api(base+'/authority/habits','GET',undefined,D.session)).data.habits.find((x:any)=>x.habitId===habit.data.resourceId);
+     assert.equal(corrected.currentTotal,1);assert.equal(corrected.entries.find((e:any)=>e.id===recorded.data.resourceId).reversed,true);
      // A non-selected day is neutral and cannot create an automatic outcome.
      const yesterday=Number((await db.owner.query("SELECT extract(isodow from (now() AT TIME ZONE 'UTC')::date-1)::integer AS day")).rows[0].day);
      const selected=[1,2,3,4,5,6,7].filter(d=>d!==yesterday);

@@ -1372,5 +1372,8 @@
   "habits.breakStart": "Start date",
   "habits.breakEnd": "End date",
   "habits.planBreak": "Plan break",
-  "habits.cancelBreak": "Cancel break"
+  "habits.cancelBreak": "Cancel break",
+  "habits.history": "Progress history",
+  "habits.recentPeriods": "Recent periods",
+  "habits.recentEntries": "Recent entries"
 }
