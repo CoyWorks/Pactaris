@@ -1858,6 +1858,15 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const older=await api(base+'/exchange/notices?after='+first.nextCursor,'GET',undefined,A.session);assert.equal(older.status,200);assert.ok(older.data.notices.filter((n:any)=>!n.read).length>=2);assert.equal(older.data.unread,2);
      assert.equal(new Set([...first.notices,...older.data.notices].map((n:any)=>n.id)).size,first.notices.length+older.data.notices.length);
      await db.owner.query('DELETE FROM pactaris.member_notices WHERE id=ANY($1::uuid[])',[seeded]);
+     // Sender preferences suppress only the recipient's new notices; the exchange still exists.
+     const mutedSender=await ex(A,'noticeConfigure',{muted:[],mutedPeople:[B.member]});assert.equal(mutedSender.status,200,JSON.stringify(mutedSender.data));
+     assert.ok(mutedSender.data.mutedPeople.includes(B.member));
+     const afterMute=await ex(B,'exchangeCreate',{kind:'proposal',recipientId:A.member,title:'Sender muted',body:'',dueAt:null});assert.equal(afterMute.status,200);
+     assert.ok(!(await notices(A)).notices.some((n:any)=>n.resourceId===afterMute.data.exchangeId));
+     assert.ok((await list(A)).exchanges.some((x:any)=>x.id===afterMute.data.exchangeId));
+     assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[A.member]})).status,400);
+     assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[B.member,B.member]})).status,400);
+     assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[]})).status,200);
      // Muted kinds create no notice (and so no push); unmuting restores them.
      assert.equal((await ex(A,'noticeConfigure',{muted:['proposal','bogus']})).status,400);
      const muted=await ex(A,'noticeConfigure',{muted:['proposal']});assert.equal(muted.status,200);assert.deepEqual(muted.data.muted,['proposal']);
@@ -1898,6 +1907,13 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       return post(A,'partnerAssign',{assigneeId:D.member,agreementId:choice.agreementId,agreementVersion:choice.agreementVersion,epoch:choice.epoch,safetyVersion:choice.safetyVersion,fields:taskFields,policyId:policy.policyId,policyVersion:policy.version});
      };
      const assigned=await direct();assert.equal(assigned.status,200,JSON.stringify(assigned.data));assert.equal((await read(D,assigned.data.taskId)).state,'assigned');
+     // Muting a sender does not hide or block a task that sender assigns.
+     const configure=(input:Record<string,unknown>)=>api(base+'/exchange/noticeConfigure','POST',{operationId:randomUUID(),...input},D.session);
+     assert.equal((await configure({muted:[],mutedPeople:[A.member]})).status,200);
+     const quietTask=await direct();assert.equal(quietTask.status,200);assert.equal((await read(D,quietTask.data.taskId)).state,'assigned');
+     const inbox=await post(D,'partnerInbox',{});assert.equal(inbox.status,200);assert.ok(!inbox.data.inbox.some((item:any)=>item.taskId===quietTask.data.taskId));
+     assert.equal((await configure({muted:[],mutedPeople:[]})).status,200);
+     assert.equal((await move(A,'partnerCancel',quietTask.data.taskId)).status,200);
      // A personal pause blocks; resuming restores authority without any re-acceptance.
      assert.equal((await consent(D,'selfPause',{})).status,200);
      assert.equal((await au(A,'pointsAdjust',{subjectId:D.member,points:5,reason:''})).status,409);

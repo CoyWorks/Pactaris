@@ -44,3 +44,7 @@ Planned for the pre-release, not the alpha (owner decision, 20 November 2026); t
 No native code is in the repository yet.
 
 Migration 0057 redeclares `notice_command` from 0045 to paginate member notices by recipient-bound cursor.
+
+## Sender preferences
+
+A member can mute notices from individually selected people with whom they share an accepted relationship. This choice suppresses new notifications, not the underlying tasks or other records. System-generated notices are unaffected. Pending push candidates are checked again against current settings; existing inbox entries remain readable. The member's preferences are included in their personal export and removed on departure or account erasure; a departing sender is removed from other members' mute lists. Migration 0058 redeclares `notice`, `notice_command`, `task_delivery_command` and `authority_export_page` to enforce and export these preferences.

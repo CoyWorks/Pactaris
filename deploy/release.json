@@ -596,6 +596,13 @@
       "path": "migrations/instance/0057_notice_pagination.sql",
       "sha256": "847d2b0784c2018f225bd4be87aebd31b056bd0e218400e7178d04df8f7c3e88",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0058_notice_people",
+      "path": "migrations/instance/0058_notice_people.sql",
+      "sha256": "3144a33e58e9afeb86659d71a7419c883c7e44277db5df3acc03e2c144c19c64",
+      "backwardCompatible": true
     }
   ]
 }

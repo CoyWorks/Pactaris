@@ -52,3 +52,9 @@ test('notice cursors are exact opaque IDs',()=>{
  assert.equal(exchangeInput('noticeList',{operationId,after}).after,after);
  assert.throws(()=>exchangeInput('noticeList',{operationId,after:'1 OR 1=1'}),ExchangeError);
 });
+
+test('sender preference input rejects duplicates and injected identifiers',()=>{
+ const operationId=randomUUID(),id=randomUUID();
+ assert.deepEqual(exchangeInput('noticeConfigure',{operationId,muted:[],mutedPeople:[id]}).mutedPeople,[id]);
+ for(const mutedPeople of [[id,id],['not-a-uuid']])assert.throws(()=>exchangeInput('noticeConfigure',{operationId,muted:[],mutedPeople}),ExchangeError);
+});

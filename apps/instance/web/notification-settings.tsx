@@ -15,7 +15,7 @@ const groups:Group[]=[
 const taskLabels:Record<keyof InboxPreferences,MessageKey>={assigned:'inbox.prefAssigned',submitted:'inbox.prefSubmitted',reviewed:'inbox.prefReviewed'};
 const noticeLabels:Record<Kind,MessageKey>={permission:'notices.permission',proposal:'notices.proposal',journal:'notices.journal',breach:'notices.breach',
  answered:'notices.answered',invited:'notices.invited',accepted:'notices.accepted',ended:'notices.ended',delegated:'notices.delegated',points:'notices.points',habit:'notices.habit',purchase:'notices.purchase',transfer:'notices.transfer',approval:'notices.approval'};
-type Loaded={delivery:DeliveryPreferences;inbox:InboxPreferences;muted:Kind[]};
+type Loaded={delivery:DeliveryPreferences;inbox:InboxPreferences;muted:Kind[];mutedPeople:string[];people:{id:string;name:string}[]};
 /** One dynamic: whether it may notify you, quiet hours, and which kinds you receive. */
 function HouseholdSettings({household,csrfToken,language}:{household:{id:string;name:string};csrfToken:string;language:string}){
  const t=createTranslator(language),[value,setValue]=useState<Loaded>(),[state,setState]=useState<'idle'|'loading'|'saving'>('idle'),[message,setMessage]=useState<MessageKey>(),[failed,setFailed]=useState(false);
@@ -30,7 +30,7 @@ function HouseholdSettings({household,csrfToken,language}:{household:{id:string;
    const [delivery,inbox,notices]=await Promise.all([partner('partnerDeliveryPreferences'),partner('partnerInboxPreferences'),
     fetch(`${base}/exchange/notice-preferences`,{cache:'no-store'}).then(async r=>{if(!r.ok)throw Error('notices');return await r.json() as ExchangeResult;})]);
    if(!delivery.deliveryPreferences||!inbox.inboxPreferences)throw Error('preferences');
-   setValue({delivery:delivery.deliveryPreferences,inbox:inbox.inboxPreferences,muted:notices.muted??[]});
+   setValue({delivery:delivery.deliveryPreferences,inbox:inbox.inboxPreferences,muted:notices.muted??[],mutedPeople:notices.mutedPeople??[],people:notices.noticePeople??[]});
   }catch{setFailed(true);}finally{setState('idle');}
  }
  async function save(e:React.FormEvent){
@@ -38,7 +38,7 @@ function HouseholdSettings({household,csrfToken,language}:{household:{id:string;
   try{
    await partner('partnerDeliveryConfigure',{deliveryPreferences:value.delivery});
    await partner('partnerInboxConfigure',{preferences:value.inbox});
-   const r=await fetch(`${base}/exchange/noticeConfigure`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({operationId:crypto.randomUUID(),muted:value.muted})});
+   const r=await fetch(`${base}/exchange/noticeConfigure`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({operationId:crypto.randomUUID(),muted:value.muted,mutedPeople:value.mutedPeople})});
    if(!r.ok)throw Error('notices');
    setMessage('inbox.preferencesSaved');
   }catch{setFailed(true);}finally{setState('idle');}
@@ -55,6 +55,10 @@ function HouseholdSettings({household,csrfToken,language}:{household:{id:string;
     {group.reminders&&<label className="check"><input type="checkbox" checked={value.delivery.reminders} onChange={e=>edit({delivery:{...value.delivery,reminders:e.target.checked}})}/>{t('inbox.enableReminder')}</label>}
     {group.notices.map(kind=><label key={kind} className="check"><input type="checkbox" checked={!value.muted.includes(kind)} onChange={e=>edit({muted:e.target.checked?value.muted.filter(k=>k!==kind):[...value.muted,kind]})}/>{t(noticeLabels[kind])}</label>)}
    </fieldset>)}
+   {!!value.people.length&&<fieldset className="kinds" disabled={busy}><legend>{t('notifySettings.people')}</legend>
+    <Hint label={t('hint.more')}>{t('notifySettings.peopleHelp')}</Hint>
+    {value.people.map(person=><label className="check" key={person.id}><input type="checkbox" checked={!value.mutedPeople.includes(person.id)} onChange={e=>edit({mutedPeople:e.target.checked?value.mutedPeople.filter(id=>id!==person.id):[...value.mutedPeople,person.id]})}/>{person.name||t('partner.unnamed')}</label>)}
+   </fieldset>}
    <fieldset className="kinds" disabled={busy}><legend>{t('notifySettings.quiet')}</legend>
     <label>{t('inbox.quietStart')}<input type="time" required={value.delivery.quietEnd!==null} value={value.delivery.quietStart??''} onChange={e=>edit({delivery:{...value.delivery,quietStart:e.target.value||null}})}/></label>
     <label>{t('inbox.quietEnd')}<input type="time" required={value.delivery.quietStart!==null} value={value.delivery.quietEnd??''} onChange={e=>edit({delivery:{...value.delivery,quietEnd:e.target.value||null}})}/></label>
