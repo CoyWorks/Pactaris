@@ -51,3 +51,9 @@ test('complete export requests and pages are strictly shaped',async()=>{
   assert.throws(()=>exportPage({section:'tasks',records:[],next:"x' OR 1=1"},'tasks'));
   assert.throws(()=>exportPage({section:'documents',records:Array.from({length:exportSections.documents+1},()=>({})),next:null},'documents'));
 });
+
+test('scheduled habit restrictions contain only their resource identifier',()=>{
+ const id=randomUUID(),householdId=randomUUID(),habitId=randomUUID();
+ const value={id,householdId,kind:'habit.break',subject:{habitId},occurredAt:'2026-11-23T12:00:00.000000Z'};
+ assert.deepEqual(journalEntries({entries:[value]},50),[value]);
+});

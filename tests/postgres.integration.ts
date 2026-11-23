@@ -1950,6 +1950,12 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const day=(await db.owner.query("SELECT to_char((now() AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS today, to_char((now() AT TIME ZONE 'UTC')::date+8,'YYYY-MM-DD') AS future")).rows[0];
      assert.equal((await au(B,'habitBreakAdd',{habitId:weekly.data.resourceId,start:day.today,end:day.today})).status,404);
      const pause=await au(D,'habitBreakAdd',{habitId:weekly.data.resourceId,start:day.today,end:day.today});assert.equal(pause.status,200,JSON.stringify(pause.data));
+     const journaled=(await db.owner.query("SELECT subject FROM pactaris.revocation_journal WHERE household_id=$1 AND kind='habit.break' AND subject->>'habitId'=$2",[home.householdId,weekly.data.resourceId])).rows;
+     assert.deepEqual(journaled.at(-1).subject,{habitId:weekly.data.resourceId});
+     const restoreTx=await db.owner.connect();try{await restoreTx.query('BEGIN');
+      await restoreTx.query("SELECT pactaris.journal_apply($1,'habit.break',jsonb_build_object('habitId',$2::text))",[home.householdId,weekly.data.resourceId]);
+      assert.equal((await restoreTx.query('SELECT state FROM pactaris.authority_habits WHERE id=$1',[weekly.data.resourceId])).rows[0].state,'paused');
+     }finally{await restoreTx.query('ROLLBACK');restoreTx.release();}
      assert.equal((await au(D,'habitRecord',{habitId:weekly.data.resourceId,count:1})).status,409);
      const future=await au(A,'habitBreakAdd',{habitId:weekly.data.resourceId,start:day.future,end:day.future});assert.equal(future.status,200,JSON.stringify(future.data));
      assert.equal((await au(B,'habitBreakCancel',{habitId:weekly.data.resourceId,breakId:future.data.resourceId})).status,404);

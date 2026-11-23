@@ -575,6 +575,13 @@
       "path": "migrations/instance/0054_habit_history_alias.sql",
       "sha256": "85f6e2b39e99eb72a478b147f8c545ec38f65b07f1f8e912317109d13ea86db3",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0055_habit_break_journal",
+      "path": "migrations/instance/0055_habit_break_journal.sql",
+      "sha256": "e6d7cfc9a7de3346bb48c2262638b6b46adcea3c01e6f636f11b5d8957bed051",
+      "backwardCompatible": true
     }
   ]
 }
