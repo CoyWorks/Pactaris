@@ -1983,7 +1983,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await move(D,'partnerStart',rid)).status,200);
      assert.equal((await move(D,'partnerSubmit',rid,{note:'Missing proof'})).data.code,'partner_proofRequired');
      assert.equal((await read(D,rid)).state,'in_progress');
-     assert.equal((await move(B,'partnerSubmit',rid,{note:'Unauthorized'})).status,404);
+     assert.equal((await post(B,'partnerSubmit',transitionBody(await read(D,rid),'partnerSubmit',{note:'Unauthorized'}))).status,404);
      const proofOperation=randomUUID(),stored=await upload(D,png,'image/png',proofOperation);assert.equal(stored.status,200,stored.data.toString());
      assert.equal(JSON.parse(stored.data.toString()).proofId,proofOperation);
      assert.equal((await upload(D,png,'image/png',proofOperation)).status,200);
