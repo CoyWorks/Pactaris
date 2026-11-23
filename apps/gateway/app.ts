@@ -49,7 +49,7 @@ import type { GatewayInvitations } from './invitations.js';
 import { randomUUID } from 'node:crypto';
 import { normalizeEmail } from '../../packages/auth/email.js';
 import { OnboardingError,type OnboardingService } from './onboarding.js';
-import { SecurityUnavailable,type AccountSecurity } from './account-security.js';
+import { accountSecurityRoutes,type AccountSecurity } from './account-security.js';
 const token=()=>randomBytes(32).toString('base64url');
 const LOGIN='__Host-pactaris-login',SESSION='__Host-pactaris-session';
 export function cookie(req:express.Request,name:string):string|undefined {
@@ -362,39 +362,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     await store.updateAccountPresentation(session.account.id,value);
     res.json({presentation:value});
   });
-  // Sign-in security (docs/ACCOUNT_SECURITY.md): Identity owns the credentials; Pactaris shows
-  // the person's own devices, removes them after a fresh sign-in, and links to Identity flows.
-  app.get('/api/account/security',async(req,res)=>{
-    const session=await authenticate(req,res);if(!session)return;
-    res.set('Cache-Control','no-store');
-    if(!accountSecurity){res.json({available:false});return;}
-    const links=accountSecurity.links(),identityUser=await store.identityUser?.(session.account.id);
-    if(identityUser===undefined){res.json({available:true,links,devices:null,signInAgain:true});return;}
-    try{res.json({available:true,...await accountSecurity.overview(identityUser)});}
-    catch(error){
-      if(!(error instanceof SecurityUnavailable))process.stderr.write(JSON.stringify({code:'account_security.failed'})+'\n');
-      res.json({available:true,links,devices:null,devicesUnavailable:true});
-    }
-  });
-  app.delete('/api/account/security/devices/:id',async(req,res)=>{
-    const session=await authenticate(req,res);if(!session)return;
-    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
-    if(!accountSecurity){missing(res);return;}
-    const token=cookie(req,SESSION)!;
-    if(!await store.recentlyAuthenticated?.(token)){
-      res.status(403).json({code:'recent_authentication_required',messageKey:'security.reauthenticate'});return;
-    }
-    if(!await store.throttle('account.security:'+session.account.id,10)){
-      res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;
-    }
-    const identityUser=await store.identityUser?.(session.account.id);
-    if(identityUser===undefined){missing(res);return;}
-    try{
-      const result=await accountSecurity.remove(identityUser,String(req.params.id));
-      if(result==='not_found'){missing(res);return;}
-      res.status(204).end();
-    }catch{res.status(503).json({code:'security_unavailable',messageKey:'errors.unavailable'});}
-  });
+  accountSecurityRoutes(app,store,accountSecurity,authenticate,csrfAllowed,req=>cookie(req,SESSION));
   app.put('/api/account/display-name',express.json({limit:1024,strict:true,inflate:false}),async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;
     if(!csrfAllowed(req,session)){

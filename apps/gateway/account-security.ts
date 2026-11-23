@@ -1,4 +1,6 @@
 import {readFileSync} from 'node:fs';
+import type express from 'express';
+import type {GatewayStore,Session} from './store.js';
 import {accountFlowKinds,type AccountFlowKind,type AccountSecurityConfig} from '../../packages/config/index.js';
 
 // Self-service sign-in security (docs/ACCOUNT_SECURITY.md). Identity (Authentik) stays the
@@ -91,4 +93,41 @@ export class AccountSecurity {
     await this.call('DELETE',`/api/v3/authenticators/admin/${target.kind}/${target.pk}/`);
     return 'removed';
   }
+}
+
+// Routes live here, outside createGatewayApp, to keep that function's control flow small.
+export function accountSecurityRoutes(app:express.Express,store:GatewayStore,security:Pick<AccountSecurity,'overview'|'remove'|'links'>|undefined,
+  authenticate:(req:express.Request,res:express.Response)=>Promise<Session|undefined>,
+  csrfAllowed:(req:express.Request,session:Session)=>boolean,sessionToken:(req:express.Request)=>string|undefined){
+  const missing=(res:express.Response)=>res.status(404).json({code:'not_found',messageKey:'errors.notFound'});
+  app.get('/api/account/security',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    res.set('Cache-Control','no-store');
+    if(!security){res.json({available:false});return;}
+    const links=security.links(),identityUser=await store.identityUser?.(session.account.id);
+    if(identityUser===undefined){res.json({available:true,links,devices:null,signInAgain:true});return;}
+    try{res.json({available:true,...await security.overview(identityUser)});}
+    catch(error){
+      if(!(error instanceof SecurityUnavailable))process.stderr.write(JSON.stringify({code:'account_security.failed'})+'\n');
+      res.json({available:true,links,devices:null,devicesUnavailable:true});
+    }
+  });
+  app.delete('/api/account/security/devices/:id',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    if(!security){missing(res);return;}
+    const token=sessionToken(req);
+    if(!token||!await store.recentlyAuthenticated?.(token)){
+      res.status(403).json({code:'recent_authentication_required',messageKey:'security.reauthenticate'});return;
+    }
+    if(!await store.throttle('account.security:'+session.account.id,10)){
+      res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;
+    }
+    const identityUser=await store.identityUser?.(session.account.id);
+    if(identityUser===undefined){missing(res);return;}
+    try{
+      if(await security.remove(identityUser,String(req.params.id))==='not_found'){missing(res);return;}
+      res.status(204).end();
+    }catch{res.status(503).json({code:'security_unavailable',messageKey:'errors.unavailable'});}
+  });
 }
