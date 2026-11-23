@@ -52,3 +52,9 @@ A member can mute notices from individually selected people with whom they share
 Migration 0059 redeclares `notice_command` from 0058 to omit actor names from in-app notice payloads.
 
 Migration 0060 checks the recipient's current resource visibility again before listing member notices or considering them for push. A paused or departed actor cannot generate a pending push.
+
+## Active-household change checks
+
+The visible, online workspace checks the active household with a bounded, opaque cursor tied to the exact membership and instance. Changes to private tasks, shared tasks, approval rows and inboxes invalidate only the affected person's topic token. Tokens update in the same transaction as the change; row locking makes concurrent updates to the same topic commit in token order. The cursor is never authorization: follow-up reads use their normal current membership and resource checks. A muted notification does not suppress a task-change token. Cursor snapshots are bounded per membership, expire after 24 hours, are included in personal export, and are removed on departure or erasure. The client resets an expired cursor and reloads the affected views.
+
+Migration 0061 adds the scoped cursor and token functions, trigger-based invalidation and a runtime function grant, and redeclares `authority_export_page` from 0058 for export. Its initial scope is the active household's workspace tasks, shared tasks, approvals and inboxes; other views retain their existing independent refresh mechanisms.

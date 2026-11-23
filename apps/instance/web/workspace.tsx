@@ -1,3 +1,4 @@
+import {useWorkspaceChanges} from './workspace-changes.js';
 import {PersonalSeriesPanel} from './personal-series.js';
 import {SharedCheckins} from './shared-checkins.js';
 import {PartnerPanel} from './partner.js';
@@ -51,12 +52,19 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
  const assignedHabits=useAssignedHabits(householdId,authorityReload);
  const progress=useProgress(householdId,authorityReload+':'+(view==='board'||view==='overview'?view:''));
  const [noticeReload,setNoticeReload]=useState(0),notices=useNotices(householdId,noticeReload);
- const refreshAll=()=>{setExchangeReload(v=>v+1);setAuthorityReload(v=>v+1);setNoticeReload(v=>v+1);setRefresh(v=>v+1);};
+ const refreshAll=()=>{window.dispatchEvent(new Event('pactaris:refreshChanges'));setExchangeReload(v=>v+1);setAuthorityReload(v=>v+1);setNoticeReload(v=>v+1);setRefresh(v=>v+1);};
  const [adding,setAdding]=useState<QuickKind|'menu'>(),[habitsReload,setHabitsReload]=useState(0),pendingEditor=useRef<{fields:TaskFields}|undefined>(undefined);
  const t=createTranslator(language),[data,setData]=useState<WorkspaceResult>(),[filter,setFilter]=useState('open'),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[draft,setDraft]=useState<Draft>(),[editor,setEditor]=useState<{fields:TaskFields;taskId?:string;version?:string}>(),[settings,setSettings]=useState<{name:string;timeZone:string;version:string}>();
  useFleetingNotice(notice,()=>setNotice(undefined));
  const [pointsDraft,setPointsDraft]=useState<PointsSettings & {version:string}>();
  const activeWrite=useRef(false),base='/api/households/'+householdId+'/workspace';
+ const currentHousehold=useRef(householdId);currentHousehold.current=householdId;
+ useWorkspaceChanges(householdId,topics=>{
+  if(topics.includes('workspace'))setRefresh(v=>v+1);
+  if(topics.includes('notices')){setNoticeReload(v=>v+1);void fetch(`/api/households/${householdId}/workspace/unread`,{cache:'no-store'}).then(async r=>{if(!r.ok)return;const data=await r.json() as {hasUnreadTaskInbox?:unknown};if(currentHousehold.current===householdId&&typeof data.hasUnreadTaskInbox==='boolean')setData(current=>current?{...current,hasUnreadTaskInbox:data.hasUnreadTaskInbox as boolean}:current);}).catch(()=>{});}
+  if(topics.includes('tasks'))window.dispatchEvent(new CustomEvent('pactaris:taskChanges',{detail:householdId}));
+ });
+
  useEffect(()=>{
   let stopped=false,active:AbortController|undefined,timer:ReturnType<typeof setTimeout>|undefined;
   let snapshotAt=0, retryAt=0, terminal=false;

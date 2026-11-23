@@ -659,6 +659,15 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       if(!workspace)throw new WorkspaceError('unavailable');res.json(await workspace.read(session.account.id,req.params.householdId,String(req.query.filter??'open'),req.query.after as string|undefined));
     }catch(error){workspaceFailure(res,error);}
   });
+  app.get('/api/households/:householdId/workspace/changes',async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      if(!uuid(req.params.householdId)||Object.keys(req.query).some(k=>k!=='cursor')||(req.query.cursor!==undefined&&!uuid(req.query.cursor)))throw new WorkspaceError('invalid');
+      if(!workspace)throw new WorkspaceError('unavailable');
+      if(!await store.throttle('workspaceChanges:'+session.account.id)){res.set('Retry-After','300').status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+      const result=await workspace.execute(session.account.id,req.params.householdId,'workspaceChanges',{operationId:randomUUID(),cursor:req.query.cursor??null});
+      res.json({cursor:result.changeCursor,changed:result.changed});
+    }catch(error){workspaceFailure(res,error);}
+  });
   app.get('/api/households/:householdId/workspace/unread',async(req,res)=>{
     try{
       const session=await authenticate(req,res);if(!session)return;
@@ -674,7 +683,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
   app.post('/api/households/:householdId/workspace/:action',async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;
       if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
-      const action=req.params.action;if(!uuid(req.params.householdId)||!isWorkspaceAction(action)||action==='workspaceRead'||action==='workspaceUnread')throw new WorkspaceError('invalid');
+      const action=req.params.action;if(!uuid(req.params.householdId)||!isWorkspaceAction(action)||action==='workspaceRead'||action==='workspaceUnread'||action==='workspaceChanges')throw new WorkspaceError('invalid');
       const input=workspaceInput(action,req.body);if(!workspace)throw new WorkspaceError('unavailable');
       if(action!=='taskRead'&&action!=='personalSeriesList'&&!await store.throttle('workspace:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
       res.json(await workspace.execute(session.account.id,req.params.householdId,action,input));

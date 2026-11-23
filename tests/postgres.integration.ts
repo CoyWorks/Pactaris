@@ -1931,10 +1931,20 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       return post(A,'partnerAssign',{assigneeId:D.member,agreementId:choice.agreementId,agreementVersion:choice.agreementVersion,epoch:choice.epoch,safetyVersion:choice.safetyVersion,fields:taskFields,policyId:policy.policyId,policyVersion:policy.version});
      };
      const assigned=await direct();assert.equal(assigned.status,200,JSON.stringify(assigned.data));assert.equal((await read(D,assigned.data.taskId)).state,'assigned');
+     // Freshness cursors are bound to the exact membership and never depend on notice settings.
+     const changes=async(p:Person,cursor?:string)=>api(base+'/workspace/changes'+(cursor?'?cursor='+cursor:''),'GET',undefined,p.session);
+     const startChanges=await changes(D);assert.equal(startChanges.status,200,JSON.stringify(startChanges.data));assert.ok(startChanges.data.cursor);assert.deepEqual(startChanges.data.changed,['notices','tasks','workspace']);
+     assert.equal((await changes(A,startChanges.data.cursor)).status,409);
      // Muting a sender does not hide or block a task that sender assigns.
      const configure=(input:Record<string,unknown>)=>api(base+'/exchange/noticeConfigure','POST',{operationId:randomUUID(),...input},D.session);
      assert.equal((await configure({muted:[],mutedPeople:[A.member]})).status,200);
      const quietTask=await direct();assert.equal(quietTask.status,200);assert.equal((await read(D,quietTask.data.taskId)).state,'assigned');
+     const fresh=await changes(D,startChanges.data.cursor);assert.equal(fresh.status,200,JSON.stringify(fresh.data));assert.ok(fresh.data.changed.includes('tasks'));
+     const unchanged=await changes(D,fresh.data.cursor);assert.equal(unchanged.status,200);assert.deepEqual(unchanged.data.changed,[]);assert.equal(unchanged.data.cursor,fresh.data.cursor);
+     const parallel=await Promise.all([direct(),direct()]);assert.ok(parallel.every(r=>r.status===200));
+     const parallelChanges=await changes(D,unchanged.data.cursor);assert.equal(parallelChanges.status,200);assert.ok(parallelChanges.data.changed.includes('tasks'));
+     const caughtUp=await changes(D,parallelChanges.data.cursor);assert.equal(caughtUp.status,200);assert.deepEqual(caughtUp.data.changed,[]);
+     for(const r of parallel)assert.equal((await move(A,'partnerCancel',r.data.taskId)).status,200);
      const inbox=await post(D,'partnerInbox',{});assert.equal(inbox.status,200);assert.ok(!inbox.data.inbox.some((item:any)=>item.taskId===quietTask.data.taskId));
      assert.equal((await configure({muted:[],mutedPeople:[]})).status,200);
      assert.equal((await move(A,'partnerCancel',quietTask.data.taskId)).status,200);
