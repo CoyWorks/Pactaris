@@ -33,7 +33,7 @@ Text is blanked by `erase_text`, which empties user-authored string fields in JS
 
 ## Completion
 
-The gateway records an acknowledgement per Instance. Unavailable Instances are retried with backoff up to one hour, and the worker logs `account.deletion_deferred` with a count. When every active Instance has acknowledged, the gateway removes remaining sessions and household hints and reduces the account row to an unlinkable marker: status `deleted`, subject `deleted:<account id>`, and no name, email or presentation settings. The worker logs `account.deletion_completed`. Signing in again with the same provider identity creates a new, empty account.
+The gateway records an acknowledgement per Instance. Unavailable Instances are retried with backoff up to one hour, and the worker logs `account.deletion_deferred` with a count. When every active Instance has acknowledged, the gateway removes remaining sessions and household hints and reduces the account row to an unlinkable marker: status `deleted`, subject `deleted:<account id>`, and no name, email, presentation settings or Identity user number. The worker logs `account.deletion_completed`. Signing in again with the same provider identity creates a new, empty account.
 
 ## Limits
 

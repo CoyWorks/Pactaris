@@ -56,7 +56,7 @@ From 900 CSS pixels the bottom tabs become a side navigation, the content keeps 
 
 ## Profile
 
-The avatar opens Profile. Settings are rows with a chevron that open their own page: display name, date and time, notifications, signed-in devices (sign out this device, one other device, or all other devices) and report a problem or idea. Appearance and personal export stay inline. An **Account** group holds a clearly marked **Sign out** button (this device only) and delete account.
+The avatar opens Profile. Settings are rows with a chevron that open their own page: display name, date and time, notifications, sign-in and security (password, passkeys, authenticator app, recovery codes; see [ACCOUNT_SECURITY.md](ACCOUNT_SECURITY.md)), signed-in devices (sign out this device, one other device, or all other devices) and report a problem or idea. Appearance and personal export stay inline. An **Account** group holds a clearly marked **Sign out** button (this device only) and delete account.
 
 ## Help text
 

@@ -5,7 +5,7 @@ import type { LoginAttempt } from '../../apps/gateway/store.js';
 import { verifiedEmailClaim } from './email.js';
 export interface OidcLogin {
   start(attempt:LoginAttempt,reauthenticate?:boolean):Promise<string>;
-  finish(url:URL,attempt:LoginAttempt):Promise<{issuer:string;subject:string;name:string;verifiedEmail?:string;mfaAt?:number;authAt?:number}>;
+  finish(url:URL,attempt:LoginAttempt):Promise<{issuer:string;subject:string;name:string;verifiedEmail?:string;mfaAt?:number;authAt?:number;identityUser?:number}>;
 }
 export class OpenIdLogin implements OidcLogin {
   private cached?:Promise<oidc.Configuration>;
@@ -49,8 +49,9 @@ export class OpenIdLogin implements OidcLogin {
     // membership grant. Omit malformed/unverified claims without blocking login.
     const verifiedEmail=verifiedEmailClaim(claims);
     const authAt=verifiedAuthTime(claims.auth_time),mfaAt=verifiedMfaClaim(claims,this.config.session.passkeyIsMfa);
+    const identityUser=identityUserClaim(claims);
     return {issuer:claims.iss,subject:claims.sub,name:typeof claims.name==='string'?claims.name.slice(0,120):'',
-      ...(verifiedEmail?{verifiedEmail}:{}),...(mfaAt===undefined?{}:{mfaAt}),...(authAt===undefined?{}:{authAt})};
+      ...(identityUser===undefined?{}:{identityUser}),...(verifiedEmail?{verifiedEmail}:{}),...(mfaAt===undefined?{}:{mfaAt}),...(authAt===undefined?{}:{authAt})};
   }
 }
 
@@ -63,4 +64,11 @@ function verifiedAuthTime(time:unknown):number|undefined {
 export function verifiedMfaClaim(claims:Record<string,unknown>,passkeyIsMfa=false):number|undefined {
   if(!Array.isArray(claims.amr))return;
   if(claims.amr.includes('mfa')||(passkeyIsMfa&&claims.amr.includes('user')))return verifiedAuthTime(claims.auth_time);
+}
+
+// Identity's internal user number (docs/ACCOUNT_SECURITY.md). The gateway uses it only to
+// list and remove that person's own sign-in devices through Identity's API.
+export function identityUserClaim(claims:Record<string,unknown>):number|undefined {
+  const value=claims.pactaris_identity_user;
+  if(typeof value==='number'&&Number.isSafeInteger(value)&&value>0)return value;
 }

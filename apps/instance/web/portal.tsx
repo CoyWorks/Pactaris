@@ -16,6 +16,7 @@ import {Hint,Icon,Layer,Link,navigate,useLocation} from './navigation.js';
 import {Skeleton} from './today-habits.js';
 import {AppearancePanel} from './appearance.js';
 import {NotificationSettings} from './notification-settings.js';
+import {AccountSecurity} from './account-security.js';
 type Session={account:{id:string;displayName:string};csrfToken:string;presentation?:Presentation;preferredName?:string};
 type Summary={id:string;name:string};
 // Per-browser convenience only: which dynamic this account opened last. Cleared on sign-out.
@@ -32,7 +33,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   const t=createTranslator(language);
   const [session,setSession]=useState<Session>(),[loading,setLoading]=useState(true),[error,setError]=useState<MessageKey>(),[listing,setListing]=useState<Listing>(),[selected,setSelected]=useState<Summary>(),[busy,setBusy]=useState(false);
   const [name,setName]=useState(''),[createId,setCreateId]=useState<string>(),[createPending,setCreatePending]=useState(false),[leaveId,setLeaveId]=useState<string>(),[confirmLeave,setConfirmLeave]=useState(false),[leavePending,setLeavePending]=useState(false),[refresh,setRefresh]=useState(0);
-  const [loadError,setLoadError]=useState<MessageKey>(),[panel,setPanel]=useState<'name'|'time'|'sessions'|'report'>();
+  const [loadError,setLoadError]=useState<MessageKey>(),[panel,setPanel]=useState<'name'|'time'|'sessions'|'security'|'report'>();
   const accountId=useRef<string|undefined>(undefined);
   const {path,search}=useLocation();
   const selectedId=/^\/households\/([a-f0-9-]{36})$/i.exec(path)?.[1];
@@ -148,6 +149,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
     <AppearancePanel language={language}/>
     <h2 className="group-title">{t('profile.privacy')}</h2>
     <ul className="menu">
+     <ProfileRow title={t('security.title')} onOpen={()=>setPanel('security')}/>
      <ProfileRow title={t('account.sessionsTitle')} onOpen={()=>setPanel('sessions')}/>
      <ProfileRow title={t('account.reportTitle')} onOpen={()=>setPanel('report')}/>
     </ul>
@@ -165,6 +167,8 @@ export function Portal({language,format,timeZone}:{language:string;format:string
         current?.account.id===session.account.id?{...current,presentation:value??undefined}:current)}/></Layer>}
     {panel==='sessions'&&<Layer title={t('account.sessionsTitle')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
      <AccountSessions key={'sessions:'+session.account.id} csrfToken={session.csrfToken} language={language} format={displayFormat} timeZone={displayZone} onSignOut={()=>{void logout();}}/></Layer>}
+    {panel==='security'&&<Layer title={t('security.title')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
+     <AccountSecurity key={'security:'+session.account.id} csrfToken={session.csrfToken} language={language} format={displayFormat} timeZone={displayZone}/></Layer>}
     {panel==='report'&&<Layer title={t('account.reportTitle')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
      <ReportPanel csrfToken={session.csrfToken} language={language}/></Layer>}
     <DeleteAccountPanel csrfToken={session.csrfToken} language={language}/>

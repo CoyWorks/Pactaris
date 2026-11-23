@@ -128,6 +128,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const proof=()=>gatewayDb.pool.query('SELECT verified_email,verified_email_asserted_at FROM pactaris.accounts WHERE id=$1',[account.id]);
   const email='Fixture+invite@example.invalid';
   assert.deepEqual(await store.account('https://idp.fixture.invalid/','subject-a','Fixture user',email),account);
+  await identityUserChecks(store,account.id,other.id,email);
   assert.equal((await proof()).rows[0].verified_email,email);assert.ok((await proof()).rows[0].verified_email_asserted_at instanceof Date);
   assert.equal((await store.account('https://idp.fixture.invalid/','subject-b','Other fixture',email)).id,other.id);
   assert.equal((await store.account('https://other-idp.fixture.invalid/','subject-a','Fixture user',email)).id,sameSubjectOtherIssuer.id);
@@ -2372,3 +2373,13 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await root.end();await rm(folder,{recursive:true,force:true});
  }
 });
+
+// Kept outside the main test body: its control flow is near the type checker's recursion limit in CI.
+async function identityUserChecks(store:PgGatewayStore,accountId:string,otherId:string,email:string){
+  // Identity's user number is kept across sign-ins that omit it, and is per account.
+  assert.equal(await store.identityUser(accountId),undefined);
+  await store.account('https://idp.fixture.invalid/','subject-a','Fixture user',email,4242);
+  await store.account('https://idp.fixture.invalid/','subject-a','Fixture user',email);
+  assert.equal(await store.identityUser(accountId),4242);
+  assert.equal(await store.identityUser(otherId),undefined);
+}

@@ -88,7 +88,7 @@ export class AccountDeletion {
       // Keep only an unlinkable marker. A new sign-in with the same provider identity
       // creates a fresh account with no access to anything erased here.
       await db.query(`UPDATE pactaris.accounts SET status='deleted',subject='deleted:'||id::text,
-        display_name='',verified_email=NULL,verified_email_asserted_at=NULL,locale_format=NULL,time_zone=NULL,preferred_display_name=NULL
+        display_name='',verified_email=NULL,verified_email_asserted_at=NULL,locale_format=NULL,time_zone=NULL,preferred_display_name=NULL,identity_user_id=NULL
         WHERE id=$1 AND status='deleting'`,[accountId]);
       await db.query('UPDATE pactaris.account_deletions SET completed_at=now() WHERE account_id=$1',[accountId]);
       await db.query('COMMIT');

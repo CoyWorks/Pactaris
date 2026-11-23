@@ -49,6 +49,7 @@ import type { GatewayInvitations } from './invitations.js';
 import { randomUUID } from 'node:crypto';
 import { normalizeEmail } from '../../packages/auth/email.js';
 import { OnboardingError,type OnboardingService } from './onboarding.js';
+import { accountSecurityRoutes,type AccountSecurity } from './account-security.js';
 const token=()=>randomBytes(32).toString('base64url');
 const LOGIN='__Host-pactaris-login',SESSION='__Host-pactaris-session';
 export function cookie(req:express.Request,name:string):string|undefined {
@@ -63,7 +64,7 @@ type OperatorInventory={
   instances:(after:string|null)=>ReturnType<typeof listRegistryInstances>;
   placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
 };
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'|'shop'>,proof?:Pick<GatewayProof,'upload'|'view'|'remove'>,admin?:AdminConsole,maintenance?:Pick<GatewayMaintenance,'gateway'|'status'|'instances'|'runInstance'>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'|'shop'>,proof?:Pick<GatewayProof,'upload'|'view'|'remove'>,admin?:AdminConsole,maintenance?:Pick<GatewayMaintenance,'gateway'|'status'|'instances'|'runInstance'>,accountSecurity?:Pick<AccountSecurity,'overview'|'remove'|'links'>) {
   const app=express();headers(app,new URL(config.publicOrigin).protocol==='https:');app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -112,7 +113,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       if(admin&&!operator&&await admin.registrationClosedFor(identity.issuer,identity.subject)){
         loginFailure(req,res,403,'registration_closed','errors.registrationClosed');return;
       }
-      const account=await store.account(identity.issuer,identity.subject,identity.name,email);
+      const account=await store.account(identity.issuer,identity.subject,identity.name,email,identity.identityUser);
       const previous=cookie(req,SESSION);if(previous)await store.logout(previous);
       const bounds=attempt.client==='app'?config.session.app:config.session;
       const sessionToken=token();await store.createSession(sessionToken,account,token(),bounds.idleSeconds,bounds.absoluteSeconds,email,identity.mfaAt,identity.authAt);
@@ -361,6 +362,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     await store.updateAccountPresentation(session.account.id,value);
     res.json({presentation:value});
   });
+  accountSecurityRoutes(app,store,accountSecurity,authenticate,csrfAllowed,req=>cookie(req,SESSION));
   app.put('/api/account/display-name',express.json({limit:1024,strict:true,inflate:false}),async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;
     if(!csrfAllowed(req,session)){
