@@ -13,7 +13,7 @@ const targets:Record<Notice['kind'],NoticeTarget>={permission:'exchange',proposa
 export function useNotices(householdId:string,reload:number){
  const [data,setData]=useState<ExchangeResult>(),[tick,setTick]=useState(0);
  useEffect(()=>{
-  const timer=setInterval(()=>{if(!document.hidden)setTick(v=>v+1);},60000);
+  const timer=setInterval(()=>{if(!document.hidden)setTick(v=>v+1);},300000);
   const visible=()=>{if(!document.hidden)setTick(v=>v+1);};
   document.addEventListener('visibilitychange',visible);
   return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',visible);};

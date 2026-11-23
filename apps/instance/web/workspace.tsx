@@ -62,11 +62,11 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
  useWorkspaceChanges(householdId,topics=>{
   if(topics.includes('workspace'))setRefresh(v=>v+1);
   if(topics.includes('notices')){setNoticeReload(v=>v+1);void fetch(`/api/households/${householdId}/workspace/unread`,{cache:'no-store'}).then(async r=>{if(!r.ok)return;const data=await r.json() as {hasUnreadTaskInbox?:unknown};if(currentHousehold.current===householdId&&typeof data.hasUnreadTaskInbox==='boolean')setData(current=>current?{...current,hasUnreadTaskInbox:data.hasUnreadTaskInbox as boolean}:current);}).catch(()=>{});}
-  if(topics.includes('tasks'))window.dispatchEvent(new CustomEvent('pactaris:taskChanges',{detail:householdId}));
+  if(topics.includes('tasks')){setNoticeReload(v=>v+1);window.dispatchEvent(new CustomEvent('pactaris:taskChanges',{detail:householdId}));}
   if(topics.includes('routines')){setHabitsReload(v=>v+1);window.dispatchEvent(new CustomEvent('pactaris:routineChanges',{detail:householdId}));}
   if(topics.includes('library'))window.dispatchEvent(new CustomEvent('pactaris:libraryChanges',{detail:householdId}));
   if(topics.includes('catalog'))window.dispatchEvent(new CustomEvent('pactaris:catalogChanges',{detail:householdId}));
-  if(topics.includes('dynamic')){setExchangeReload(v=>v+1);setAuthorityReload(v=>v+1);}
+  if(topics.includes('dynamic')){setExchangeReload(v=>v+1);setAuthorityReload(v=>v+1);setTermsReload(v=>v+1);setNoticeReload(v=>v+1);window.dispatchEvent(new CustomEvent('pactaris:dynamicChanges',{detail:householdId}));}
 
  });
 
@@ -131,7 +131,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
     if(active===controller){
      active=undefined;
      setLoading(false);
-     if(!terminal)timer=setTimeout(()=>void load(Date.now()-snapshotAt<300000),Math.max(60000,retryAt-Date.now()));
+     if(!terminal)timer=setTimeout(()=>void load(false),Math.max(300000,retryAt-Date.now()));
     }
    }
   }

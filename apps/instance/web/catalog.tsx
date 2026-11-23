@@ -18,7 +18,7 @@ export function CatalogPanel({householdId,session,language,format}:{householdId:
   let gone=false,active:AbortController|undefined,timer:ReturnType<typeof setTimeout>|undefined;
   async function load(){if(gone||active||document.hidden||!navigator.onLine)return;active=new AbortController();const deadline=setTimeout(()=>active?.abort(),12000);
    try{const data=await request('catalogList',{operationId:crypto.randomUUID(),filter,...(cursor?{after:cursor}:{})},active.signal);if(!gone){setListing(data);setError(undefined);}}
-   catch(e){if(!gone){setListing(undefined);setError(failure(e));}}finally{clearTimeout(deadline);active=undefined;if(!gone)timer=setTimeout(()=>{void load();},60000);}}
+   catch(e){if(!gone){setListing(undefined);setError(failure(e));}}finally{clearTimeout(deadline);active=undefined;if(!gone)timer=setTimeout(()=>{void load();},300000);}}
   const resume=()=>{if(timer)clearTimeout(timer);if(document.hidden)active?.abort();else void load();};const changed=(event:Event)=>{if((event as CustomEvent<string>).detail===householdId)resume();};void load();document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);window.addEventListener('pactaris:catalogChanges',changed);
   return()=>{gone=true;if(timer)clearTimeout(timer);active?.abort();document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);window.removeEventListener('pactaris:catalogChanges',changed);};
  },[base,filter,cursor,refresh]);

@@ -1945,7 +1945,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const configure=(input:Record<string,unknown>)=>api(base+'/exchange/noticeConfigure','POST',{operationId:randomUUID(),...input},D.session);
      assert.equal((await configure({muted:[],mutedPeople:[A.member]})).status,200);
      const quietTask=await direct();assert.equal(quietTask.status,200);assert.equal((await read(D,quietTask.data.taskId)).state,'assigned');
-     const fresh=await changes(D,startChanges.data.cursor);assert.equal(fresh.status,200,JSON.stringify(fresh.data));assert.ok(fresh.data.changed.includes('tasks'));
+     const fresh=await changes(D,startChanges.data.cursor);assert.equal(fresh.status,200,JSON.stringify(fresh.data));assert.ok(fresh.data.changed.includes('tasks'));assert.ok(fresh.data.changed.includes('notices'));
      const unchanged=await changes(D,fresh.data.cursor);assert.equal(unchanged.status,200);assert.deepEqual(unchanged.data.changed,[]);assert.equal(unchanged.data.cursor,fresh.data.cursor);
      const parallel=await Promise.all([direct(),direct()]);assert.ok(parallel.every(r=>r.status===200));
      const parallelChanges=await changes(D,unchanged.data.cursor);assert.equal(parallelChanges.status,200);assert.ok(parallelChanges.data.changed.includes('tasks'));

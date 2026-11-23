@@ -41,10 +41,11 @@ export function SharedCheckins({householdId,csrfToken,language}:{householdId:str
     }
     const resume=()=>{void load();};
     void load();
-    const timer=setInterval(resume,60000);
+    const timer=setInterval(resume,300000);
+    const changed=(event:Event)=>{if((event as CustomEvent<string>).detail===householdId)resume();};window.addEventListener('pactaris:routineChanges',changed);
     document.addEventListener('visibilitychange',resume);
     window.addEventListener('online',resume);
-    return ()=>{gone=true;active?.abort();clearInterval(timer);document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);};
+    return ()=>{gone=true;active?.abort();clearInterval(timer);document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);window.removeEventListener('pactaris:routineChanges',changed);};
   },[api,csrfToken,cursor,refresh]);
   async function moreMembers(){
     if(!memberCursor)return;
