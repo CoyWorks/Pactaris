@@ -39,6 +39,7 @@ export function exchangeInput(action:ExchangeAction,value:unknown):Record<string
  else if(action==='reviewSet')names.push('agreementId','version','intervalMonths');
  else if(action==='reviewDone')names.push('agreementId','version');
  else if(action==='termsSet')names.push('terms','version');
+ else if(action==='noticeList'&&'after'in value)names.push('after');
  else if(action==='noticeRead')names.push('ids');
  else if(action==='noticeConfigure')names.push('muted');
  if(Object.keys(value).sort().join(',')!==names.sort().join(','))throw new ExchangeError('invalid');
@@ -51,6 +52,7 @@ export function exchangeInput(action:ExchangeAction,value:unknown):Record<string
  if((action==='reviewSet'||action==='reviewDone')&&(!uuid(v.agreementId)||typeof v.version!=='string'||!/^(0|[1-9][0-9]{0,14})$/.test(v.version)))throw new ExchangeError('invalid');
  if(action==='reviewSet'&&v.intervalMonths!==null&&(!Number.isInteger(v.intervalMonths)||(v.intervalMonths as number)<1||(v.intervalMonths as number)>24))throw new ExchangeError('invalid');
  if(action==='noticeConfigure'&&(!Array.isArray(v.muted)||v.muted.length>noticeKinds.length||new Set(v.muted).size!==v.muted.length||!v.muted.every(k=>(noticeKinds as readonly unknown[]).includes(k))))throw new ExchangeError('invalid');
+ if(action==='noticeList'&&'after'in v&&!uuid(v.after))throw new ExchangeError('invalid');
  if(action==='noticeRead'&&v.ids!==null&&(!Array.isArray(v.ids)||!v.ids.length||v.ids.length>30||!v.ids.every(uuid)))throw new ExchangeError('invalid');
  if(action==='termsSet'&&(!validTerms(v.terms)||typeof v.version!=='string'||!/^(0|[1-9][0-9]{0,14})$/.test(v.version)))throw new ExchangeError('invalid');
  return {...value,operationId:(value.operationId as string).toLowerCase(),
@@ -69,8 +71,8 @@ export function exchangeOutput(action:ExchangeAction,input:Record<string,unknown
  }
  if(action==='noticeList'||action==='noticeRead'){
   const n=r as ExchangeResult;
-  if(n.status!==(action==='noticeList'?'listed':'applied')||!Array.isArray(n.notices)||n.notices.length>30||!Number.isInteger(n.unread)||(n.unread as number)<0)bad();
-  return {householdId:n.householdId,operationId:n.operationId,actorMembershipId:n.actorMembershipId,status:n.status,unread:n.unread,notices:n.notices!.map(x=>{
+  if((n.nextCursor!==undefined&&n.nextCursor!==null&&!uuid(n.nextCursor))||n.status!==(action==='noticeList'?'listed':'applied')||!Array.isArray(n.notices)||n.notices.length>30||!Number.isInteger(n.unread)||(n.unread as number)<0)bad();
+  return {householdId:n.householdId,operationId:n.operationId,actorMembershipId:n.actorMembershipId,status:n.status,unread:n.unread,nextCursor:n.nextCursor??null,notices:n.notices!.map(x=>{
    if(!record(x)||!uuid(x.id)||!(noticeKinds as readonly unknown[]).includes(x.kind)||!uuid(x.resourceId)||(x.actorName!==null&&(typeof x.actorName!=='string'||x.actorName.length>80))||typeof x.read!=='boolean'||!instant(x.createdAt))bad();
    return {id:x.id,kind:x.kind,resourceId:x.resourceId,actorName:x.actorName,read:x.read,createdAt:x.createdAt};
   })};

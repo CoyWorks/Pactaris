@@ -14,7 +14,7 @@ Every member has a notice list per dynamic (bell in the top bar). Notices are cr
 | `habit` | sub | a habit period was checked (not for skipped periods) |
 | `purchase` | Dom who listed the reward | a sub bought a reward in the shop (migration `0042_reward_shop`) |
 
-Task notices (assigned, submitted, reviewed, reminders) stay in the existing task inbox and appear on the same page. A withdrawn exchange removes its notices; leaving a dynamic or erasing an account removes the person's notices. Opening the page marks notices read. Notices have no actor for automatic outcomes.
+Task notices (assigned, submitted, reviewed, reminders) stay in the existing task inbox and appear on the same page. A withdrawn exchange removes its notices; leaving a dynamic or erasing an account removes the person's notices. Opening the page marks the displayed notices read; older notices remain unread until displayed. The member-notice list is paginated with a recipient-bound cursor. Notices have no actor for automatic outcomes.
 
 ## Settings
 
@@ -42,3 +42,5 @@ Planned for the pre-release, not the alpha (owner decision, 20 November 2026); t
 - **Store requirements.** Both stores require a privacy policy, an age rating for adult content and account deletion in the app; Pactaris already provides account deletion and personal export. App review of adult content needs to be checked before submission.
 
 No native code is in the repository yet.
+
+Migration 0057 redeclares `notice_command` from 0045 to paginate member notices by recipient-bound cursor.

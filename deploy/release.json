@@ -589,6 +589,13 @@
       "path": "migrations/instance/0056_habit_break_worker.sql",
       "sha256": "620531c8c3a4fdc01087d78be420b299cc74800405493a8fe8df61ef55d8f7e9",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0057_notice_pagination",
+      "path": "migrations/instance/0057_notice_pagination.sql",
+      "sha256": "847d2b0784c2018f225bd4be87aebd31b056bd0e218400e7178d04df8f7c3e88",
+      "backwardCompatible": true
     }
   ]
 }

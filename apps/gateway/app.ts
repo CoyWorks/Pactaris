@@ -731,9 +731,9 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
   app.get(['/api/households/:householdId/exchange','/api/households/:householdId/exchange/reviews','/api/households/:householdId/exchange/terms','/api/households/:householdId/exchange/notices','/api/households/:householdId/exchange/notice-preferences'],async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;
       const kind=req.path.endsWith('/reviews')?'reviewList':req.path.endsWith('/terms')?'termsGet':req.path.endsWith('/notices')?'noticeList':req.path.endsWith('/notice-preferences')?'noticePreferences':'exchangeList';
-      const allowed=kind==='exchangeList'?['box','before']:[];
+      const allowed=kind==='exchangeList'?['box','before']:kind==='noticeList'?['after']:[];
       if(!uuid(req.params.householdId)||Object.keys(req.query).some(k=>!allowed.includes(k)))throw new ExchangeError('invalid');
-      const input=kind==='exchangeList'?{box:req.query.box??'open',...(req.query.before!==undefined?{before:req.query.before}:{})}:{};
+      const input=kind==='exchangeList'?{box:req.query.box??'open',...(req.query.before!==undefined?{before:req.query.before}:{})}:kind==='noticeList'&&req.query.after!==undefined?{after:req.query.after}:{};
       exchangeInput(kind,{operationId:randomUUID(),...input});if(!exchange)throw new ExchangeError('unavailable');
       res.json(await exchange.read(session.account.id,req.params.householdId,kind,input));
     }catch(error){exchangeFailure(res,error);}

@@ -46,3 +46,9 @@ test('the create page offers only kinds the standing authority allows',()=>{
  const holder=renderToStaticMarkup(React.createElement(ExchangeForm,{...props,people:[{membershipId:randomUUID(),name:'Subject',holder:false,subject:true}]}));
  assert.match(holder,/Rule breach/);assert.doesNotMatch(holder,/Permission request/);
 });
+
+test('notice cursors are exact opaque IDs',()=>{
+ const operationId=randomUUID(),after=randomUUID();
+ assert.equal(exchangeInput('noticeList',{operationId,after}).after,after);
+ assert.throws(()=>exchangeInput('noticeList',{operationId,after:'1 OR 1=1'}),ExchangeError);
+});

@@ -1850,6 +1850,14 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await ex(B,'exchangeCreate',{kind:'proposal',recipientId:A.member,title:'Push me',body:'',dueAt:null})).status,200);
      const after=await pushStatus();assert.ok(after&&(!before||BigInt(after)>BigInt(before)),JSON.stringify({before,after}));
      assert.equal((await ex(A,'noticeRead',{ids:null})).status,200);
+     // Older member notices remain accessible without marking unseen pages read.
+     const seeded=(await db.owner.query("INSERT INTO pactaris.member_notices(household_id,recipient_id,actor_id,kind,resource_id) SELECT $1,$2,NULL,'points',gen_random_uuid() FROM generate_series(1,32) RETURNING id",[home.householdId,A.member])).rows.map((row:any)=>row.id);
+     const first=await notices(A);assert.equal(first.notices.length,30);assert.ok(first.nextCursor);assert.equal(first.unread,32);
+     assert.equal((await api(base+'/exchange/notices?after='+first.nextCursor,'GET',undefined,B.session)).status,404);
+     assert.equal((await ex(A,'noticeRead',{ids:first.notices.map((n:any)=>n.id)})).status,200);
+     const older=await api(base+'/exchange/notices?after='+first.nextCursor,'GET',undefined,A.session);assert.equal(older.status,200);assert.ok(older.data.notices.filter((n:any)=>!n.read).length>=2);assert.equal(older.data.unread,2);
+     assert.equal(new Set([...first.notices,...older.data.notices].map((n:any)=>n.id)).size,first.notices.length+older.data.notices.length);
+     await db.owner.query('DELETE FROM pactaris.member_notices WHERE id=ANY($1::uuid[])',[seeded]);
      // Muted kinds create no notice (and so no push); unmuting restores them.
      assert.equal((await ex(A,'noticeConfigure',{muted:['proposal','bogus']})).status,400);
      const muted=await ex(A,'noticeConfigure',{muted:['proposal']});assert.equal(muted.status,200);assert.deepEqual(muted.data.muted,['proposal']);
