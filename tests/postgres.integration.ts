@@ -1879,10 +1879,10 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await au(D,'linkAccept',{linkId,version:'1'})).status,200);
      const power=(await view(A)).powers.find((x:any)=>x.membershipId===D.member);assert.deepEqual([power.tasks,power.outcomes,power.manage],[true,true,true]);
      // Direct assignment through the backing direct policy: no offer, no acceptance.
-     const direct=async()=>{
+     const direct=async(taskFields:typeof fields & {proofRequired?:boolean}=fields)=>{
       const choice=(await options(A)).find((c:any)=>c.label==='House rules'&&c.assignees.some((m:any)=>m.membershipId===D.member));assert.ok(choice);
       const policy=(await post(D,'partnerPolicyList')).data.policies.find((x:any)=>x.agreementId===choice.agreementId&&x.state==='active');assert.ok(policy);
-      return post(A,'partnerAssign',{assigneeId:D.member,agreementId:choice.agreementId,agreementVersion:choice.agreementVersion,epoch:choice.epoch,safetyVersion:choice.safetyVersion,fields,policyId:policy.policyId,policyVersion:policy.version});
+      return post(A,'partnerAssign',{assigneeId:D.member,agreementId:choice.agreementId,agreementVersion:choice.agreementVersion,epoch:choice.epoch,safetyVersion:choice.safetyVersion,fields:taskFields,policyId:policy.policyId,policyVersion:policy.version});
      };
      const assigned=await direct();assert.equal(assigned.status,200,JSON.stringify(assigned.data));assert.equal((await read(D,assigned.data.taskId)).state,'assigned');
      // A personal pause blocks; resuming restores authority without any re-acceptance.
@@ -1966,7 +1966,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await au(C,'pointsAdjust',{subjectId:D.member,points:1,reason:''})).status,404);
      // Approval by several people: C also receives the approve right over D, so D's work needs A and C.
      assert.equal((await au(A,'delegationSet',{linkId,delegateId:C.member,version:'1',tasks:true,approve:true,outcomes:false,endsAt:null})).status,200);
-     const reviewed=await direct();assert.equal(reviewed.status,200,JSON.stringify(reviewed.data));const rid=reviewed.data.taskId as string;
+     const reviewed=await direct({...fields,proofRequired:true});assert.equal(reviewed.status,200,JSON.stringify(reviewed.data));const rid=reviewed.data.taskId as string;
      const raw=(path:string,p:Person,body:Buffer,headers:Record<string,string>={})=>new Promise<{status:number;type:string;data:Buffer}>((resolve,reject)=>{
       const request=https.request({hostname:'127.0.0.1',port:gatewayAddress.port,path,method:'POST',servername:'backend.fixture.invalid',ca:readFileSyncFixture,
        headers:{host:'pactaris.app',cookie:'__Host-pactaris-session='+p.session,origin:'https://pactaris.app','x-csrf-token':'registration-csrf','Content-Length':String(body.length),...headers}},r=>{
@@ -1979,11 +1979,15 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await upload(D,png,'image/jpeg')).status,400);
      assert.equal((await upload(D,Buffer.from('not an image'))).status,400);
      assert.equal((await upload(D,png,'image/gif')).status,400);
+     assert.equal((await read(D,rid)).proofRequired,true);
+     assert.equal((await move(D,'partnerStart',rid)).status,200);
+     assert.equal((await move(D,'partnerSubmit',rid,{note:'Missing proof'})).data.code,'partner_proofRequired');
+     assert.equal((await read(D,rid)).state,'in_progress');
+     assert.equal((await move(B,'partnerSubmit',rid,{note:'Unauthorized'})).status,404);
      const proofOperation=randomUUID(),stored=await upload(D,png,'image/png',proofOperation);assert.equal(stored.status,200,stored.data.toString());
      assert.equal(JSON.parse(stored.data.toString()).proofId,proofOperation);
      assert.equal((await upload(D,png,'image/png',proofOperation)).status,200);
      assert.equal((await read(D,rid)).proof.proofId,proofOperation);assert.equal((await read(A,rid)).proof,null);
-     assert.equal((await move(D,'partnerStart',rid)).status,200);
      assert.equal((await move(D,'partnerSubmit',rid,{note:'Done, photo attached'})).status,200);
      assert.deepEqual((await read(A,rid)).approvals.map((x:any)=>x.membershipId+':'+x.decision).sort(),[A.member+':null',C.member+':null'].sort());
      const approvals=await post(C,'approvalList');assert.equal(approvals.status,200,JSON.stringify(approvals.data));assert.deepEqual(approvals.data.approvals.map((x:any)=>x.taskId),[rid]);

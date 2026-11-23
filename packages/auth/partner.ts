@@ -8,7 +8,7 @@ export const partnerStates=['assigned','offered','accepted','in_progress','submi
 export type PartnerState=typeof partnerStates[number];
 export type TaskRewardReference={itemId:string;version:string};
 export type TaskReward={title:string;description:string};
-export type PartnerFields={title:string;description:string;priority:'low'|'normal'|'high';dueAt:string|null;rewardPoints?:number;rewardSelection?:TaskRewardReference};
+export type PartnerFields={title:string;description:string;priority:'low'|'normal'|'high';dueAt:string|null;rewardPoints?:number;rewardSelection?:TaskRewardReference;proofRequired?:boolean};
 export type TaskSchedule={period:'once'|'daily'|'weekly';startDate:string;endDate:string|null;timeZone:string;availableTime:string;dueMinutes:number;weekdays:number[]};
 export type TaskSeries={policyId:string;seriesId:string;version:string;creatorId:string;assigneeId:string;state:'active'|'cancelled'|'blocked'|'finished';fields:PartnerFields;schedule:TaskSchedule};
 export type AssignmentPolicy={policyId:string;version:string;agreementLabel:string;creatorName:string;assigneeName:string;agreementId:string;agreementVersion:string;creatorId:string;assigneeId:string;mode:'direct'|'explicit';state:'proposed'|'active'|'revoked';epoch:string;safetyVersion:string};
@@ -24,7 +24,7 @@ export type ApprovalDetail={taskId:string;version:string;state:PartnerState;titl
 export type DeliveryPreferences={push:boolean;reminders:boolean;quietStart:string|null;quietEnd:string|null;timeZone:string};
 export type InboxPreferences={assigned:boolean;submitted:boolean;reviewed:boolean};
 export type PartnerResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';scheduling?:boolean;seriesId?:string;series?:TaskSeries[];taskId?:string;policyId?:string;balance?:string;deliveryPreferences?:DeliveryPreferences;pushSequence?:string|null;inboxPreferences?:InboxPreferences;inbox?:{id:string;taskId:string;kind:'assigned'|'submitted'|'reviewed'|'reminder';read:boolean;at:string}[];policies?:AssignmentPolicy[];choices?:PartnerChoice[];tasks?:PartnerSummary[];task?:PartnerDetail;nextCursor?:string|null;approvals?:ApprovalItem[];approval?:ApprovalDetail};
-export class PartnerError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'unavailable'){super('partner.'+kind);}}
+export class PartnerError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'proofRequired'|'unavailable'){super('partner.'+kind);}}
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 export const validPushSequence=(value:unknown):value is string=>typeof value==='string'&&
  /^(0|[1-9][0-9]{0,18})$/.test(value)&&BigInt(value)<=9223372036854775807n;
@@ -72,7 +72,7 @@ export function partnerInput(action:PartnerAction,value:unknown):Record<string,u
  if(action==='partnerPolicyPropose'&&!['direct','explicit'].includes(value.mode as string))throw new PartnerError('invalid');
  if(action==='partnerList'&&!(typeof value.filter==='string'&&['active','closed','todo'].includes(value.filter)))throw new PartnerError('invalid');
  if('schedule'in value&&!validTaskSchedule(value.schedule))throw new PartnerError('invalid');
- if('fields'in value){const f=value.fields;if(!record(f)||Object.keys(f).sort().join(',')!==['description','dueAt','priority','title',...('rewardPoints'in f?['rewardPoints']:[]),...('rewardSelection'in f?['rewardSelection']:[])].sort().join(',')||('rewardSelection'in f&&!validTaskRewardReference(f.rewardSelection))||('rewardPoints'in f&&(!Number.isInteger(f.rewardPoints)||Number(f.rewardPoints)<1||Number(f.rewardPoints)>10000))||!documentText(f.title,120)||!documentText(f.description,500,true,true)||typeof f.priority!=='string'||!['low','normal','high'].includes(f.priority)||(f.dueAt!==null&&!utcInstant(f.dueAt)))throw new PartnerError('invalid');}
+ if('fields'in value){const f=value.fields;if(!record(f)||Object.keys(f).sort().join(',')!==['description','dueAt','priority','title',...('rewardPoints'in f?['rewardPoints']:[]),...('rewardSelection'in f?['rewardSelection']:[]),...('proofRequired'in f?['proofRequired']:[])].sort().join(',')||('proofRequired'in f&&typeof f.proofRequired!=='boolean')||('rewardSelection'in f&&!validTaskRewardReference(f.rewardSelection))||('rewardPoints'in f&&(!Number.isInteger(f.rewardPoints)||Number(f.rewardPoints)<1||Number(f.rewardPoints)>10000))||!documentText(f.title,120)||!documentText(f.description,500,true,true)||typeof f.priority!=='string'||!['low','normal','high'].includes(f.priority)||(f.dueAt!==null&&!utcInstant(f.dueAt)))throw new PartnerError('invalid');}
  return {...value,...Object.fromEntries(['operationId','seriesId','taskId','assigneeId','agreementId','policyId','after'].filter(k=>k in value).map(k=>[k,(value[k] as string).toLowerCase()]))} as Record<string,unknown>&{operationId:string};
 }
 

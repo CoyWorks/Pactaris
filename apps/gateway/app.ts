@@ -816,7 +816,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       const action=req.params.action;if(!uuid(req.params.householdId)||!isPartnerAction(action)||action==='partnerPushStatus')throw new PartnerError('invalid');const input=partnerInput(action,req.body);
       if(!partner)throw new PartnerError('unavailable');if(!['partnerInbox','partnerInboxPreferences','partnerDeliveryPreferences','partnerPoints','partnerInboxRead','partnerSeriesList','partnerSeriesCancel','partnerPolicyList','partnerPolicyRevoke','partnerOptions','partnerRead','partnerList','partnerCancel','partnerDecline','approvalList','approvalRead'].includes(action)&&!await store.throttle('partner:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
       res.json(await partner.execute(session.account.id,req.params.householdId,action,input));
-    }catch(error){const kind=error instanceof PartnerError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,unavailable:503}[kind]).json({code:'partner_'+kind,messageKey:('partner.'+kind) as MessageKey});}
+    }catch(error){const kind=error instanceof PartnerError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,proofRequired:409,unavailable:503}[kind]).json({code:'partner_'+kind,messageKey:('partner.'+kind) as MessageKey});}
   });
   app.use('/api',(_req,res)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});});
   const pwaHead=publicPwa(app,webRoot,config.locale.language,!!webPush);

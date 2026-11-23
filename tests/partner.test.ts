@@ -56,3 +56,9 @@ test('series summary preserves the scheduled wall time and identifies the weekda
  }));
  for(const value of [/Monday and Sunday/,/dateTime="2026-10-25"/,/dateTime="2026-11-22"/,/02:30/,/Europe\/Amsterdam/,/90 minutes/])assert.match(html,value);
 });
+
+test('task photo proof requirement is an optional boolean for offers and scheduled tasks',()=>{
+ const required={...offer,fields:{...fields,proofRequired:true}};assert.deepEqual(partnerInput('partnerOffer',required),required);
+ assert.deepEqual(partnerInput('partnerOffer',{...offer,fields:{...fields,proofRequired:false}}).fields,{...fields,proofRequired:false});
+ for(const value of ['true',1,null])assert.throws(()=>partnerInput('partnerOffer',{...offer,fields:{...fields,proofRequired:value}}),{kind:'invalid'});
+});
