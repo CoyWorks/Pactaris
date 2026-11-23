@@ -1861,12 +1861,24 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      // Sender preferences suppress only the recipient's new notices; the exchange still exists.
      const mutedSender=await ex(A,'noticeConfigure',{muted:[],mutedPeople:[B.member]});assert.equal(mutedSender.status,200,JSON.stringify(mutedSender.data));
      assert.ok(mutedSender.data.mutedPeople.includes(B.member));
+     // The preference is part of the recipient's export and is removed when its sender is erased.
+     let exportCursor:string|null=null,exported:any[]=[];
+     do{const page:any=(await db.owner.query('SELECT pactaris.authority_export_page($1,$2,$3,25) AS result',[place.instanceId,A.account.id,exportCursor])).rows[0].result;exported.push(...page.records);exportCursor=page.next;}while(exportCursor);
+     assert.ok(exported.some((row:any)=>row.kind==='noticePreferences'&&row.muted_people.includes(B.member)));
+     const privacyTx=await db.owner.connect();try{await privacyTx.query('BEGIN');
+      await privacyTx.query('UPDATE pactaris.memberships SET account_erased_at=now() WHERE household_id=$1 AND id=$2',[home.householdId,B.member]);
+      const remaining=(await privacyTx.query('SELECT muted_people FROM pactaris.notice_preferences WHERE household_id=$1 AND member_id=$2',[home.householdId,A.member])).rows[0].muted_people;
+      assert.ok(!remaining.includes(B.member));
+     }finally{await privacyTx.query('ROLLBACK');privacyTx.release();}
      const afterMute=await ex(B,'exchangeCreate',{kind:'proposal',recipientId:A.member,title:'Sender muted',body:'',dueAt:null});assert.equal(afterMute.status,200);
      assert.ok(!(await notices(A)).notices.some((n:any)=>n.resourceId===afterMute.data.exchangeId));
      assert.ok((await list(A)).exchanges.some((x:any)=>x.id===afterMute.data.exchangeId));
      assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[A.member]})).status,400);
      assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[B.member,B.member]})).status,400);
      assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[]})).status,200);
+     const queued=await ex(B,'exchangeCreate',{kind:'proposal',recipientId:A.member,title:'Queued',body:'',dueAt:null});assert.equal(queued.status,200);assert.ok(await pushStatus());
+     assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[B.member]})).status,200);assert.equal(await pushStatus(),null);
+     assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[]})).status,200);assert.equal((await ex(A,'noticeRead',{ids:null})).status,200);
      // Muted kinds create no notice (and so no push); unmuting restores them.
      assert.equal((await ex(A,'noticeConfigure',{muted:['proposal','bogus']})).status,400);
      const muted=await ex(A,'noticeConfigure',{muted:['proposal']});assert.equal(muted.status,200);assert.deepEqual(muted.data.muted,['proposal']);
