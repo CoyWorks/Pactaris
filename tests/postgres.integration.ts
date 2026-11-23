@@ -1925,6 +1925,22 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const missed=(await db.owner.query('SELECT result,outcome FROM pactaris.authority_habit_results WHERE habit_id=$1',[habit.data.resourceId])).rows;
      assert.equal(missed.length,1);assert.equal(missed[0].result,'missed');assert.equal(missed[0].outcome.points,-2);assert.ok(missed[0].outcome.punishmentTaskId);
      assert.equal((await view(D)).myPoints,'3');assert.equal((await read(D,missed[0].outcome.punishmentTaskId)).state,'assigned');
+     // Both parties can schedule a break; outsiders cannot. Weekly overlap skips the whole week.
+     const weekly=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:{...habitFields,period:'weekly'}});
+     assert.equal(weekly.status,200,JSON.stringify(weekly.data));
+     const day=(await db.owner.query("SELECT to_char((now() AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS today, to_char((now() AT TIME ZONE 'UTC')::date+8,'YYYY-MM-DD') AS future")).rows[0];
+     assert.equal((await au(B,'habitBreakAdd',{habitId:weekly.data.resourceId,start:day.today,end:day.today})).status,404);
+     const pause=await au(D,'habitBreakAdd',{habitId:weekly.data.resourceId,start:day.today,end:day.today});assert.equal(pause.status,200,JSON.stringify(pause.data));
+     assert.equal((await au(D,'habitRecord',{habitId:weekly.data.resourceId,count:1})).status,409);
+     const future=await au(A,'habitBreakAdd',{habitId:weekly.data.resourceId,start:day.future,end:day.future});assert.equal(future.status,200,JSON.stringify(future.data));
+     assert.equal((await au(B,'habitBreakCancel',{habitId:weekly.data.resourceId,breakId:future.data.resourceId})).status,404);
+     assert.equal((await au(D,'habitBreakCancel',{habitId:weekly.data.resourceId,breakId:future.data.resourceId})).status,200);
+     // Move the saved interval and due cursor back together to simulate a worker running after the break.
+     await db.owner.query("UPDATE pactaris.authority_habits SET breaks=jsonb_build_array(jsonb_build_object('id',$2::text,'start',to_char(pactaris.habit_period_start('weekly','UTC',now())-5,'YYYY-MM-DD'),'end',to_char(pactaris.habit_period_start('weekly','UTC',now())-5,'YYYY-MM-DD'),'creator',$3::text)),next_period=pactaris.habit_period_start('weekly','UTC',now())-7 WHERE id=$1",[weekly.data.resourceId,pause.data.resourceId,D.member]);
+     await db.pool.query('SELECT pactaris.run_authority_habits($1)',[instanceId]);
+     const breakResult=(await db.owner.query('SELECT result,outcome FROM pactaris.authority_habit_results WHERE habit_id=$1',[weekly.data.resourceId])).rows[0];
+     assert.equal(breakResult.result,'skipped');assert.deepEqual(breakResult.outcome,{});
+     await db.owner.query("UPDATE pactaris.authority_habits SET state='archived' WHERE id=$1",[weekly.data.resourceId]);
      // Progress: the Dom sees the sub's last 14 days; a member without authority does not while subs are not visible.
      const progress=await api(base+'/authority/progress','GET',undefined,A.session);assert.equal(progress.status,200,JSON.stringify(progress.data));
      const mine=progress.data.people.find((p:any)=>p.membershipId===D.member);assert.ok(mine);assert.equal(mine.tasks.length,14);
@@ -1965,6 +1981,12 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await db.owner.query("SELECT result FROM pactaris.authority_habit_results WHERE habit_id=$1 AND period_start=pactaris.habit_period_start('daily','UTC',now())-2",[habit.data.resourceId])).rows[0].result,'skipped');
      assert.equal((await view(D)).myPoints,'3');
      const pausedAgain=await state(D);assert.equal((await consent(D,'selfResume',{epoch:pausedAgain.epoch,memberEpoch:pausedAgain.memberEpoch})).status,200);
+     // A paused period remains fenced if the member resumes before the worker evaluates it.
+     await db.owner.query("DELETE FROM pactaris.authority_habit_results WHERE habit_id=$1 AND period_start=pactaris.habit_period_start('daily','UTC',now())-1",[habit.data.resourceId]);
+     await db.owner.query("UPDATE pactaris.authority_habits SET next_period=pactaris.habit_period_start('daily','UTC',now())-1 WHERE id=$1",[habit.data.resourceId]);
+     await db.pool.query('SELECT pactaris.run_authority_habits($1)',[instanceId]);
+     const fenced=(await db.owner.query("SELECT result,outcome FROM pactaris.authority_habit_results WHERE habit_id=$1 AND period_start=pactaris.habit_period_start('daily','UTC',now())-1",[habit.data.resourceId])).rows[0];
+     assert.equal(fenced.result,'skipped');assert.deepEqual(fenced.outcome,{});assert.equal((await view(D)).myPoints,'3');
      assert.equal((await move(A,'partnerCancel',missed[0].outcome.punishmentTaskId)).status,200);
      // Per-sub permission: proposals can be switched off by the Dom.
      const settings=(await view(A)).links.find((l:any)=>l.linkId===linkId);

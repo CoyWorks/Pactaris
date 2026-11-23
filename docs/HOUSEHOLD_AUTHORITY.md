@@ -94,3 +94,7 @@ Migration `0042_reward_shop`, command `shop_command` (`shopList`, `shopSave`, `s
 ### Assigned habit weekdays (in progress)
 
 New daily assigned habits can select one or more ISO weekdays. Weekly count-based habits retain their existing weekly period. A daily period outside the selected weekdays is recorded as skipped and cannot issue an outcome. The weekday selection is fixed when the habit is created to avoid reinterpreting past periods; older clients and existing habits default to every day. This is a partial implementation of #63: scheduled breaks and safety across paused intervals still require implementation and PostgreSQL integration verification before release.
+
+### Scheduled breaks and safety fences
+
+For assigned habits, the sub and the holder with task authority can schedule inclusive date breaks in the habit's time zone. Any overlapping daily or weekly period is skipped, with no points, punishment, reward, or streak change. The sub may cancel either participant's break; the holder may only cancel their own. Cancelling an active break keeps the overlapping period skipped. Pauses, household stops, relationship holds and authority changes fence pending periods through the current period even after resumption. Breaks are included in the existing habit export and removed when either participant is erased; departure archives the habit. Migration 0050 redeclares `run_authority_habits` and `authority_habit_command` from 0049 and adds safety triggers.

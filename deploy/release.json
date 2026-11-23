@@ -540,6 +540,13 @@
       "path": "migrations/instance/0049_habit_weekdays.sql",
       "sha256": "6f7c09c023f0a0c43ad38a22a2bcc0fcae354f71fb81de3cb837e02925f19fa0",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0050_habit_breaks",
+      "path": "migrations/instance/0050_habit_breaks.sql",
+      "sha256": "f701c75ca7e400fc4eb0b32d0d203c4883500c2c034737d86d3be2859c589f6c",
+      "backwardCompatible": true
     }
   ]
 }

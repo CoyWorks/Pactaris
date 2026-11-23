@@ -22,6 +22,27 @@ function Progress({habit,language}:{habit:AssignedHabit;language:string}){
  return <><span className="habit-count">{t(habit.mode==='minimum'?'habits.progressMin':'habits.progressMax',{count:String(habit.currentTotal),target:String(habit.target)})}</span>
   <span className={'bar'+(habit.mode==='maximum'&&habit.currentTotal>habit.target?' over':'')} aria-hidden="true"><span style={{width:percent+'%'}}/></span></>;
 }
+function HabitBreaks({habit,householdId,session,language,onChanged}:{habit:AssignedHabit;householdId:string;session:Session;language:string;onChanged:()=>void}){
+ const t=createTranslator(language),[open,setOpen]=useState(false),[start,setStart]=useState(''),[end,setEnd]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>();
+ const operation=useRef<{key:string;id:string}|undefined>(undefined);
+ const today=new Intl.DateTimeFormat('en-CA',{timeZone:habit.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ async function send(action:'habitBreakAdd'|'habitBreakCancel',body:Record<string,string>){
+  if(busy)return;setBusy(true);setError(undefined);const key=JSON.stringify([action,body]);
+  if(operation.current?.key!==key)operation.current={key,id:crypto.randomUUID()};
+  try{const result=await authoritySend(householdId,session,action,{operationId:operation.current.id,habitId:habit.habitId,...body});
+   if(result.ok){operation.current=undefined;setStart('');setEnd('');onChanged();}else{setError(result.key);if(!result.unknown)operation.current=undefined;}}
+  finally{setBusy(false);}
+ }
+ if(!habit.canPlanBreak)return null;
+ return <div className="habit-breaks"><button type="button" className="secondary" onClick={()=>setOpen(!open)}>{t('habits.breaks')}</button>{open&&<div>
+  <p className="muted">{t('habits.breakHelp')}</p>
+  {habit.breaks.filter(b=>b.end>=today).map(b=><p key={b.id}>{b.start}{t('catalog.separator')}{b.end} {b.canCancel&&<button type="button" className="secondary" disabled={busy} onClick={()=>{void send('habitBreakCancel',{breakId:b.id});}}>{t('habits.cancelBreak')}</button>}</p>)}
+  <label>{t('habits.breakStart')}<input type="date" min={today} value={start} disabled={busy} onChange={e=>setStart(e.target.value)}/></label>
+  <label>{t('habits.breakEnd')}<input type="date" min={start||today} value={end} disabled={busy} onChange={e=>setEnd(e.target.value)}/></label>
+  <button type="button" disabled={busy||!start||!end||end<start} onClick={()=>{void send('habitBreakAdd',{start,end});}}>{t('habits.planBreak')}</button>
+  {error&&<p role="alert">{t(error)}</p>}
+ </div>}</div>;
+}
 /** Today, for the sub: habits a Dom set for you, with +1. */
 export function TodayAssignedHabits({habits,me,householdId,session,language,onChanged}:{habits?:AssignedHabit[];me:string;householdId:string;session:Session;language:string;onChanged:()=>void}){
  const t=createTranslator(language),[busy,setBusy]=useState<string>(),[error,setError]=useState<MessageKey>();
@@ -37,6 +58,7 @@ export function TodayAssignedHabits({habits,me,householdId,session,language,onCh
   <div className="habit-tiles">{mine.map(habit=><div className="habit-tile" key={habit.habitId}>
    <span className="habit-name">{habit.title}</span><Progress habit={habit} language={language}/>
    <span className="muted">{[habit.holderName,habit.streaks.current>0&&t('habits.streak',{count:String(habit.streaks.current)})].filter(Boolean).join(t('catalog.separator'))}</span>
+   <HabitBreaks habit={habit} householdId={householdId} session={session} language={language} onChanged={onChanged}/>
    <button type="button" className="icon-button add-one" disabled={!!busy||!habit.canRecord} aria-label={t('today.addOne',{title:habit.title})} onClick={()=>{void add(habit);}}><Icon name="plus"/></button>
   </div>)}</div>
   {error&&<p role="alert">{t(error)}</p>}
@@ -99,6 +121,7 @@ export function PersonHabits({habits,subjectId,name,householdId,session,language
    {!theirs.length?<p className="muted">{t('habits.none')}</p>:<ul className="card-list">{theirs.map(habit=><li key={habit.habitId} className="habit-row"><span className="grow">
     <span>{habit.title}</span><Progress habit={habit} language={language}/>
     <span className="muted">{[t(habit.period==='daily'?'routines.daily':'routines.weekly'),habit.state==='paused'&&t('habits.paused'),habit.streaks.current>0&&t('habits.streak',{count:String(habit.streaks.current)}),habit.streaks.longest>1&&t('habits.streakBest',{count:String(habit.streaks.longest)}),...habit.results.slice(0,3).map(r=>t(resultKeys[r.result]))].filter(Boolean).join(t('catalog.separator'))}</span></span>
+    <HabitBreaks habit={habit} householdId={householdId} session={session} language={language} onChanged={()=>onChanged('habits.saved')}/>
     {habit.canEdit&&<span className="row-actions"><button type="button" className="secondary" disabled={busy} onClick={()=>setEditing(habit)}>{t('workspace.edit')}</button>
      <button type="button" className="secondary" disabled={busy} onClick={()=>{void state(habit,habit.state==='active'?'paused':'active');}}>{t(habit.state==='active'?'habits.pause':'habits.resume')}</button>
      <button type="button" className="secondary" disabled={busy} onClick={()=>{void state(habit,'archived');}}>{t('workspace.archive')}</button></span>}
