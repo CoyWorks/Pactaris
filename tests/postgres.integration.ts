@@ -1931,6 +1931,13 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await au(A,'habitSave',{habitId:habit.data.resourceId,subjectId:null,version:habits[0].version,fields:{...habitFields,milestoneEvery:1,milestonePoints:5}})).status,400);
      assert.equal((await au(A,'habitSave',{habitId:habit.data.resourceId,subjectId:null,version:habits[0].version,fields:{...habitFields,milestoneEvery:3,milestonePoints:5}})).status,200);
      const withMilestone=(await api(base+'/authority/habits','GET',undefined,A.session)).data.habits.find((x:any)=>x.habitId===habit.data.resourceId);assert.equal(withMilestone.milestoneEvery,3);assert.equal(withMilestone.milestonePoints,5);
+     // A primary-role change fences the affected habit, even if authority is later restored.
+     const fenceTx=await db.owner.connect();
+     try{await fenceTx.query('BEGIN');
+      await fenceTx.query('UPDATE pactaris.authority_links SET is_primary=false WHERE id=$1',[linkId]);
+      const fenced=(await fenceTx.query("SELECT skip_through=pactaris.habit_period_start(period,time_zone,now()) AS fenced FROM pactaris.authority_habits WHERE id=$1",[habit.data.resourceId])).rows[0];
+      assert.equal(fenced.fenced,true);
+     }finally{await fenceTx.query('ROLLBACK');fenceTx.release();}
      const instanceId=place.instanceId;
      await db.owner.query("UPDATE pactaris.authority_habits SET next_period=pactaris.habit_period_start('daily','UTC',now())-1 WHERE id=$1",[habit.data.resourceId]);
      assert.equal((await db.pool.query('SELECT pactaris.run_authority_habits($1) AS state',[instanceId])).rows[0].state,'processed');
