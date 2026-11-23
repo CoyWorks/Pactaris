@@ -26,7 +26,8 @@ test('scheduler concurrent claims, restart rollback and live pause serialization
   // Reuse only the fresh synthetic setup; never reactivate an ended membership.
   const fixture=await readFile('tests/fixtures/task_scheduler.sql','utf8');
   const setup=fixture.split('-- Calendar boundaries:')[0];assert.ok(setup);await db.query(setup);
-  await db.query("SELECT scheduler_test.command('partnerSeriesCreate',scheduler_test.payload(),'70000000-0000-4000-8000-000000000003')");
+  await db.query("SELECT scheduler_test.command('partnerSeriesCreate',jsonb_set(scheduler_test.payload(),'{fields,proofRequired}','true'::jsonb,true),'70000000-0000-4000-8000-000000000003')");
+  assert.equal((await db.query("SELECT fields->'proofRequired' AS required FROM pactaris.task_series WHERE id='70000000-0000-4000-8000-000000000003'")).rows[0].required,true);
   const instance='10000000-0000-4000-8000-000000000002',house='10000000-0000-4000-8000-000000000001';
   // Delete synthetic future effects only to model a prior shorter generation window.
   await db.query("DELETE FROM pactaris.partner_outbox WHERE operation_id IN (SELECT id FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000003'); DELETE FROM pactaris.partner_receipts WHERE operation_id IN (SELECT id FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000003'); DELETE FROM pactaris.partner_events WHERE task_id IN (SELECT id FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000003'); DELETE FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000003'; UPDATE pactaris.task_generation_jobs SET cursor_date=current_date+1,run_after=now() WHERE series_id='70000000-0000-4000-8000-000000000003'");
@@ -34,6 +35,7 @@ test('scheduler concurrent claims, restart rollback and live pause serialization
   assert.equal((await db.query("SELECT count(*)::int n FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000003'")).rows[0].n,0);
   await Promise.all(Array.from({length:4},()=>worker!.query('SELECT pactaris.run_task_scheduler($1)',[instance])));
   assert.equal((await db.query("SELECT count(*)::int n FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000003'")).rows[0].n,7);
+  assert.equal((await db.query("SELECT count(*)::int n FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000003' AND fields->'proofRequired'='true'::jsonb")).rows[0].n,7);
   assert.equal((await db.query("SELECT count(*)::int n FROM pactaris.partner_outbox WHERE operation_id IN (SELECT id FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000003')")).rows[0].n,7);
   const pause=await db.connect();try{
    await pause.query('BEGIN');await pause.query("SELECT pg_advisory_xact_lock(hashtextextended('pactaris.household.'||$1,0))",[house]);

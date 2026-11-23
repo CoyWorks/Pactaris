@@ -1,6 +1,6 @@
 # Completion proof (photos)
 
-A sub can attach a photo as proof before submitting a shared task. When creating or editing a shared task series, the creator can require photo proof; the assignee must attach a current, unexpired photo before each submission. Existing tasks without this setting keep optional proof. Each new review round after changes requires a new photo if proof is required. Proof is **intimate content on a kink platform**, so the design is privacy-first: the bytes live only on the instance's own disk, metadata-stripped and encrypted at rest, reachable only by the people who approve the task, seen at most once by each of them, and deleted soon after.
+A sub can attach a photo as proof before submitting a shared task. When creating a shared task, offering a task, or creating or editing a shared task series, the creator can require photo proof; the assignee must attach a current, unexpired photo before each submission. Existing tasks without this setting keep optional proof. Each new review round after changes requires a new photo if proof is required. Proof is **intimate content on a kink platform**, so the design is privacy-first: the bytes live only on the instance's own disk, metadata-stripped and encrypted at rest, reachable only by the people who approve the task, seen at most once by each of them, and deleted soon after.
 
 Owner decisions:
 
