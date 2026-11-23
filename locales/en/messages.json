@@ -1366,5 +1366,14 @@
   "maintenance.waitingPurge": "Closed dynamics waiting to be purged:",
   "maintenance.noneWaiting": "None.",
   "maintenance.closedAt": "Closed",
-  "maintenance.purgeAfter": "purged after"
+  "maintenance.purgeAfter": "purged after",
+  "habits.breaks": "Breaks",
+  "habits.breakHelp": "A break skips the entire overlapping daily or weekly period, without rewards or consequences. If an active break is cancelled, the current period stays skipped.",
+  "habits.breakStart": "Start date",
+  "habits.breakEnd": "End date",
+  "habits.planBreak": "Plan break",
+  "habits.cancelBreak": "Cancel break",
+  "habits.history": "Progress history",
+  "habits.recentPeriods": "Recent periods",
+  "habits.recentEntries": "Recent entries"
 }

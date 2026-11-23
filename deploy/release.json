@@ -533,6 +533,62 @@
       "path": "migrations/instance/0048_required_task_proof.sql",
       "sha256": "663ff8a7b531eec3630367f6442cb67d4dc4a2b3a7109f346905660affac4691",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0049_habit_weekdays",
+      "path": "migrations/instance/0049_habit_weekdays.sql",
+      "sha256": "6f7c09c023f0a0c43ad38a22a2bcc0fcae354f71fb81de3cb837e02925f19fa0",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0050_habit_breaks",
+      "path": "migrations/instance/0050_habit_breaks.sql",
+      "sha256": "f701c75ca7e400fc4eb0b32d0d203c4883500c2c034737d86d3be2859c589f6c",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0051_personal_habit_weekdays",
+      "path": "migrations/instance/0051_personal_habit_weekdays.sql",
+      "sha256": "5ad2f0b74c9488ffeb5abbddb8b102e61dd1aaae5d4bdfa8f08ed72a18dcc11a",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0052_habit_history",
+      "path": "migrations/instance/0052_habit_history.sql",
+      "sha256": "cf6a30992bfb81de00bf41e7ca78144dc1bbafa0dd8f897beacb178843a77142",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0053_habit_authority_fence",
+      "path": "migrations/instance/0053_habit_authority_fence.sql",
+      "sha256": "e62a99dd19ee7bfc894d2e46cc99a36cf7322c61b2169ccb86e54e49903e3d07",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0054_habit_history_alias",
+      "path": "migrations/instance/0054_habit_history_alias.sql",
+      "sha256": "85f6e2b39e99eb72a478b147f8c545ec38f65b07f1f8e912317109d13ea86db3",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0055_habit_break_journal",
+      "path": "migrations/instance/0055_habit_break_journal.sql",
+      "sha256": "e6d7cfc9a7de3346bb48c2262638b6b46adcea3c01e6f636f11b5d8957bed051",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0056_habit_break_worker",
+      "path": "migrations/instance/0056_habit_break_worker.sql",
+      "sha256": "620531c8c3a4fdc01087d78be420b299cc74800405493a8fe8df61ef55d8f7e9",
+      "backwardCompatible": true
     }
   ]
 }

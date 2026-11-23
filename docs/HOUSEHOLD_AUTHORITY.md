@@ -90,3 +90,17 @@ Migration `0042_reward_shop`, command `shop_command` (`shopList`, `shopSave`, `s
 - **Picking a punishment:** "From your list" appears in the punishment form, the breach form and the habit form.
 - **Today → Getting started** (owners and administrators): invite people, link as Dom and sub, give a first task. Hidden on this device once dismissed or after the first task.
 - **Dynamic → Household board:** everyone you may see, by rank, with their last 7 days and balance; a row opens the same progress view. Shown when you are part of an active Dom link.
+
+### Assigned habit weekdays
+
+New daily assigned habits can select one or more ISO weekdays. Weekly count-based habits retain their existing weekly period. A daily period outside the selected weekdays is recorded as skipped and cannot issue an outcome. The weekday selection is fixed when the habit is created to avoid reinterpreting past periods; older clients and existing habits default to every day.
+
+### Scheduled breaks and safety fences
+
+For assigned habits, the sub and the holder with task authority can schedule inclusive date breaks in the habit's time zone. Any overlapping daily or weekly period is skipped, with no points, punishment, reward, or streak change. The sub may cancel either participant's break; the holder may only cancel their own. Cancelling an active break keeps the overlapping period skipped. Pauses, household stops, relationship holds and authority changes fence pending periods through the current period even after resumption. Breaks are included in the existing habit export and removed when either participant is erased; departure archives the habit. Migration 0053 extends the link safety fence for primary-transfer and rank changes. Migration 0050 redeclares `run_authority_habits` and `authority_habit_command` from 0049 and adds safety triggers.
+
+Assigned habits also have an optional category and a bounded history of the 20 most recent entries and seven evaluated periods. Authorized participants can reverse eligible entries in the app; reversed entries remain visible and do not count towards the total. Closed-period entries cannot be reversed after evaluation. The creator chooses a time zone when creating an assigned habit. Migration 0052 adds the category, erasure handling, and extends `authority_habit_command` from 0050 with history and category projection.
+
+Migration 0054 redeclares `authority_habit_command` from 0052 with an unambiguous progress-entry query alias.
+
+Migration 0056 redeclares `run_authority_habits` from 0050 to suppress even older pending outcomes while a scheduled break is currently active.

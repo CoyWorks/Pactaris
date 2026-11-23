@@ -22,6 +22,7 @@ Database triggers on the Instance append one entry when one of these transitions
 | `exchange.withdrawn` | Request, proposal, journal entry or breach record is withdrawn | exchangeId |
 | `authority.ended` | Dom link ended or invitation declined | linkId |
 | `delegation.revoked` | Delegation revoked | delegationId |
+| `habit.break` | A scheduled habit break is added | habitId |
 
 Subjects contain identifiers, versions and fixed status codes only. They never contain names, titles, text, limits or other household-authored content. Clearing a pause or resuming a household is not recorded: those are not revocations, and replay stays conservative. The migration backfills entries for state that was already ended, revoked, paused or deleted.
 
@@ -84,3 +85,5 @@ Replay is deliberately conservative. A pause or stop that happened after the bac
 - Exported entries are retained on the Instance. Retention and cleanup are part of the deletion policy work in #26.
 
 Migrations `instance/0032_revocation_journal`, `instance/0033_restore_fence` and `gateway/0018_revocation_journal` are additive and need no new configuration. The normal updater applies them.
+
+A `habit.break` replay conservatively pauses the matching assigned habit when the break was added after the backup. The journal contains only the habit ID, not break dates. The habit remains paused until resumed after review. Migration 0055 redeclares `journal_apply` from 0044 with this additional restrictive branch.

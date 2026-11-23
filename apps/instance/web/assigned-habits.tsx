@@ -22,6 +22,43 @@ function Progress({habit,language}:{habit:AssignedHabit;language:string}){
  return <><span className="habit-count">{t(habit.mode==='minimum'?'habits.progressMin':'habits.progressMax',{count:String(habit.currentTotal),target:String(habit.target)})}</span>
   <span className={'bar'+(habit.mode==='maximum'&&habit.currentTotal>habit.target?' over':'')} aria-hidden="true"><span style={{width:percent+'%'}}/></span></>;
 }
+function HabitBreaks({habit,householdId,session,language,onChanged}:{habit:AssignedHabit;householdId:string;session:Session;language:string;onChanged:()=>void}){
+ const t=createTranslator(language),[open,setOpen]=useState(false),[start,setStart]=useState(''),[end,setEnd]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>();
+ const operation=useRef<{key:string;id:string}|undefined>(undefined);
+ const parts=new Intl.DateTimeFormat('en-GB',{timeZone:habit.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+ const part=(type:string)=>parts.find(p=>p.type===type)?.value??'';const today=[part('year'),part('month'),part('day')].join('-');
+ async function send(action:'habitBreakAdd'|'habitBreakCancel',body:Record<string,string>){
+  if(busy)return;setBusy(true);setError(undefined);const key=JSON.stringify([action,body]);
+  if(operation.current?.key!==key)operation.current={key,id:crypto.randomUUID()};
+  try{const result=await authoritySend(householdId,session,action,{operationId:operation.current.id,habitId:habit.habitId,...body});
+   if(result.ok){operation.current=undefined;setStart('');setEnd('');onChanged();}else{setError(result.key);if(!result.unknown)operation.current=undefined;}}
+  finally{setBusy(false);}
+ }
+ if(!habit.canPlanBreak)return null;
+ return <div className="habit-breaks"><button type="button" className="secondary" onClick={()=>setOpen(!open)}>{t('habits.breaks')}</button>{open&&<div>
+  <p className="muted">{t('habits.breakHelp')}</p>
+  {habit.breaks.filter(b=>b.end>=today).map(b=><p key={b.id}>{b.start}{t('catalog.separator')}{b.end} {b.canCancel&&<button type="button" className="secondary" disabled={busy} onClick={()=>{void send('habitBreakCancel',{breakId:b.id});}}>{t('habits.cancelBreak')}</button>}</p>)}
+  <label>{t('habits.breakStart')}<input type="date" min={today} value={start} disabled={busy} onChange={e=>setStart(e.target.value)}/></label>
+  <label>{t('habits.breakEnd')}<input type="date" min={start||today} value={end} disabled={busy} onChange={e=>setEnd(e.target.value)}/></label>
+  <button type="button" disabled={busy||!start||!end||end<start} onClick={()=>{void send('habitBreakAdd',{start,end});}}>{t('habits.planBreak')}</button>
+  {error&&<p role="alert">{t(error)}</p>}
+ </div>}</div>;
+}
+function HabitHistory({habit,householdId,session,language,onChanged}:{habit:AssignedHabit;householdId:string;session:Session;language:string;onChanged:()=>void}){
+ const t=createTranslator(language),[open,setOpen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>();
+ const operation=useRef<{entryId:string;id:string}|undefined>(undefined);
+ async function reverse(entryId:string){
+  if(busy)return;setBusy(true);setError(undefined);if(operation.current?.entryId!==entryId)operation.current={entryId,id:crypto.randomUUID()};
+  try{const r=await authoritySend(householdId,session,'habitReverse',{operationId:operation.current.id,entryId});if(r.ok){operation.current=undefined;onChanged();}else{setError(r.key);if(!r.unknown)operation.current=undefined;}}
+  finally{setBusy(false);}
+ }
+ const fmt=new Intl.DateTimeFormat(language,{dateStyle:'medium',timeStyle:'short',timeZone:habit.timeZone});
+ return <div><button type="button" className="secondary" aria-expanded={open} onClick={()=>setOpen(!open)}>{t('habits.history')}</button>{open&&<div>
+  <h4>{t('habits.recentPeriods')}</h4><ul>{habit.results.map(r=><li key={r.periodStart}>{r.periodStart}{t('catalog.separator')}{t(resultKeys[r.result])}{t('catalog.separator')}{r.total}</li>)}</ul>
+  <h4>{t('habits.recentEntries')}</h4><ul>{habit.entries.map(e=><li key={e.id}><time dateTime={e.occurredAt}>{fmt.format(new Date(e.occurredAt))}</time>{t('catalog.separator')}{e.count}{e.reversed&&<span>{t('routines.reversed')}</span>}{e.canReverse&&<button type="button" disabled={busy} onClick={()=>{void reverse(e.id);}}>{t('routines.reverse')}</button>}</li>)}</ul>
+  {error&&<p role="alert">{t(error)}</p>}
+ </div>}</div>;
+}
 /** Today, for the sub: habits a Dom set for you, with +1. */
 export function TodayAssignedHabits({habits,me,householdId,session,language,onChanged}:{habits?:AssignedHabit[];me:string;householdId:string;session:Session;language:string;onChanged:()=>void}){
  const t=createTranslator(language),[busy,setBusy]=useState<string>(),[error,setError]=useState<MessageKey>();
@@ -37,14 +74,16 @@ export function TodayAssignedHabits({habits,me,householdId,session,language,onCh
   <div className="habit-tiles">{mine.map(habit=><div className="habit-tile" key={habit.habitId}>
    <span className="habit-name">{habit.title}</span><Progress habit={habit} language={language}/>
    <span className="muted">{[habit.holderName,habit.streaks.current>0&&t('habits.streak',{count:String(habit.streaks.current)})].filter(Boolean).join(t('catalog.separator'))}</span>
-   <button type="button" className="icon-button add-one" disabled={!!busy} aria-label={t('today.addOne',{title:habit.title})} onClick={()=>{void add(habit);}}><Icon name="plus"/></button>
+   <HabitBreaks habit={habit} householdId={householdId} session={session} language={language} onChanged={onChanged}/>
+   <HabitHistory habit={habit} householdId={householdId} session={session} language={language} onChanged={onChanged}/>
+   <button type="button" className="icon-button add-one" disabled={!!busy||!habit.canRecord} aria-label={t('today.addOne',{title:habit.title})} onClick={()=>{void add(habit);}}><Icon name="plus"/></button>
   </div>)}</div>
   {error&&<p role="alert">{t(error)}</p>}
  </>;
 }
-const empty=(timeZone:string):HabitFields=>({title:'',description:'',period:'daily',mode:'minimum',target:1,timeZone,rewardPoints:null,penaltyPoints:null,punishment:null,milestoneEvery:null,milestonePoints:null});
+const empty=(timeZone:string):HabitFields=>({category:'',weekdays:[1,2,3,4,5,6,7],title:'',description:'',period:'daily',mode:'minimum',target:1,timeZone,rewardPoints:null,penaltyPoints:null,punishment:null,milestoneEvery:null,milestonePoints:null});
 function HabitForm({habit,subjectId,householdId,session,language,timeZone,canOutcomes,onClose,onSaved}:{habit?:AssignedHabit;subjectId:string;householdId:string;session:Session;language:string;timeZone:string;canOutcomes:boolean;onClose:()=>void;onSaved:(notice:MessageKey)=>void}){
- const t=createTranslator(language),[fields,setFields]=useState<HabitFields>(habit?{title:habit.title,description:habit.description,period:habit.period,mode:habit.mode,target:habit.target,timeZone:habit.timeZone,rewardPoints:habit.rewardPoints,penaltyPoints:habit.penaltyPoints,punishment:habit.punishment,milestoneEvery:habit.milestoneEvery,milestonePoints:habit.milestonePoints}:empty(timeZone));
+ const t=createTranslator(language),[fields,setFields]=useState<HabitFields>(habit?{category:habit.category??'',weekdays:habit.weekdays,title:habit.title,description:habit.description,period:habit.period,mode:habit.mode,target:habit.target,timeZone:habit.timeZone,rewardPoints:habit.rewardPoints,penaltyPoints:habit.penaltyPoints,punishment:habit.punishment,milestoneEvery:habit.milestoneEvery,milestonePoints:habit.milestonePoints}:empty(timeZone));
  const [busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),operation=useRef<string|undefined>(undefined);
  const set=<K extends keyof HabitFields,>(key:K,value:HabitFields[K])=>{setFields(f=>({...f,[key]:value}));operation.current=undefined;};
  const number=(value:string)=>value===''?null:Math.max(1,Math.min(10000,Math.round(Number(value))));
@@ -60,7 +99,12 @@ function HabitForm({habit,subjectId,householdId,session,language,timeZone,canOut
   <form className="quick-form" onSubmit={e=>{void save(e);}}>
    <label>{t('quick.habitTitle')}<input required maxLength={120} autoComplete="off" disabled={busy} value={fields.title} onChange={e=>set('title',e.target.value)}/></label>
    <label>{t('library.body')}<textarea maxLength={500} disabled={busy} value={fields.description} onChange={e=>set('description',e.target.value)}/></label>
+   <label>{t('library.category')}<input maxLength={60} disabled={busy} value={fields.category??''} onChange={e=>set('category',e.target.value)}/></label>
+   {!habit&&<label>{t('workspace.timeZone')}<input required maxLength={100} disabled={busy} value={fields.timeZone} onChange={e=>set('timeZone',e.target.value)}/></label>}
    {!habit&&<label>{t('routines.period')}<select disabled={busy} value={fields.period} onChange={e=>set('period',e.target.value as HabitFields['period'])}><option value="daily">{t('routines.daily')}</option><option value="weekly">{t('routines.weekly')}</option></select></label>}
+   {fields.period==='daily'&&<fieldset disabled={busy||!!habit}><legend>{t('partner.weekdays')}</legend>
+    {(['partner.monday','partner.tuesday','partner.wednesday','partner.thursday','partner.friday','partner.saturday','partner.sunday'] as const).map((key,index)=><label className="check" key={key}><input type="checkbox" checked={(fields.weekdays??[]).includes(index+1)} onChange={e=>set('weekdays',e.target.checked?[...(fields.weekdays??[]),index+1].sort((a,b)=>a-b):(fields.weekdays??[]).filter(d=>d!==index+1))}/>{t(key)}</label>)}
+   </fieldset>}
    <fieldset className="rating" disabled={busy}><legend>{t('routines.goalMode')}</legend>
     <label><input type="radio" name="mode" checked={fields.mode==='minimum'} onChange={()=>set('mode','minimum')}/>{t('routines.minimum')}</label>
     <label><input type="radio" name="mode" checked={fields.mode==='maximum'} onChange={()=>set('mode','maximum')}/>{t('routines.maximum')}</label></fieldset>
@@ -75,7 +119,7 @@ function HabitForm({habit,subjectId,householdId,session,language,timeZone,canOut
      <label>{t('habits.milestoneEvery')}<input type="number" inputMode="numeric" min={2} max={365} required disabled={busy} value={fields.milestoneEvery} onChange={e=>set('milestoneEvery',Math.max(2,Math.min(365,Math.round(Number(e.target.value))||2)))}/></label>
      <label>{t('habits.milestonePoints')}<input type="number" inputMode="numeric" min={1} max={10000} required disabled={busy} value={fields.milestonePoints??''} onChange={e=>set('milestonePoints',number(e.target.value))}/></label></>}</>}
    {error&&<p role="alert">{t(error)}</p>}
-   <button type="submit" disabled={busy||!fields.title.trim()}>{t(busy?'onboarding.saving':'habits.save')}</button>
+   <button type="submit" disabled={busy||!fields.title.trim()||(fields.period==='daily'&&!(fields.weekdays?.length))}>{t(busy?'onboarding.saving':'habits.save')}</button>
   </form>
  </Layer>;
 }
@@ -96,6 +140,8 @@ export function PersonHabits({habits,subjectId,name,householdId,session,language
    {!theirs.length?<p className="muted">{t('habits.none')}</p>:<ul className="card-list">{theirs.map(habit=><li key={habit.habitId} className="habit-row"><span className="grow">
     <span>{habit.title}</span><Progress habit={habit} language={language}/>
     <span className="muted">{[t(habit.period==='daily'?'routines.daily':'routines.weekly'),habit.state==='paused'&&t('habits.paused'),habit.streaks.current>0&&t('habits.streak',{count:String(habit.streaks.current)}),habit.streaks.longest>1&&t('habits.streakBest',{count:String(habit.streaks.longest)}),...habit.results.slice(0,3).map(r=>t(resultKeys[r.result]))].filter(Boolean).join(t('catalog.separator'))}</span></span>
+    <HabitBreaks habit={habit} householdId={householdId} session={session} language={language} onChanged={()=>onChanged('habits.saved')}/>
+    <HabitHistory habit={habit} householdId={householdId} session={session} language={language} onChanged={()=>onChanged('habits.saved')}/>
     {habit.canEdit&&<span className="row-actions"><button type="button" className="secondary" disabled={busy} onClick={()=>setEditing(habit)}>{t('workspace.edit')}</button>
      <button type="button" className="secondary" disabled={busy} onClick={()=>{void state(habit,habit.state==='active'?'paused':'active');}}>{t(habit.state==='active'?'habits.pause':'habits.resume')}</button>
      <button type="button" className="secondary" disabled={busy} onClick={()=>{void state(habit,'archived');}}>{t('workspace.archive')}</button></span>}

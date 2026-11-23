@@ -24,3 +24,9 @@ test('owner-only routine screens show private draft entry and keyed separate nav
  const habits=renderToStaticMarkup(React.createElement(RoutinesPanel,{...props,section:'habits'}));assert.match(habits,/Habits/);assert.match(habits,/private/i);
  const checkins=renderToStaticMarkup(React.createElement(RoutinesPanel,{...props,section:'checkins'}));assert.match(checkins,/Rituals/);assert.match(checkins,/Check-ins/);assert.doesNotMatch(checkins,/reviewer|partner required/i);
 });
+
+test('habit weekday input validates unique ISO days',()=>{
+ const operationId=randomUUID();
+ assert.deepEqual(routineInput('routineCreate',{operationId,kind:'habit',fields:{...fields,weekdays:[3,4,6]}}).fields,{...fields,weekdays:[3,4,6]});
+ for(const weekdays of [[],[0],[8],[1,1]]) assert.throws(()=>routineInput('routineCreate',{operationId,kind:'habit',fields:{...fields,weekdays}}),{kind:'invalid'});
+});
