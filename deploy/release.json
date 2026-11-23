@@ -603,6 +603,13 @@
       "path": "migrations/instance/0058_notice_people.sql",
       "sha256": "3144a33e58e9afeb86659d71a7419c883c7e44277db5df3acc03e2c144c19c64",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0059_notice_payload_privacy",
+      "path": "migrations/instance/0059_notice_payload_privacy.sql",
+      "sha256": "c7ee417ec0d6f084177a9cd31e3c00e0825281ecd992c2aabe22cb125c0d43d8",
+      "backwardCompatible": true
     }
   ]
 }

@@ -2,7 +2,7 @@
 
 ## In-app notices
 
-Every member has a notice list per dynamic (bell in the top bar). Notices are created by database triggers in the same transaction as the change, so a notice exists exactly when the change committed. A notice holds only its kind, the resource ID, the acting member and a time: never titles or text.
+Every member has a notice list per dynamic (bell in the top bar). Notices are created by database triggers in the same transaction as the change, so a notice exists exactly when the change committed. A notice holds only its kind, the resource ID, the acting member ID and a time internally; in-app notice payloads do not expose the actor name, titles or text.
 
 | Kind | Recipient | When |
 | --- | --- | --- |
@@ -48,3 +48,5 @@ Migration 0057 redeclares `notice_command` from 0045 to paginate member notices 
 ## Sender preferences
 
 A member can mute notices from individually selected people with whom they share an accepted relationship. This choice suppresses new notifications, not the underlying tasks or other records. System-generated notices are unaffected. Pending push candidates are checked again against current settings; existing inbox entries remain readable. The member's preferences are included in their personal export and removed on departure or account erasure; a departing sender is removed from other members' mute lists. Migration 0058 redeclares `notice`, `notice_command`, `task_delivery_command` and `authority_export_page` to enforce and export these preferences.
+
+Migration 0059 redeclares `notice_command` from 0058 to omit actor names from in-app notice payloads.

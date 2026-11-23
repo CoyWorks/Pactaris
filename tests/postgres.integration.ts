@@ -1839,6 +1839,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const notices=async(p:Person)=>{const r=await api(base+'/exchange/notices','GET',undefined,p.session);assert.equal(r.status,200,JSON.stringify(r.data));return r.data;};
      const forA=await notices(A);assert.ok(forA.unread>=1);assert.ok(forA.notices.some((n:any)=>n.kind==='permission'&&n.resourceId===operationId));
      assert.ok(!JSON.stringify(forA).includes('midnight'));
+     assert.ok(forA.notices.every((n:any)=>n.actorName===null));
      assert.ok((await notices(B)).notices.some((n:any)=>n.kind==='answered'&&n.resourceId===operationId));
      assert.ok((await notices(B)).notices.some((n:any)=>n.kind==='breach'));
      assert.equal((await notices(C)).notices.length,0);
