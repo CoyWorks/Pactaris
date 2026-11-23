@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {Hint} from './navigation.js';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
+import {signInHref} from './auto-sign-in.js';
 type Session={account:{id:string;displayName:string};csrfToken:string};
 type Invite={invitationId:string;status:string;role:string;expiresAt:string;delivery?:string};
 const errorKey=(key:unknown):MessageKey=>(['invitations.invalid','invitations.denied','invitations.conflict','invitations.capacity','invitations.proof','invitations.unavailable','errors.rateLimited','errors.request'] as unknown[]).includes(key)?key as MessageKey:'invitations.unavailable';
@@ -78,7 +79,7 @@ export function InvitationJoin({session,loading,language,format,timeZone}:{sessi
   }catch{setPending(true);setError('invitations.unknownResponse');}finally{setBusy(false);}
  }
  return <main><header><span className="eyebrow">{t('app.title')}</span></header><h1>{t('invitations.joinTitle')}</h1>
-  {loading?<p role="status">{t('portal.loading')}</p>:!claim?<p role="alert">{t('invitations.invalidLink')}</p>:!session?<section><p>{t('invitations.signInThenReopen')}</p><a className="button" href="/auth/login">{t('portal.signIn')}</a></section>:<>
+  {loading?<p role="status">{t('portal.loading')}</p>:!claim?<p role="alert">{t('invitations.invalidLink')}</p>:!session?<section><p>{t('invitations.signInThenReopen')}</p><a className="button" href={signInHref()}>{t('portal.signIn')}</a></section>:<>
    {error&&<p role="alert">{t(error)}</p>}
    {(!preview||preview.accountId!==session.account.id)&&!declined&&<button type="button" disabled={busy} onClick={()=>{void review();}}>{t('invitations.review')}</button>}
    {preview&&preview.accountId===session.account.id&&!declined&&<section><h2>{preview.name}</h2><p>{t('invitations.participant')}</p><p>{t('invitations.noConsent')}</p><p>{t('invitations.expires')} <time dateTime={preview.expiresAt} title={timeZone}>{formatTime(new Date(preview.expiresAt),format,timeZone)}</time></p>
@@ -87,7 +88,7 @@ export function InvitationJoin({session,loading,language,format,timeZone}:{sessi
     </>}
    </section>}
    {declined&&<p role="status">{t('invitations.declined')}</p>}
-   {error==='invitations.proof'&&<p>{t('invitations.signInThenReopen')} <a href="/auth/login">{t('portal.signIn')}</a></p>}
+   {error==='invitations.proof'&&<p>{t('invitations.signInThenReopen')} <a href={signInHref()}>{t('portal.signIn')}</a></p>}
   </>}
   <p><a href="/">{t('portal.back')}</a></p>
  </main>;

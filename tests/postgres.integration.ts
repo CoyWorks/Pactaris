@@ -138,6 +138,15 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
     await store.createSession(verified,account,'csrf',60,120,email);
     try{
       assert.ok(await store.session(legacy,60));
+      // A session keeps the idle bound it was created with, not the caller's browser default.
+      const app='app-session-fixture';await store.createSession(app,account,'csrf',604800,7776000);
+      assert.ok(await store.session(app,60));
+      const bound=(await gatewayDb.pool.query(`SELECT extract(epoch FROM idle_expires_at-now())::int AS left,idle_seconds
+        FROM pactaris.sessions WHERE token_hash=$1`,[hash(app)])).rows[0];
+      assert.equal(bound?.idle_seconds,604800);assert.ok(bound.left>604000);
+      await store.logout(app);
+      await store.beginLogin('login-cookie',{state:'s1',nonce:'n',verifier:'v'},'app');
+      assert.equal((await store.consumeLogin('login-cookie','s1'))?.client,'app');
       assert.equal(await store.session(legacy,60,true),undefined);
       assert.ok(await store.session(verified,60,true));
       assert.equal((await store.sessionsForAccount(account.id,verified,true)).sessions.length,1);

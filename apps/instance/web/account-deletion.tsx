@@ -1,7 +1,7 @@
 import React,{useState} from 'react';
 import {Hint} from './navigation.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
-import {forgetSignedIn} from './auto-sign-in.js';
+import {forgetSignedIn,signInHref} from './auto-sign-in.js';
 
 export function DeleteAccountPanel({csrfToken,language}:{csrfToken:string;language:string}){
   const t=createTranslator(language);
@@ -25,6 +25,6 @@ export function DeleteAccountPanel({csrfToken,language}:{csrfToken:string;langua
     <label><input type="checkbox" checked={confirmed} onChange={event=>setConfirmed(event.target.checked)}/> {t('account.deleteConfirm')}</label>
     <button type="button" disabled={busy||!confirmed||message==='account.deletePending'} onClick={()=>void remove()}>{t('account.deleteButton')}</button>
     {message&&<p role="alert">{t(message)}</p>}
-    {message==='account.deleteReauthenticate'&&<a href="/auth/reauth" target="_blank" rel="noopener">{t('account.exportSignIn')}</a>}
+    {message==='account.deleteReauthenticate'&&<a href={signInHref('/auth/reauth')} target="_blank" rel="noopener">{t('account.exportSignIn')}</a>}
   </section>;
 }

@@ -1,7 +1,7 @@
 import {useSelectorInbox} from './selector-inbox.js';
 import {AccountDisplayName} from './account-display-name.js';
 import {announceSignOut} from './session-invalidation.js';
-import {claimAutoSignIn,forgetSignedIn,rememberSignedIn,standalone} from './auto-sign-in.js';
+import {claimAutoSignIn,forgetSignedIn,rememberSignedIn,signInHref,standalone} from './auto-sign-in.js';
 import {ExportPanel} from './personal-export.js';
 import {DeleteAccountPanel} from './account-deletion.js';
 import {ReportPanel} from './abuse-report.js';
@@ -118,7 +118,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   useEffect(()=>{if(autoOpen&&only)navigate('/households/'+only.id,true);},[autoOpen,only]);
   useEffect(()=>{if(session&&selectedId&&selected)writeLast(session.account.id,selectedId);},[session,selectedId,selected]);
   const signedOut=!loading&&!session&&!loadError&&path!=='/join';
-  useEffect(()=>{if(signedOut&&claimAutoSignIn(standalone(),Date.now()))window.location.assign('/auth/login');},[signedOut]);
+  useEffect(()=>{if(signedOut&&claimAutoSignIn(standalone(),Date.now()))window.location.assign(signInHref());},[signedOut]);
   if(path==='/join')return <InvitationJoin session={session} loading={loading} language={language} format={session?.presentation?.format??format} timeZone={session?.presentation?.timeZone??timeZone}/>;
   const displayFormat=session?.presentation?.format??format,displayZone=session?.presentation?.timeZone??timeZone;
   const initial=(session?.account.displayName.trim()||t('portal.account')).slice(0,1).toUpperCase();
@@ -130,7 +130,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   </section>;
   if(loading||autoOpen)return <main className="page"><div className="app-bar"><span className="skeleton-title" aria-hidden="true"/></div><Skeleton count={4} label={t('portal.loading')}/></main>;
   if(!session)return <main className="page sign-in"><span className="eyebrow">{t('app.title')}</span>{problem}
-    {!loadError&&<section><h1>{t('portal.signInTitle')}</h1><p>{t('portal.signInDescription')}</p><a className="button" href="/auth/login">{t('portal.signIn')}</a></section>}</main>;
+    {!loadError&&<section><h1>{t('portal.signInTitle')}</h1><p>{t('portal.signInDescription')}</p><a className="button" href={signInHref()}>{t('portal.signIn')}</a></section>}</main>;
   if(notificationsPage)return <main className="page profile">
     <header className="app-bar"><button type="button" className="icon-button" aria-label={t('nav.back')} onClick={()=>{if(window.history.length>1)window.history.back();else navigate('/profile');}}><Icon name="back"/></button><h1>{t('notices.title')}</h1></header>
     <NotificationSettings households={listing?.households??[]} csrfToken={session.csrfToken} language={language}/>

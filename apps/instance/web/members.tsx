@@ -2,6 +2,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {Hint,Icon,Layer} from './navigation.js';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import type {MemberRow,OwnerOffer} from '../members.js';
+import {signInHref} from './auto-sign-in.js';
 type Session={account:{id:string;displayName:string};csrfToken:string};
 type Action='alias'|'remove'|'offer'|'accept'|'decline'|'cancel';
 type Operation={operationId:string;action:string;status:'pending'|'complete'|'rejected'};
@@ -52,7 +53,7 @@ export function MemberAdministration({householdId,session,language,format,timeZo
  const alias=(id:string)=>listing?.members.find(m=>m.membershipId===id)?.displayName||id;
  const blocked=busy||!!draft;
  const self=listing?.members.find(m=>m.isSelf),member=listing?.members.find(m=>m.membershipId===openMember),layerOpen=naming||!!member||!!confirm;
- const status=<>{error&&<p role="alert">{t(error)}</p>}{error==='members.reauthenticate'&&<p><a href="/auth/login">{t('portal.signIn')}</a></p>}
+ const status=<>{error&&<p role="alert">{t(error)}</p>}{error==='members.reauthenticate'&&<p><a href={signInHref()}>{t('portal.signIn')}</a></p>}
   {notice&&<p role="status">{t(notice)}</p>}
   {draft&&<div><p>{t('members.retryDescription')}</p><button type="button" disabled={busy} onClick={()=>{void execute(draft.action,draft.payload,draft);}}>{t('onboarding.retry')}</button></div>}</>;
  return <section><h2>{t('members.title')}</h2><Hint label={t('hint.more')}>{t('members.description')}</Hint>

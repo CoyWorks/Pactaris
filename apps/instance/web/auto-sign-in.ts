@@ -40,3 +40,9 @@ export function claimAutoSignIn(isStandalone:boolean,now:number,
     return true;
   }catch{return false;}
 }
+
+// The installed app asks the gateway for its longer session bounds (one week idle by
+// default). This is a convenience signal from the client, not a security boundary.
+export function signInHref(path:'/auth/login'|'/auth/reauth'='/auth/login',isStandalone=standalone()):string {
+  return isStandalone?path+'?client=app':path;
+}

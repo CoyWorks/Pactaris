@@ -3,6 +3,7 @@ import type pg from 'pg';
 import { normalizeEmail } from '../../packages/auth/email.js';
 export const hash = (token: string) => createHash('sha256').update(token).digest('hex');
 export type LoginAttempt = {state:string;nonce:string;verifier:string};
+export type LoginClient = 'browser'|'app';
 export type Account = {id:string;displayName:string};
 export type AccountPresentation = {format:string;timeZone:string};
 export type Session = {account:Account;csrfToken:string;expiresAt:string;presentation?:AccountPresentation;preferredName?:string};
@@ -13,8 +14,8 @@ export interface GatewayStore {
   throttle(bucket:string,limit?:number):Promise<boolean>;
   updateAccountPresentation(accountId:string,value:AccountPresentation|null):Promise<void>;
   updatePreferredName?(accountId:string,value:string|null):Promise<string|undefined>;
-  beginLogin(cookie:string, attempt:LoginAttempt):Promise<void>;
-  consumeLogin(cookie:string,state:string):Promise<LoginAttempt|undefined>;
+  beginLogin(cookie:string, attempt:LoginAttempt, client?:LoginClient):Promise<void>;
+  consumeLogin(cookie:string,state:string):Promise<(LoginAttempt&{client?:LoginClient})|undefined>;
   account(issuer:string,subject:string,name:string,verifiedEmail?:string):Promise<Account>;
   createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number,verifiedEmail?:string,mfaAt?:number,authAt?:number):Promise<void>;
   session(token:string,idle:number,requireVerifiedEmail?:boolean):Promise<Session|undefined>;
@@ -36,12 +37,12 @@ export class PgGatewayStore implements GatewayStore {
       resets_at=CASE WHEN pactaris.auth_limits.resets_at<=now() THEN now()+interval '5 minutes' ELSE pactaris.auth_limits.resets_at END RETURNING attempts`,[hash(bucket)]);
     return r.rows[0].attempts<=limit;
   }
-  async beginLogin(cookie:string,attempt:LoginAttempt) {
-    await this.pool.query(`INSERT INTO pactaris.login_attempts(cookie_hash,state,nonce,verifier,expires_at) VALUES($1,$2,$3,$4,now()+interval '5 minutes')`,[hash(cookie),attempt.state,attempt.nonce,attempt.verifier]);
+  async beginLogin(cookie:string,attempt:LoginAttempt,client:LoginClient='browser') {
+    await this.pool.query(`INSERT INTO pactaris.login_attempts(cookie_hash,state,nonce,verifier,expires_at,client) VALUES($1,$2,$3,$4,now()+interval '5 minutes',$5)`,[hash(cookie),attempt.state,attempt.nonce,attempt.verifier,client]);
   }
   async consumeLogin(cookie:string,state:string) {
-    const r=await this.pool.query('DELETE FROM pactaris.login_attempts WHERE cookie_hash=$1 AND state=$2 AND expires_at>now() RETURNING state,nonce,verifier',[hash(cookie),state]);
-    return r.rows[0] as LoginAttempt|undefined;
+    const r=await this.pool.query('DELETE FROM pactaris.login_attempts WHERE cookie_hash=$1 AND state=$2 AND expires_at>now() RETURNING state,nonce,verifier,client',[hash(cookie),state]);
+    return r.rows[0] as (LoginAttempt&{client:LoginClient})|undefined;
   }
   async account(issuer:string,subject:string,name:string,verifiedEmail?:string) {
     const email=normalizeEmail(verifiedEmail)??null;
@@ -55,15 +56,15 @@ export class PgGatewayStore implements GatewayStore {
   }
   async createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number,verifiedEmail?:string,mfaAt?:number,authAt?:number) {
     const email=normalizeEmail(verifiedEmail)??null;
-    const r=await this.pool.query(`INSERT INTO pactaris.sessions(token_hash,account_id,csrf_token,expires_at,idle_expires_at,recipient_email,recipient_asserted_at,mfa_at,authenticated_at)
+    const r=await this.pool.query(`INSERT INTO pactaris.sessions(token_hash,account_id,csrf_token,expires_at,idle_expires_at,recipient_email,recipient_asserted_at,mfa_at,authenticated_at,idle_seconds)
       SELECT $1,a.id,$3,now()+$4*interval '1 second',now()+$5*interval '1 second',
         CASE WHEN a.verified_email=$6 THEN $6 ELSE NULL END,
-        CASE WHEN a.verified_email=$6 THEN a.verified_email_asserted_at ELSE NULL END,to_timestamp($7),to_timestamp($8)
+        CASE WHEN a.verified_email=$6 THEN a.verified_email_asserted_at ELSE NULL END,to_timestamp($7),to_timestamp($8),$5
       FROM pactaris.accounts a WHERE a.id=$2 AND a.status='active'`,[hash(token),account.id,csrfToken,absolute,idle,email,mfaAt??null,authAt??null]);
     if(r.rowCount!==1)throw Error('authentication.suspended');
   }
   async session(token:string,idle:number,requireVerifiedEmail=false) {
-    const r=await this.pool.query(`UPDATE pactaris.sessions s SET idle_expires_at=LEAST(s.expires_at,now()+$2*interval '1 second')
+    const r=await this.pool.query(`UPDATE pactaris.sessions s SET idle_expires_at=LEAST(s.expires_at,now()+COALESCE(s.idle_seconds,$2)*interval '1 second')
       FROM pactaris.accounts a WHERE s.token_hash=$1 AND a.id=s.account_id AND a.status='active' AND s.expires_at>now() AND s.idle_expires_at>now()
       AND (NOT $3::boolean OR s.recipient_email=a.verified_email)
       RETURNING a.id,COALESCE(a.preferred_display_name,a.display_name) AS display_name,a.preferred_display_name,s.csrf_token,s.expires_at,a.locale_format,a.time_zone`,[hash(token),idle,requireVerifiedEmail]);
