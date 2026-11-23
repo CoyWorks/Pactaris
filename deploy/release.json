@@ -568,6 +568,13 @@
       "path": "migrations/instance/0053_habit_authority_fence.sql",
       "sha256": "e62a99dd19ee7bfc894d2e46cc99a36cf7322c61b2169ccb86e54e49903e3d07",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0054_habit_history_alias",
+      "path": "migrations/instance/0054_habit_history_alias.sql",
+      "sha256": "85f6e2b39e99eb72a478b147f8c545ec38f65b07f1f8e912317109d13ea86db3",
+      "backwardCompatible": true
     }
   ]
 }
