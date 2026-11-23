@@ -102,3 +102,5 @@ For assigned habits, the sub and the holder with task authority can schedule inc
 Assigned habits also have an optional category and a bounded history of the 20 most recent entries and seven evaluated periods. Authorized participants can reverse eligible entries in the app; reversed entries remain visible and do not count towards the total. Closed-period entries cannot be reversed after evaluation. The creator chooses a time zone when creating an assigned habit. Migration 0052 adds the category, erasure handling, and extends `authority_habit_command` from 0050 with history and category projection.
 
 Migration 0054 redeclares `authority_habit_command` from 0052 with an unambiguous progress-entry query alias.
+
+Migration 0056 redeclares `run_authority_habits` from 0050 to suppress even older pending outcomes while a scheduled break is currently active.

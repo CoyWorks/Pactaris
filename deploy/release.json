@@ -582,6 +582,13 @@
       "path": "migrations/instance/0055_habit_break_journal.sql",
       "sha256": "e6d7cfc9a7de3346bb48c2262638b6b46adcea3c01e6f636f11b5d8957bed051",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0056_habit_break_worker",
+      "path": "migrations/instance/0056_habit_break_worker.sql",
+      "sha256": "620531c8c3a4fdc01087d78be420b299cc74800405493a8fe8df61ef55d8f7e9",
+      "backwardCompatible": true
     }
   ]
 }

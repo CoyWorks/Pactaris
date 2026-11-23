@@ -1960,6 +1960,12 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const future=await au(A,'habitBreakAdd',{habitId:weekly.data.resourceId,start:day.future,end:day.future});assert.equal(future.status,200,JSON.stringify(future.data));
      assert.equal((await au(B,'habitBreakCancel',{habitId:weekly.data.resourceId,breakId:future.data.resourceId})).status,404);
      assert.equal((await au(D,'habitBreakCancel',{habitId:weekly.data.resourceId,breakId:future.data.resourceId})).status,200);
+     // An older missed week cannot issue outcomes while today's break is active either.
+     await db.owner.query("UPDATE pactaris.authority_habits SET next_period=pactaris.habit_period_start('weekly','UTC',now())-7 WHERE id=$1",[weekly.data.resourceId]);
+     await db.pool.query('SELECT pactaris.run_authority_habits($1)',[instanceId]);
+     const duringBreak=(await db.owner.query('SELECT result,outcome FROM pactaris.authority_habit_results WHERE habit_id=$1',[weekly.data.resourceId])).rows[0];
+     assert.equal(duringBreak.result,'skipped');assert.deepEqual(duringBreak.outcome,{});
+     await db.owner.query('DELETE FROM pactaris.authority_habit_results WHERE habit_id=$1',[weekly.data.resourceId]);
      // Move the saved interval and due cursor back together to simulate a worker running after the break.
      await db.owner.query("UPDATE pactaris.authority_habits SET breaks=jsonb_build_array(jsonb_build_object('id',$2::text,'start',to_char(pactaris.habit_period_start('weekly','UTC',now())-5,'YYYY-MM-DD'),'end',to_char(pactaris.habit_period_start('weekly','UTC',now())-5,'YYYY-MM-DD'),'creator',$3::text)),next_period=pactaris.habit_period_start('weekly','UTC',now())-7 WHERE id=$1",[weekly.data.resourceId,pause.data.resourceId,D.member]);
      await db.pool.query('SELECT pactaris.run_authority_habits($1)',[instanceId]);
