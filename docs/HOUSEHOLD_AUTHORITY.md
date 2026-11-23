@@ -90,3 +90,7 @@ Migration `0042_reward_shop`, command `shop_command` (`shopList`, `shopSave`, `s
 - **Picking a punishment:** "From your list" appears in the punishment form, the breach form and the habit form.
 - **Today → Getting started** (owners and administrators): invite people, link as Dom and sub, give a first task. Hidden on this device once dismissed or after the first task.
 - **Dynamic → Household board:** everyone you may see, by rank, with their last 7 days and balance; a row opens the same progress view. Shown when you are part of an active Dom link.
+
+### Assigned habit weekdays (in progress)
+
+New daily assigned habits can select one or more ISO weekdays. Weekly count-based habits retain their existing weekly period. A daily period outside the selected weekdays is recorded as skipped and cannot issue an outcome. The weekday selection is fixed when the habit is created to avoid reinterpreting past periods; older clients and existing habits default to every day. This is a partial implementation of #63: scheduled breaks and safety across paused intervals still require implementation and PostgreSQL integration verification before release.

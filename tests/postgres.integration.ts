@@ -1903,6 +1903,17 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await au(D,'habitRecord',{habitId:habit.data.resourceId,count:1})).status,200);
      assert.equal((await au(B,'habitRecord',{habitId:habit.data.resourceId,count:1})).status,404);
      const habits=(await api(base+'/authority/habits','GET',undefined,D.session)).data.habits;assert.equal(habits[0].currentTotal,1);assert.equal(habits[0].canEdit,false);assert.deepEqual(habits[0].streaks,{current:0,longest:0});
+     // A non-selected day is neutral and cannot create an automatic outcome.
+     const yesterday=Number((await db.owner.query("SELECT extract(isodow from (now() AT TIME ZONE 'UTC')::date-1)::integer AS day")).rows[0].day);
+     const selected=[1,2,3,4,5,6,7].filter(d=>d!==yesterday);
+     const scheduled=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:{...habitFields,weekdays:selected}});
+     assert.equal(scheduled.status,200,JSON.stringify(scheduled.data));
+     assert.deepEqual((await api(base+'/authority/habits','GET',undefined,D.session)).data.habits.find((x:any)=>x.habitId===scheduled.data.resourceId).weekdays,selected);
+     await db.owner.query("UPDATE pactaris.authority_habits SET next_period=pactaris.habit_period_start('daily','UTC',now())-1 WHERE id=$1",[scheduled.data.resourceId]);
+     await db.pool.query('SELECT pactaris.run_authority_habits($1)',[place.instanceId]);
+     const skipped=(await db.owner.query('SELECT result,outcome FROM pactaris.authority_habit_results WHERE habit_id=$1',[scheduled.data.resourceId])).rows;
+     assert.equal(skipped[0].result,'skipped');assert.deepEqual(skipped[0].outcome,{});
+     await db.owner.query("UPDATE pactaris.authority_habits SET state='archived' WHERE id=$1",[scheduled.data.resourceId]);
      // Milestones must come as a pair and within range; they round-trip through habitList.
      assert.equal((await au(A,'habitSave',{habitId:habit.data.resourceId,subjectId:null,version:habits[0].version,fields:{...habitFields,milestoneEvery:3}})).status,400);
      assert.equal((await au(A,'habitSave',{habitId:habit.data.resourceId,subjectId:null,version:habits[0].version,fields:{...habitFields,milestoneEvery:1,milestonePoints:5}})).status,400);

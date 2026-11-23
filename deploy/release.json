@@ -533,6 +533,13 @@
       "path": "migrations/instance/0048_required_task_proof.sql",
       "sha256": "663ff8a7b531eec3630367f6442cb67d4dc4a2b3a7109f346905660affac4691",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0049_habit_weekdays",
+      "path": "migrations/instance/0049_habit_weekdays.sql",
+      "sha256": "6f7c09c023f0a0c43ad38a22a2bcc0fcae354f71fb81de3cb837e02925f19fa0",
+      "backwardCompatible": true
     }
   ]
 }

@@ -37,14 +37,14 @@ export function TodayAssignedHabits({habits,me,householdId,session,language,onCh
   <div className="habit-tiles">{mine.map(habit=><div className="habit-tile" key={habit.habitId}>
    <span className="habit-name">{habit.title}</span><Progress habit={habit} language={language}/>
    <span className="muted">{[habit.holderName,habit.streaks.current>0&&t('habits.streak',{count:String(habit.streaks.current)})].filter(Boolean).join(t('catalog.separator'))}</span>
-   <button type="button" className="icon-button add-one" disabled={!!busy} aria-label={t('today.addOne',{title:habit.title})} onClick={()=>{void add(habit);}}><Icon name="plus"/></button>
+   <button type="button" className="icon-button add-one" disabled={!!busy||!habit.canRecord} aria-label={t('today.addOne',{title:habit.title})} onClick={()=>{void add(habit);}}><Icon name="plus"/></button>
   </div>)}</div>
   {error&&<p role="alert">{t(error)}</p>}
  </>;
 }
-const empty=(timeZone:string):HabitFields=>({title:'',description:'',period:'daily',mode:'minimum',target:1,timeZone,rewardPoints:null,penaltyPoints:null,punishment:null,milestoneEvery:null,milestonePoints:null});
+const empty=(timeZone:string):HabitFields=>({weekdays:[1,2,3,4,5,6,7],title:'',description:'',period:'daily',mode:'minimum',target:1,timeZone,rewardPoints:null,penaltyPoints:null,punishment:null,milestoneEvery:null,milestonePoints:null});
 function HabitForm({habit,subjectId,householdId,session,language,timeZone,canOutcomes,onClose,onSaved}:{habit?:AssignedHabit;subjectId:string;householdId:string;session:Session;language:string;timeZone:string;canOutcomes:boolean;onClose:()=>void;onSaved:(notice:MessageKey)=>void}){
- const t=createTranslator(language),[fields,setFields]=useState<HabitFields>(habit?{title:habit.title,description:habit.description,period:habit.period,mode:habit.mode,target:habit.target,timeZone:habit.timeZone,rewardPoints:habit.rewardPoints,penaltyPoints:habit.penaltyPoints,punishment:habit.punishment,milestoneEvery:habit.milestoneEvery,milestonePoints:habit.milestonePoints}:empty(timeZone));
+ const t=createTranslator(language),[fields,setFields]=useState<HabitFields>(habit?{weekdays:habit.weekdays,title:habit.title,description:habit.description,period:habit.period,mode:habit.mode,target:habit.target,timeZone:habit.timeZone,rewardPoints:habit.rewardPoints,penaltyPoints:habit.penaltyPoints,punishment:habit.punishment,milestoneEvery:habit.milestoneEvery,milestonePoints:habit.milestonePoints}:empty(timeZone));
  const [busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),operation=useRef<string|undefined>(undefined);
  const set=<K extends keyof HabitFields,>(key:K,value:HabitFields[K])=>{setFields(f=>({...f,[key]:value}));operation.current=undefined;};
  const number=(value:string)=>value===''?null:Math.max(1,Math.min(10000,Math.round(Number(value))));
@@ -61,6 +61,9 @@ function HabitForm({habit,subjectId,householdId,session,language,timeZone,canOut
    <label>{t('quick.habitTitle')}<input required maxLength={120} autoComplete="off" disabled={busy} value={fields.title} onChange={e=>set('title',e.target.value)}/></label>
    <label>{t('library.body')}<textarea maxLength={500} disabled={busy} value={fields.description} onChange={e=>set('description',e.target.value)}/></label>
    {!habit&&<label>{t('routines.period')}<select disabled={busy} value={fields.period} onChange={e=>set('period',e.target.value as HabitFields['period'])}><option value="daily">{t('routines.daily')}</option><option value="weekly">{t('routines.weekly')}</option></select></label>}
+   {fields.period==='daily'&&<fieldset disabled={busy||!!habit}><legend>{t('partner.weekdays')}</legend>
+    {(['partner.monday','partner.tuesday','partner.wednesday','partner.thursday','partner.friday','partner.saturday','partner.sunday'] as const).map((key,index)=><label className="check" key={key}><input type="checkbox" checked={(fields.weekdays??[]).includes(index+1)} onChange={e=>set('weekdays',e.target.checked?[...(fields.weekdays??[]),index+1].sort((a,b)=>a-b):(fields.weekdays??[]).filter(d=>d!==index+1))}/>{t(key)}</label>)}
+   </fieldset>}
    <fieldset className="rating" disabled={busy}><legend>{t('routines.goalMode')}</legend>
     <label><input type="radio" name="mode" checked={fields.mode==='minimum'} onChange={()=>set('mode','minimum')}/>{t('routines.minimum')}</label>
     <label><input type="radio" name="mode" checked={fields.mode==='maximum'} onChange={()=>set('mode','maximum')}/>{t('routines.maximum')}</label></fieldset>
@@ -75,7 +78,7 @@ function HabitForm({habit,subjectId,householdId,session,language,timeZone,canOut
      <label>{t('habits.milestoneEvery')}<input type="number" inputMode="numeric" min={2} max={365} required disabled={busy} value={fields.milestoneEvery} onChange={e=>set('milestoneEvery',Math.max(2,Math.min(365,Math.round(Number(e.target.value))||2)))}/></label>
      <label>{t('habits.milestonePoints')}<input type="number" inputMode="numeric" min={1} max={10000} required disabled={busy} value={fields.milestonePoints??''} onChange={e=>set('milestonePoints',number(e.target.value))}/></label></>}</>}
    {error&&<p role="alert">{t(error)}</p>}
-   <button type="submit" disabled={busy||!fields.title.trim()}>{t(busy?'onboarding.saving':'habits.save')}</button>
+   <button type="submit" disabled={busy||!fields.title.trim()||(fields.period==='daily'&&!(fields.weekdays?.length))}>{t(busy?'onboarding.saving':'habits.save')}</button>
   </form>
  </Layer>;
 }
