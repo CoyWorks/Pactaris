@@ -22,8 +22,8 @@ export function LibraryPanel({householdId,session,language,format,timeZone,secti
    catch(e){if(!gone){setListing(undefined);setDetail(undefined);setError(errorKey((e as {messageKey?:string})?.messageKey));}}
    finally{clearTimeout(deadline);active=undefined;if(!gone)timer=setTimeout(()=>{void load();},60000);}
   }
-  const resume=()=>{if(timer)clearTimeout(timer);if(document.hidden)active?.abort();else void load();};void load();document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);
-  return()=>{gone=true;if(timer)clearTimeout(timer);active?.abort();document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);};
+  const resume=()=>{if(timer)clearTimeout(timer);if(document.hidden)active?.abort();else void load();};const changed=(event:Event)=>{if((event as CustomEvent<string>).detail===householdId)resume();};void load();document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);window.addEventListener('pactaris:libraryChanges',changed);
+  return()=>{gone=true;if(timer)clearTimeout(timer);active?.abort();document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);window.removeEventListener('pactaris:libraryChanges',changed);};
  },[base,kind,filter,query,cursor,refresh]);
  // Clear an open body on refresh or visibility changes instead of retaining a revoked shared detail.
  useEffect(()=>{setDetail(undefined);setConfirmation(undefined);},[refresh,kind,filter,query,cursor]);

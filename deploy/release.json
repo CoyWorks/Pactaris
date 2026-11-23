@@ -624,6 +624,20 @@
       "path": "migrations/instance/0061_workspace_changes.sql",
       "sha256": "8aa45d2c11575ac1df73203194ca2b4886b724dfbb1bcbe688b61f67a7dc064b",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0062_workspace_cursor_cleanup",
+      "path": "migrations/instance/0062_workspace_cursor_cleanup.sql",
+      "sha256": "f9c76e608e5b65a80422f864d28c19cb9564b0e71bc15872bd666cac3d7730f1",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0063_workspace_change_scopes",
+      "path": "migrations/instance/0063_workspace_change_scopes.sql",
+      "sha256": "0495ff3a6ac46803c2f75d455496c84b82441d011f0f16a4c56ec2e0359c2021",
+      "backwardCompatible": true
     }
   ]
 }

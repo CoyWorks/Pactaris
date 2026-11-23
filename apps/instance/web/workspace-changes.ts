@@ -1,5 +1,5 @@
 import {useEffect,useRef} from 'react';
-type Topic='workspace'|'tasks'|'notices';
+type Topic='workspace'|'tasks'|'notices'|'routines'|'library'|'dynamic'|'catalog';
 /** Content-free change checks for the active household. A cursor is never an authority grant. */
 export function useWorkspaceChanges(householdId:string,onChanges:(topics:Topic[])=>void){
  const onChangesRef=useRef(onChanges);onChangesRef.current=onChanges;
@@ -14,11 +14,11 @@ export function useWorkspaceChanges(householdId:string,onChanges:(topics:Topic[]
     const query=cursor?'?cursor='+encodeURIComponent(cursor):'';
     const response=await fetch(`/api/households/${householdId}/workspace/changes${query}`,{cache:'no-store',signal:controller.signal});
     if(response.status===401||response.status===404)terminal=true;
-    if(response.status===409&&cursor){cursor=undefined;reset=true;onChangesRef.current(['workspace','tasks','notices']);return;}
+    if(response.status===409&&cursor){cursor=undefined;reset=true;onChangesRef.current(['workspace','tasks','notices','routines','library','dynamic','catalog']);return;}
     if(response.status===429){const header=response.headers.get('Retry-After');const delay=header&&/^\d+$/.test(header)?Number(header)*1000:Date.parse(header??'')-Date.now();retryAt=Date.now()+Math.max(60000,Number.isFinite(delay)?Math.min(delay,3600000):0);}
     if(!response.ok)throw Error('changes.unavailable');
     const data=await response.json() as {cursor?:unknown;changed?:unknown};
-    if(typeof data.cursor!=='string'||!Array.isArray(data.changed)||!data.changed.every(v=>['workspace','tasks','notices'].includes(v)))throw Error('changes.invalid');
+    if(typeof data.cursor!=='string'||!Array.isArray(data.changed)||!data.changed.every(v=>['workspace','tasks','notices','routines','library','dynamic','catalog'].includes(v)))throw Error('changes.invalid');
     if(stopped||active!==controller)return;cursor=data.cursor;retryAt=0;
     if(data.changed.length)onChangesRef.current(data.changed as Topic[]);
    }catch{if(!stopped&&active===controller)retryAt=Math.max(retryAt,Date.now()+60000);}

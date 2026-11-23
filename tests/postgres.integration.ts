@@ -1665,6 +1665,12 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    await store.createSession(peerSession,peer,'registration-csrf',600,1200);
    await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role) VALUES($1,$2,$3,'active','admin')",[home.householdId,peerMember,peer.id]);
    await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id) VALUES($1,$2)',[peer.id,home.householdId]);
+   // Private activity must not change another household administrator's freshness cursor.
+   const peerBaseline=await api(base+'/workspace/changes','GET',undefined,peerSession);assert.equal(peerBaseline.status,200,JSON.stringify(peerBaseline.data));
+   const ownBaseline=await api(base+'/workspace/changes','GET',undefined,session);assert.equal(ownBaseline.status,200);
+   await make('habit',{title:'Private freshness fixture'});
+   const peerCheck=await api(base+'/workspace/changes?cursor='+peerBaseline.data.cursor,'GET',undefined,peerSession);assert.equal(peerCheck.status,200);assert.deepEqual(peerCheck.data.changed,[]);
+   const ownCheck=await api(base+'/workspace/changes?cursor='+ownBaseline.data.cursor,'GET',undefined,session);assert.equal(ownCheck.status,200);assert.ok(ownCheck.data.changed.includes('routines'));
    assert.equal((await post('routineRead',{routineId:habit,day:null},peerSession)).status,404);
    assert.equal((await post('routineRead',{routineId:habit,day:null,includeTrend:true},peerSession)).status,404);
    assert.equal((await post('progressReverse',{routineId:habit,eventId:event},peerSession)).status,404);
@@ -1933,7 +1939,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const assigned=await direct();assert.equal(assigned.status,200,JSON.stringify(assigned.data));assert.equal((await read(D,assigned.data.taskId)).state,'assigned');
      // Freshness cursors are bound to the exact membership and never depend on notice settings.
      const changes=async(p:Person,cursor?:string)=>api(base+'/workspace/changes'+(cursor?'?cursor='+cursor:''),'GET',undefined,p.session);
-     const startChanges=await changes(D);assert.equal(startChanges.status,200,JSON.stringify(startChanges.data));assert.ok(startChanges.data.cursor);assert.deepEqual(startChanges.data.changed,['notices','tasks','workspace']);
+     const startChanges=await changes(D);assert.equal(startChanges.status,200,JSON.stringify(startChanges.data));assert.ok(startChanges.data.cursor);assert.deepEqual(startChanges.data.changed,['catalog','dynamic','library','notices','routines','tasks','workspace']);
      assert.equal((await changes(A,startChanges.data.cursor)).status,409);
      // Muting a sender does not hide or block a task that sender assigns.
      const configure=(input:Record<string,unknown>)=>api(base+'/exchange/noticeConfigure','POST',{operationId:randomUUID(),...input},D.session);

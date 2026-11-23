@@ -26,7 +26,7 @@ export class InstanceWorkspace{
    const unread=action==='workspaceRead'
     ?` || jsonb_build_object('hasUnreadTaskInbox',pactaris.workspace_has_unread($1,$2,$3,($6::jsonb->>'membershipId')::uuid))`:'';
    if(action==='workspaceChanges'){
-    const result=await db.query<{changes:{cursor:string;changed:('workspace'|'tasks'|'notices')[]}}>('SELECT pactaris.workspace_change_check($1,$2,$3,$4,$5) AS changes',[householdId,this.config.instanceId,verified.accountId,input.membershipId,input.cursor]);
+    const result=await db.query<{changes:{cursor:string;changed:('workspace'|'tasks'|'notices'|'routines'|'library'|'dynamic'|'catalog')[]}}>('SELECT pactaris.workspace_change_check($1,$2,$3,$4,$5) AS changes',[householdId,this.config.instanceId,verified.accountId,input.membershipId,input.cursor]);
     const row=result.rows[0];if(!row)throw new WorkspaceError('unavailable');await db.query('COMMIT');
     return {householdId,operationId:verified.operationId,actorMembershipId:input.membershipId,status:'listed',changeCursor:row.changes.cursor,changed:row.changes.changed};
    }

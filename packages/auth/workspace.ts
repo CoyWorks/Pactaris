@@ -11,7 +11,7 @@ export type PointsSettings={enabled:boolean;label:string|null};
 export type PersonalSeries={seriesId:string;version:string;state:'active'|'blocked'|'finished'|'stopped';fields:TaskFields;schedule:TaskSchedule};
 export type WorkspaceResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';taskId?:string;task?:TaskDetail;
  household?:{name:string;timeZone:string;version:string;canEdit:boolean;status:'active'|'paused';epoch:string;memberEpoch:string;selfPaused:boolean;memberCount:number};
- series?:PersonalSeries[];pointsSettings?:PointsSettings;hasUnreadTaskInbox?:boolean;changeCursor?:string;changed?:('workspace'|'tasks'|'notices')[];counts?:{open:number;done:number;overdue:number;unassigned:number};tasks?:TaskSummary[];nextCursor?:string|null};
+ series?:PersonalSeries[];pointsSettings?:PointsSettings;hasUnreadTaskInbox?:boolean;changeCursor?:string;changed?:('workspace'|'tasks'|'notices'|'routines'|'library'|'dynamic'|'catalog')[];counts?:{open:number;done:number;overdue:number;unassigned:number};tasks?:TaskSummary[];nextCursor?:string|null};
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const version=(v:unknown)=>typeof v==='string'&&/^[1-9][0-9]{0,14}$/.test(v);
 const text=(v:unknown,max:number,empty=false,multiline=false)=>typeof v==='string'&&(empty||v.length>0)&&[...v].length<=max&&v===v.trim()&&!(multiline?/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u:/[\u0000-\u001f\u007f\uD800-\uDFFF]/u).test(v);

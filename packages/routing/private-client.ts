@@ -293,7 +293,7 @@ export class PrivateWorkspaceClient{
     out.nextCursor=r.nextCursor;
    }
    if(action==='workspaceChanges'){
-    if(!uuid(r.changeCursor)||!Array.isArray(r.changed)||r.changed.length>3||new Set(r.changed).size!==r.changed.length||!r.changed.every(v=>['workspace','tasks','notices'].includes(v)))throw Error('routing.response');
+    if(!uuid(r.changeCursor)||!Array.isArray(r.changed)||r.changed.length>7||new Set(r.changed).size!==r.changed.length||!r.changed.every(v=>['workspace','tasks','notices','routines','library','dynamic','catalog'].includes(v)))throw Error('routing.response');
     return {...out,changeCursor:r.changeCursor,changed:r.changed};
    }
    if(action==='workspaceUnread'){
