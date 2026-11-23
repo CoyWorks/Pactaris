@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {PartnerPanel,SeriesScheduleSummary,AssignmentPolicies} from '../apps/instance/web/partner.js';
+import {PartnerPanel,SeriesScheduleSummary,AssignmentPolicies,missingRequiredProof} from '../apps/instance/web/partner.js';
 import {partnerInput} from '../packages/auth/partner.js';
 const fields={title:'A voluntary task',description:'Shared scope\nSecond line',priority:'normal',dueAt:null};
 const offer={operationId:randomUUID(),agreementId:randomUUID(),agreementVersion:'1',assigneeId:randomUUID(),epoch:'1',safetyVersion:'a'.repeat(32),fields};
@@ -55,4 +55,19 @@ test('series summary preserves the scheduled wall time and identifies the weekda
    weekdays:[1,7],timeZone:'Europe/Amsterdam',dueMinutes:90},language:'en',format:'en-GB'
  }));
  for(const value of [/Monday and Sunday/,/dateTime="2026-10-25"/,/dateTime="2026-11-22"/,/02:30/,/Europe\/Amsterdam/,/90 minutes/])assert.match(html,value);
+});
+
+test('task photo proof requirement is an optional boolean for offers and scheduled tasks',()=>{
+ const required={...offer,fields:{...fields,proofRequired:true}};assert.deepEqual(partnerInput('partnerOffer',required),required);
+ assert.deepEqual(partnerInput('partnerOffer',{...offer,fields:{...fields,proofRequired:false}}).fields,{...fields,proofRequired:false});
+ for(const value of ['true',1,null])assert.throws(()=>partnerInput('partnerOffer',{...offer,fields:{...fields,proofRequired:value}}),{kind:'invalid'});
+});
+
+test('submission requires an available, unbound and unexpired photo only when requested',()=>{
+ const now=Date.parse('2026-01-01T12:00:00Z');
+ const proof={proofId:randomUUID(),type:'image/jpeg' as const,state:'stored' as const,bound:false,available:true,consumes:false,expiresAt:'2026-01-01T13:00:00Z'};
+ assert.equal(missingRequiredProof({proofRequired:false,proof:null},now),false);
+ assert.equal(missingRequiredProof({proofRequired:true,proof:null},now),true);
+ assert.equal(missingRequiredProof({proofRequired:true,proof},now),false);
+ for(const change of [{bound:true},{available:false},{state:'removed' as const},{expiresAt:'2026-01-01T11:00:00Z'}])assert.equal(missingRequiredProof({proofRequired:true,proof:{...proof,...change}},now),true);
 });

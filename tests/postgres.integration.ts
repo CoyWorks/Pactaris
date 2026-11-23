@@ -1879,10 +1879,10 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await au(D,'linkAccept',{linkId,version:'1'})).status,200);
      const power=(await view(A)).powers.find((x:any)=>x.membershipId===D.member);assert.deepEqual([power.tasks,power.outcomes,power.manage],[true,true,true]);
      // Direct assignment through the backing direct policy: no offer, no acceptance.
-     const direct=async()=>{
+     const direct=async(taskFields:typeof fields & {proofRequired?:boolean}=fields)=>{
       const choice=(await options(A)).find((c:any)=>c.label==='House rules'&&c.assignees.some((m:any)=>m.membershipId===D.member));assert.ok(choice);
       const policy=(await post(D,'partnerPolicyList')).data.policies.find((x:any)=>x.agreementId===choice.agreementId&&x.state==='active');assert.ok(policy);
-      return post(A,'partnerAssign',{assigneeId:D.member,agreementId:choice.agreementId,agreementVersion:choice.agreementVersion,epoch:choice.epoch,safetyVersion:choice.safetyVersion,fields,policyId:policy.policyId,policyVersion:policy.version});
+      return post(A,'partnerAssign',{assigneeId:D.member,agreementId:choice.agreementId,agreementVersion:choice.agreementVersion,epoch:choice.epoch,safetyVersion:choice.safetyVersion,fields:taskFields,policyId:policy.policyId,policyVersion:policy.version});
      };
      const assigned=await direct();assert.equal(assigned.status,200,JSON.stringify(assigned.data));assert.equal((await read(D,assigned.data.taskId)).state,'assigned');
      // A personal pause blocks; resuming restores authority without any re-acceptance.
@@ -1966,7 +1966,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await au(C,'pointsAdjust',{subjectId:D.member,points:1,reason:''})).status,404);
      // Approval by several people: C also receives the approve right over D, so D's work needs A and C.
      assert.equal((await au(A,'delegationSet',{linkId,delegateId:C.member,version:'1',tasks:true,approve:true,outcomes:false,endsAt:null})).status,200);
-     const reviewed=await direct();assert.equal(reviewed.status,200,JSON.stringify(reviewed.data));const rid=reviewed.data.taskId as string;
+     const reviewed=await direct({...fields,proofRequired:true});assert.equal(reviewed.status,200,JSON.stringify(reviewed.data));const rid=reviewed.data.taskId as string;
      const raw=(path:string,p:Person,body:Buffer,headers:Record<string,string>={})=>new Promise<{status:number;type:string;data:Buffer}>((resolve,reject)=>{
       const request=https.request({hostname:'127.0.0.1',port:gatewayAddress.port,path,method:'POST',servername:'backend.fixture.invalid',ca:readFileSyncFixture,
        headers:{host:'pactaris.app',cookie:'__Host-pactaris-session='+p.session,origin:'https://pactaris.app','x-csrf-token':'registration-csrf','Content-Length':String(body.length),...headers}},r=>{
@@ -1979,11 +1979,24 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await upload(D,png,'image/jpeg')).status,400);
      assert.equal((await upload(D,Buffer.from('not an image'))).status,400);
      assert.equal((await upload(D,png,'image/gif')).status,400);
+     assert.equal((await read(D,rid)).proofRequired,true);
+     assert.equal((await move(D,'partnerStart',rid)).status,200);
+     assert.equal((await move(D,'partnerSubmit',rid,{note:'Missing proof'})).data.code,'partner_proofRequired');
+     assert.equal((await read(D,rid)).state,'in_progress');
+     assert.equal((await post(B,'partnerSubmit',transitionBody(await read(D,rid),'partnerSubmit',{note:'Unauthorized'}))).status,404);
+     const expiredOperation=randomUUID();assert.equal((await upload(D,png,'image/png',expiredOperation)).status,200);
+     await db.owner.query("UPDATE pactaris.task_proofs SET expires_at=now()-interval '1 second' WHERE id=$1",[expiredOperation]);
+     assert.equal((await move(D,'partnerSubmit',rid,{note:'Expired photo'})).data.code,'partner_proofRequired');
+     assert.equal((await read(D,rid)).state,'in_progress');
      const proofOperation=randomUUID(),stored=await upload(D,png,'image/png',proofOperation);assert.equal(stored.status,200,stored.data.toString());
      assert.equal(JSON.parse(stored.data.toString()).proofId,proofOperation);
      assert.equal((await upload(D,png,'image/png',proofOperation)).status,200);
      assert.equal((await read(D,rid)).proof.proofId,proofOperation);assert.equal((await read(A,rid)).proof,null);
+     assert.equal((await move(D,'partnerSubmit',rid,{note:'Done, photo attached'})).status,200);
+     assert.equal((await move(A,'partnerChanges',rid,{note:'Please revise'})).status,200);
      assert.equal((await move(D,'partnerStart',rid)).status,200);
+     assert.equal((await move(D,'partnerSubmit',rid,{note:'Photo from previous round'})).data.code,'partner_proofRequired');
+     const secondProof=randomUUID();assert.equal((await upload(D,png,'image/png',secondProof)).status,200);
      assert.equal((await move(D,'partnerSubmit',rid,{note:'Done, photo attached'})).status,200);
      assert.deepEqual((await read(A,rid)).approvals.map((x:any)=>x.membershipId+':'+x.decision).sort(),[A.member+':null',C.member+':null'].sort());
      const approvals=await post(C,'approvalList');assert.equal(approvals.status,200,JSON.stringify(approvals.data));assert.deepEqual(approvals.data.approvals.map((x:any)=>x.taskId),[rid]);
@@ -1992,7 +2005,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const first=await review();assert.equal(first.note,'Done, photo attached');assert.equal(first.canDecide,true);assert.equal(first.proof.consumes,true);
      assert.ok((await api(base+'/exchange/notices','GET',undefined,C.session)).data.notices.some((n:any)=>n.kind==='approval'));
      // Each approver sees the photo once; the view counts after the image was delivered.
-     const viewProof=(p:Person)=>raw(base+'/proofs/'+proofOperation+'/view',p,Buffer.alloc(0));
+     const viewProof=(p:Person)=>raw(base+'/proofs/'+secondProof+'/view',p,Buffer.alloc(0));
      const until=async(check:()=>Promise<boolean>)=>{for(let n=0;n<100;n++){if(await check())return;await new Promise(r=>setTimeout(r,50));}assert.fail('timed out');};
      assert.equal((await viewProof(B)).status,404);
      const seen=await viewProof(C);assert.equal(seen.status,200);assert.equal(seen.type,'image/png');assert.ok(seen.data.equals(png));
@@ -2002,12 +2015,12 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await post(C,'partnerApprove',{taskId:rid,version:decision.version,epoch:decision.epoch,safetyVersion:decision.safetyVersion})).status,200);
      assert.equal((await read(A,rid)).state,'submitted');assert.equal((await review()).canDecide,false);
      assert.equal((await viewProof(A)).status,200);
-     await until(async()=>(await db.owner.query('SELECT state FROM pactaris.task_proofs WHERE id=$1',[proofOperation])).rows[0].state==='viewed');
+     await until(async()=>(await db.owner.query('SELECT state FROM pactaris.task_proofs WHERE id=$1',[secondProof])).rows[0].state==='viewed');
      assert.equal((await move(A,'partnerApprove',rid)).status,200);
      const done=await read(A,rid);assert.equal(done.state,'done');
      assert.ok(done.events.some((e:any)=>e.action==='partnerApproval'&&e.actorId===C.member));
      assert.ok(await sweepProofs(db.pool,place.instanceId,proofStores[ids.indexOf(place.instanceId as typeof ids[number])]!)>=1);
-     assert.equal((await db.owner.query('SELECT file_present FROM pactaris.task_proofs WHERE id=$1',[proofOperation])).rows[0].file_present,false);
+     assert.equal((await db.owner.query('SELECT file_present FROM pactaris.task_proofs WHERE id=$1',[secondProof])).rows[0].file_present,false);
      for(const table of ['task_approvals','approval_receipts','task_proof_views'])await assert.rejects(db.pool.query('SELECT * FROM pactaris.'+table),{code:'42501'});
      // Ranking: only for subs; the owner or the sub's own Dom sets it.
      assert.equal((await au(A,'rankSet',{subjectId:D.member,rank:2})).status,200);

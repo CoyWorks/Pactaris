@@ -526,6 +526,13 @@
       "path": "migrations/gateway/0027_identity_user.sql",
       "sha256": "6ba3a9d76b8cb65fcb1b825689b693c1b2ce2362163a452d04e78f0af55da3e1",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0048_required_task_proof",
+      "path": "migrations/instance/0048_required_task_proof.sql",
+      "sha256": "663ff8a7b531eec3630367f6442cb67d4dc4a2b3a7109f346905660affac4691",
+      "backwardCompatible": true
     }
   ]
 }
