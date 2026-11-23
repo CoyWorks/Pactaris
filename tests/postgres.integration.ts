@@ -1840,6 +1840,12 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const forA=await notices(A);assert.ok(forA.unread>=1);assert.ok(forA.notices.some((n:any)=>n.kind==='permission'&&n.resourceId===operationId));
      assert.ok(!JSON.stringify(forA).includes('midnight'));
      assert.ok(forA.notices.every((n:any)=>n.actorName===null));
+     // A queued notice cannot outlive the standing authority that made its content visible.
+     const visibilityTx=await db.owner.connect();try{await visibilityTx.query('BEGIN');
+      assert.equal((await visibilityTx.query("SELECT pactaris.notice_visible($1,$2,'permission',$3) AS allowed",[home.householdId,A.member,operationId])).rows[0].allowed,true);
+      await visibilityTx.query("UPDATE pactaris.assignment_policies SET state='revoked' WHERE household_id=$1 AND creator_id=$2 AND assignee_id=$3 AND state='active'",[home.householdId,A.member,B.member]);
+      assert.equal((await visibilityTx.query("SELECT pactaris.notice_visible($1,$2,'permission',$3) AS allowed",[home.householdId,A.member,operationId])).rows[0].allowed,false);
+     }finally{await visibilityTx.query('ROLLBACK');visibilityTx.release();}
      assert.ok((await notices(B)).notices.some((n:any)=>n.kind==='answered'&&n.resourceId===operationId));
      assert.ok((await notices(B)).notices.some((n:any)=>n.kind==='breach'));
      assert.equal((await notices(C)).notices.length,0);
@@ -1852,7 +1858,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const after=await pushStatus();assert.ok(after&&(!before||BigInt(after)>BigInt(before)),JSON.stringify({before,after}));
      assert.equal((await ex(A,'noticeRead',{ids:null})).status,200);
      // Older member notices remain accessible without marking unseen pages read.
-     const seeded=(await db.owner.query("INSERT INTO pactaris.member_notices(household_id,recipient_id,actor_id,kind,resource_id) SELECT $1,$2,NULL,'points',gen_random_uuid() FROM generate_series(1,32) RETURNING id",[home.householdId,A.member])).rows.map((row:any)=>row.id);
+     const seeded=(await db.owner.query("INSERT INTO pactaris.member_notices(household_id,recipient_id,actor_id,kind,resource_id) SELECT $1,$2,NULL,'permission',$3 FROM generate_series(1,32) RETURNING id",[home.householdId,A.member,operationId])).rows.map((row:any)=>row.id);
      const first=await notices(A);assert.equal(first.notices.length,30);assert.ok(first.nextCursor);assert.equal(first.unread,32);
      assert.equal((await api(base+'/exchange/notices?after='+first.nextCursor,'GET',undefined,B.session)).status,404);
      assert.equal((await ex(A,'noticeRead',{ids:first.notices.map((n:any)=>n.id)})).status,200);
@@ -1878,6 +1884,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[B.member,B.member]})).status,400);
      assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[]})).status,200);
      const queued=await ex(B,'exchangeCreate',{kind:'proposal',recipientId:A.member,title:'Queued',body:'',dueAt:null});assert.equal(queued.status,200);assert.ok(await pushStatus());
+     assert.equal((await consent(B,'selfPause')).status,200);assert.equal(await pushStatus(),null);
+     const senderSafety=await state(B);assert.equal((await consent(B,'selfResume',{epoch:senderSafety.epoch,memberEpoch:senderSafety.memberEpoch})).status,200);
      assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[B.member]})).status,200);assert.equal(await pushStatus(),null);
      assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[]})).status,200);assert.equal((await ex(A,'noticeRead',{ids:null})).status,200);
      // Muted kinds create no notice (and so no push); unmuting restores them.
