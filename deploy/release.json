@@ -645,6 +645,13 @@
       "path": "migrations/instance/0064_workspace_change_delivery.sql",
       "sha256": "2ce670e6495f90799dbc4ce44f962023a858c28219a985fa6e8b7fe3ab996a76",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0065_notice_push_pause",
+      "path": "migrations/instance/0065_notice_push_pause.sql",
+      "sha256": "a5dfee45ccebb4f301908b0f79bbf24cbd53f2b495fb8ce8395c2c1218c4be45",
+      "backwardCompatible": true
     }
   ]
 }

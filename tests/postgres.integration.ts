@@ -1968,6 +1968,14 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      // Habits the Dom sets, with automatic outcomes; a pause means the period is skipped.
      const habitFields={title:'Morning check-in',description:'',period:'daily',mode:'minimum',target:1,timeZone:'UTC',rewardPoints:3,penaltyPoints:2,punishment:'Corner time',milestoneEvery:null,milestonePoints:null};
      const habit=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:habitFields});assert.equal(habit.status,200,JSON.stringify(habit.data));
+     // An automatic habit notice is still readable but cannot be pushed while its holder is paused.
+     const pushPauseTx=await db.owner.connect();
+     try{await pushPauseTx.query('BEGIN');
+      const visible=()=>pushPauseTx.query("SELECT pactaris.notice_visible(household_id,$2,'habit',id) AS readable,pactaris.notice_push_visible(household_id,$2,'habit',id) AS deliverable FROM pactaris.authority_habits WHERE id=$1",[habit.data.resourceId,D.member]);
+      assert.deepEqual((await visible()).rows[0],{readable:true,deliverable:true});
+      await pushPauseTx.query('UPDATE pactaris.memberships SET safety_paused=true WHERE id=$1',[A.member]);
+      assert.deepEqual((await visible()).rows[0],{readable:true,deliverable:false});
+     }finally{await pushPauseTx.query('ROLLBACK');pushPauseTx.release();}
      assert.equal((await au(B,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:habitFields})).status,404);
      assert.equal((await au(D,'habitRecord',{habitId:habit.data.resourceId,count:1})).status,200);
      assert.equal((await au(B,'habitRecord',{habitId:habit.data.resourceId,count:1})).status,404);

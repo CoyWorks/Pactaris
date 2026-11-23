@@ -53,6 +53,8 @@ Migration 0059 redeclares `notice_command` from 0058 to omit actor names from in
 
 Migration 0060 checks the recipient's current resource visibility again before listing member notices or considering them for push. A paused or departed actor cannot generate a pending push.
 
+Migration 0065 redeclares `task_delivery_command` from 0060 to also suppress pending habit and approval pushes when another involved participant is paused. Existing authorized in-app history remains readable during a pause.
+
 ## Active-household change checks
 
 The visible, online workspace checks the active household with a bounded, opaque cursor tied to the exact membership and instance. Changes to workspace tasks, shared tasks, approvals, inboxes, routines, permitted library items, personal catalog items and dynamic records invalidate topic tokens for the affected permitted members. Tokens update in the same transaction as the change; row locking makes concurrent updates to the same topic commit in token order. The cursor is never authorization: follow-up reads use their normal current membership and resource checks. A muted notification does not suppress a task-change token. Cursor snapshots are bounded per membership, expire after 24 hours, are included in personal export, and are removed on departure or erasure. The client resets an expired cursor and reloads the affected views.
