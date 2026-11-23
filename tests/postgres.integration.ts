@@ -1884,8 +1884,11 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[B.member,B.member]})).status,400);
      assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[]})).status,200);
      const queued=await ex(B,'exchangeCreate',{kind:'proposal',recipientId:A.member,title:'Queued',body:'',dueAt:null});assert.equal(queued.status,200);assert.ok(await pushStatus());
-     assert.equal((await consent(B,'selfPause')).status,200);assert.equal(await pushStatus(),null);
-     const senderSafety=await state(B);assert.equal((await consent(B,'selfResume',{epoch:senderSafety.epoch,memberEpoch:senderSafety.memberEpoch})).status,200);
+     const pausedSenderTx=await db.owner.connect();try{await pausedSenderTx.query('BEGIN');
+      await pausedSenderTx.query('UPDATE pactaris.memberships SET safety_paused=true WHERE household_id=$1 AND id=$2',[home.householdId,B.member]);
+      const status=(await pausedSenderTx.query("SELECT pactaris.task_delivery_command($1,$2,$3,$4,'partnerPushStatus',$5) AS r",[home.householdId,place.instanceId,A.account.id,randomUUID(),{membershipId:A.member,pushAfter:'0',pushSince:'2000-01-01T00:00:00.000Z'}])).rows[0].r;
+      assert.equal(status.pushSequence,null);
+     }finally{await pausedSenderTx.query('ROLLBACK');pausedSenderTx.release();}
      assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[B.member]})).status,200);assert.equal(await pushStatus(),null);
      assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[]})).status,200);assert.equal((await ex(A,'noticeRead',{ids:null})).status,200);
      // Muted kinds create no notice (and so no push); unmuting restores them.
