@@ -25,7 +25,8 @@ function Progress({habit,language}:{habit:AssignedHabit;language:string}){
 function HabitBreaks({habit,householdId,session,language,onChanged}:{habit:AssignedHabit;householdId:string;session:Session;language:string;onChanged:()=>void}){
  const t=createTranslator(language),[open,setOpen]=useState(false),[start,setStart]=useState(''),[end,setEnd]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>();
  const operation=useRef<{key:string;id:string}|undefined>(undefined);
- const today=new Intl.DateTimeFormat('en-CA',{timeZone:habit.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ const parts=new Intl.DateTimeFormat('en-GB',{timeZone:habit.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+ const part=(type:string)=>parts.find(p=>p.type===type)?.value??'';const today=[part('year'),part('month'),part('day')].join('-');
  async function send(action:'habitBreakAdd'|'habitBreakCancel',body:Record<string,string>){
   if(busy)return;setBusy(true);setError(undefined);const key=JSON.stringify([action,body]);
   if(operation.current?.key!==key)operation.current={key,id:crypto.randomUUID()};
