@@ -18,5 +18,5 @@ The flow is reachable directly (`/if/flow/pactaris-enrollment/`, the site's "Cre
 
 - The 18+ box in Identity does not replace the confirmation in the app ([AGE_CONFIRMATION.md](AGE_CONFIRMATION.md)); the app records its own.
 - Two accounts may use the same email address; Pactaris does not merge them.
-- Imported in the live Identity on 25 November 2026 but not yet linked to the sign-in page; that happens with the move to `app.pactaris.app` because `done_url` points there.
-- Not yet tested end to end with a new mailbox; do that during the move.
+- Opening the emailed link shows one "Continue to confirm this email address" step (authentik's protection against link scanners) before the account is activated.
+- Live since 25 November 2026: imported, linked as "Sign up" on the sign-in page, and tested with a fresh mailbox (account activated, `email_verified_address` recorded, redirect to the app sign-in). A missing 18+ box, a weak password and mismatched passwords are refused. The test account was deleted afterwards.

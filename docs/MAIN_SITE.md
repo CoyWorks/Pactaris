@@ -34,6 +34,8 @@ The gateway serves the site for requests whose `Host` is the configured `site.or
 
 ## Move checklist
 
+Completed on 25 November 2026; the old callback `https://pactaris.app/auth/oidc/callback` has been removed from the provider. Kept for reference and for other installations.
+
 Order matters: the app keeps working on the old origin until step 4.
 
 1. **DNS:** `app.pactaris.app` (A/AAAA to the proxy). `pactaris.app` and `www.pactaris.app` keep pointing at the proxy.
