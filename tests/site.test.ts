@@ -23,7 +23,7 @@ test('the main website serves its pages without cookies or scripts and links to 
   assert.ok(!home.body.includes('<script'));
   assert.ok(home.body.includes('href="https://app.pactaris.app/auth/login"'));
   assert.ok(home.body.includes('A CoyWorks project'));assert.ok(home.body.includes('mailto:info@pactaris.app'));
-  for(const path of ['/privacy','/terms','/privacy/','/site.css','/logo.svg','/favicon.svg','/logo-email.png','/robots.txt'])
+  for(const path of ['/privacy','/terms','/privacy/','/site.css','/logo.svg','/favicon.svg','/logo-email.png','/flow-background.svg','/robots.txt'])
     assert.equal((await inject(app,{url:path,headers:{host:'pactaris.app'}})).statusCode,200,path);
   assert.ok((await inject(app,{url:'/terms',headers:{host:'pactaris.app'}})).body.includes('Draft.'));
   const missing=await inject(app,{url:'/nope',headers:{host:'pactaris.app'}});assert.equal(missing.statusCode,404);assert.ok(missing.body.includes('Page not found'));
