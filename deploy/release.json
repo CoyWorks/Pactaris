@@ -589,6 +589,69 @@
       "path": "migrations/instance/0056_habit_break_worker.sql",
       "sha256": "620531c8c3a4fdc01087d78be420b299cc74800405493a8fe8df61ef55d8f7e9",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0057_notice_pagination",
+      "path": "migrations/instance/0057_notice_pagination.sql",
+      "sha256": "847d2b0784c2018f225bd4be87aebd31b056bd0e218400e7178d04df8f7c3e88",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0058_notice_people",
+      "path": "migrations/instance/0058_notice_people.sql",
+      "sha256": "3144a33e58e9afeb86659d71a7419c883c7e44277db5df3acc03e2c144c19c64",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0059_notice_payload_privacy",
+      "path": "migrations/instance/0059_notice_payload_privacy.sql",
+      "sha256": "c7ee417ec0d6f084177a9cd31e3c00e0825281ecd992c2aabe22cb125c0d43d8",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0060_notice_visibility",
+      "path": "migrations/instance/0060_notice_visibility.sql",
+      "sha256": "2baec134a7bcc44c650adfe935f45657aed968d6013282b3e38cea298d580d78",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0061_workspace_changes",
+      "path": "migrations/instance/0061_workspace_changes.sql",
+      "sha256": "8aa45d2c11575ac1df73203194ca2b4886b724dfbb1bcbe688b61f67a7dc064b",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0062_workspace_cursor_cleanup",
+      "path": "migrations/instance/0062_workspace_cursor_cleanup.sql",
+      "sha256": "f9c76e608e5b65a80422f864d28c19cb9564b0e71bc15872bd666cac3d7730f1",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0063_workspace_change_scopes",
+      "path": "migrations/instance/0063_workspace_change_scopes.sql",
+      "sha256": "0495ff3a6ac46803c2f75d455496c84b82441d011f0f16a4c56ec2e0359c2021",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0064_workspace_change_delivery",
+      "path": "migrations/instance/0064_workspace_change_delivery.sql",
+      "sha256": "2ce670e6495f90799dbc4ce44f962023a858c28219a985fa6e8b7fe3ab996a76",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0065_notice_push_pause",
+      "path": "migrations/instance/0065_notice_push_pause.sql",
+      "sha256": "a5dfee45ccebb4f301908b0f79bbf24cbd53f2b495fb8ce8395c2c1218c4be45",
+      "backwardCompatible": true
     }
   ]
 }

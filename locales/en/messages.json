@@ -1375,5 +1375,7 @@
   "habits.cancelBreak": "Cancel break",
   "habits.history": "Progress history",
   "habits.recentPeriods": "Recent periods",
-  "habits.recentEntries": "Recent entries"
+  "habits.recentEntries": "Recent entries",
+  "notifySettings.people": "People",
+  "notifySettings.peopleHelp": "Choose whose new notifications you receive. Your tasks and access stay unchanged; notices without a sender remain available."
 }

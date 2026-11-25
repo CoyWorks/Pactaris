@@ -2,7 +2,7 @@
 
 ## In-app notices
 
-Every member has a notice list per dynamic (bell in the top bar). Notices are created by database triggers in the same transaction as the change, so a notice exists exactly when the change committed. A notice holds only its kind, the resource ID, the acting member and a time: never titles or text.
+Every member has a notice list per dynamic (bell in the top bar). Notices are created by database triggers in the same transaction as the change, so a notice exists exactly when the change committed. A notice holds only its kind, the resource ID, the acting member ID and a time internally; in-app notice payloads do not expose the actor name, titles or text.
 
 | Kind | Recipient | When |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ Every member has a notice list per dynamic (bell in the top bar). Notices are cr
 | `habit` | sub | a habit period was checked (not for skipped periods) |
 | `purchase` | Dom who listed the reward | a sub bought a reward in the shop (migration `0042_reward_shop`) |
 
-Task notices (assigned, submitted, reviewed, reminders) stay in the existing task inbox and appear on the same page. A withdrawn exchange removes its notices; leaving a dynamic or erasing an account removes the person's notices. Opening the page marks notices read. Notices have no actor for automatic outcomes.
+Task notices (assigned, submitted, reviewed, reminders) stay in the existing task inbox and appear on the same page. A withdrawn exchange removes its notices; leaving a dynamic or erasing an account removes the person's notices. Opening the page marks the displayed notices read; older notices remain unread until displayed. The member-notice list is paginated with a recipient-bound cursor. Notices have no actor for automatic outcomes.
 
 ## Settings
 
@@ -42,3 +42,23 @@ Planned for the pre-release, not the alpha (owner decision, 20 November 2026); t
 - **Store requirements.** Both stores require a privacy policy, an age rating for adult content and account deletion in the app; Pactaris already provides account deletion and personal export. App review of adult content needs to be checked before submission.
 
 No native code is in the repository yet.
+
+Migration 0057 redeclares `notice_command` from 0045 to paginate member notices by recipient-bound cursor.
+
+## Sender preferences
+
+A member can mute notices from individually selected people with whom they share an accepted relationship. This choice suppresses new notifications, not the underlying tasks or other records. Notices without an identified sender are unaffected. Pending push candidates are checked again against current settings; existing inbox entries remain readable. The member's preferences are included in their personal export and removed on departure or account erasure; a departing sender is removed from other members' mute lists. Migration 0058 redeclares `notice`, `notice_command`, `task_delivery_command` and `authority_export_page` to enforce and export these preferences.
+
+Migration 0059 redeclares `notice_command` from 0058 to omit actor names from in-app notice payloads.
+
+Migration 0060 checks the recipient's current resource visibility again before listing member notices or considering them for push. A paused or departed actor cannot generate a pending push.
+
+Migration 0065 redeclares `task_delivery_command` from 0060 to also suppress pending habit and approval pushes when another involved participant is paused. Existing authorized in-app history remains readable during a pause.
+
+## Active-household change checks
+
+The visible, online workspace checks the active household with a bounded, opaque cursor tied to the exact membership and instance. Changes to workspace tasks, shared tasks, approvals, inboxes, routines, permitted library items, personal catalog items and dynamic records invalidate topic tokens for the affected permitted members. Tokens update in the same transaction as the change; row locking makes concurrent updates to the same topic commit in token order. The cursor is never authorization: follow-up reads use their normal current membership and resource checks. A muted notification does not suppress a task-change token. Cursor snapshots are bounded per membership, expire after 24 hours, are included in personal export, and are removed on departure or erasure. The client resets an expired cursor and reloads the affected views.
+
+Migration 0061 adds the scoped cursor and token functions, trigger-based invalidation and a runtime function grant, and redeclares `authority_export_page` from 0058 for export. Migration 0062 adds cascading cursor cleanup, and 0063 extends the invalidation scopes to the other active-household views. Views retain independent refresh as a fallback.
+
+Migration 0064 covers additional assignment, acknowledgement, consent, terminology, shop and notification-preference changes. Visible views use the scoped check and retain a five-minute fallback refresh. The feed covers the active household on its home instance; other households are not queried for their content.

@@ -8,14 +8,15 @@ type Session={csrfToken:string};
 export type Shop=Pick<AuthorityResult,'balance'|'canSpend'|'pointsEnabled'|'offers'|'items'|'requests'|'purchases'>;
 /** Rewards you can buy, your own rewards and punishments, and purchases waiting for you. */
 export function useShop(householdId:string,reload:unknown){
- const [data,setData]=useState<Shop>(),[failed,setFailed]=useState(false);
+ const [data,setData]=useState<Shop>(),[failed,setFailed]=useState(false),[change,setChange]=useState(0);
+ useEffect(()=>{const changed=(event:Event)=>{if((event as CustomEvent<string>).detail===householdId)setChange(v=>v+1);};window.addEventListener('pactaris:dynamicChanges',changed);return()=>window.removeEventListener('pactaris:dynamicChanges',changed);},[householdId]);
  useEffect(()=>{
   let gone=false;const controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),12000);
   fetch(`/api/households/${householdId}/authority/shop`,{cache:'no-store',signal:controller.signal})
    .then(async r=>{const body=await r.json();if(!r.ok)throw body;if(!gone){setData(body as Shop);setFailed(false);}})
    .catch(()=>{if(!gone)setFailed(true);}).finally(()=>clearTimeout(deadline));
   return()=>{gone=true;controller.abort();clearTimeout(deadline);};
- },[householdId,reload]);
+ },[householdId,reload,change]);
  return {data,failed};
 }
 /** Your punishment list, for picking one while giving a punishment, recording a breach or setting a habit. */

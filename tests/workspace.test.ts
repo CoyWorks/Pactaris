@@ -47,3 +47,10 @@ test('due check-ins stay hidden until loaded and nothing is answered automatical
  const html=renderToStaticMarkup(React.createElement(TodayCheckins,{householdId:randomUUID(),csrfToken:'fixture',language:'en',reload:0,onSaved:()=>{}}));
  assert.equal(html,'');
 });
+
+test('workspace change cursors accept only an opaque UUID or an initial null',()=>{
+ const operationId=randomUUID(),cursor=randomUUID();
+ assert.equal(workspaceInput('workspaceChanges',{operationId,cursor}).cursor,cursor);
+ assert.equal(workspaceInput('workspaceChanges',{operationId,cursor:null}).cursor,null);
+ assert.throws(()=>workspaceInput('workspaceChanges',{operationId,cursor:'other-household'}),{kind:'invalid'});
+});

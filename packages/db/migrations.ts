@@ -84,6 +84,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0022_task_catalog_rewards'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.prepare_task_catalog_reward(uuid,uuid,uuid,uuid,uuid,uuid,bigint) TO ${role}`);
       if(entries.some(m=>m.id==='0021_personal_export'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.personal_export(uuid,uuid,uuid,uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0020_private_habit_trend'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.habit_trend(uuid,uuid,uuid,uuid,uuid,bigint,date) TO ${role}`);
+      if(entries.some(m=>m.id==='0061_workspace_changes'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.workspace_change_check(uuid,uuid,uuid,uuid,uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0019_workspace_unread_inbox'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.workspace_has_unread(uuid,uuid,uuid,uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0018_task_inbox_preferences'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.task_inbox_preference_command(uuid,uuid,uuid,uuid,text,jsonb) TO ${role}`);
       if(entries.some(m=>m.id==='0016_task_scheduling'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.run_task_scheduler(uuid) TO ${role}`);

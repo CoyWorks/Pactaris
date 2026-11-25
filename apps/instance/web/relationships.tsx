@@ -26,11 +26,12 @@ export function Relationships({householdId,session,language,format,timeZone}:{ho
     const membership=await m.json();if(!m.ok)throw {messageKey:'relationships.unavailable'};
     if(!gone){setListing(data);setMembers(membership.members);setError(undefined);}
    }catch(e){if(!gone){setListing(undefined);setMembers([]);setError(errorKey((e as {messageKey?:string})?.messageKey));}}
-   finally{clearTimeout(deadline);active=undefined;if(!gone)timer=setTimeout(()=>{void load();},60000);}
+   finally{clearTimeout(deadline);active=undefined;if(!gone)timer=setTimeout(()=>{void load();},300000);}
   }
   const resume=()=>{if(timer)clearTimeout(timer);if(document.hidden)active?.abort();else void load();};
+  const changed=(event:Event)=>{if((event as CustomEvent<string>).detail===householdId)resume();};window.addEventListener('pactaris:dynamicChanges',changed);
   void load();document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);
-  return()=>{gone=true;if(timer)clearTimeout(timer);active?.abort();document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);};
+  return()=>{gone=true;if(timer)clearTimeout(timer);active?.abort();document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);window.removeEventListener('pactaris:dynamicChanges',changed);};
  },[householdId,session.account.id,cursor,refresh]);
  async function execute(action:string,input:Record<string,unknown>,retry?:Draft){
   if(busy||(!retry&&draft))return;const request=retry??{action,input:{...input,operationId:crypto.randomUUID()}};

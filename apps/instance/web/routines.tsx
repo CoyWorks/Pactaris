@@ -26,10 +26,10 @@ export function RoutinesPanel({householdId,session,language,format,timeZone,sect
    if(gone||active||document.hidden||!navigator.onLine)return;active=new AbortController();const deadline=setTimeout(()=>active?.abort(),12000);
    try{const r=await fetch(base+'?kind='+kind+'&filter='+filter+(cursor?'&after='+cursor:''),{cache:'no-store',signal:active.signal}),data=await r.json();if(!r.ok)throw data;if(detailId){const d=await read(detailId,day||null,detailRevision,undefined,active.signal);if(!gone)setDetail(d);}if(!gone){setListing(data);setError(undefined);}}
    catch(e){if(!gone){setListing(undefined);setDetail(undefined);setError(errorKey((e as {messageKey?:string})?.messageKey));}}
-   finally{clearTimeout(deadline);active=undefined;if(!gone)timer=setTimeout(()=>{void load();},60000);}
+   finally{clearTimeout(deadline);active=undefined;if(!gone)timer=setTimeout(()=>{void load();},300000);}
   }
-  const resume=()=>{if(timer)clearTimeout(timer);if(document.hidden)active?.abort();else void load();};void load();document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);
-  return()=>{gone=true;if(timer)clearTimeout(timer);active?.abort();document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);};
+  const resume=()=>{if(timer)clearTimeout(timer);if(document.hidden)active?.abort();else void load();};const changed=(event:Event)=>{if((event as CustomEvent<string>).detail===householdId)resume();};void load();document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);window.addEventListener('pactaris:routineChanges',changed);
+  return()=>{gone=true;if(timer)clearTimeout(timer);active?.abort();document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);window.removeEventListener('pactaris:routineChanges',changed);};
  },[base,kind,filter,cursor,refresh,detailId,detailRevision,day,showTrend]);
  async function open(id:string,selectedDay:string|null=null,revision?:string,after?:string){
   setBusy(true);const controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),12000);

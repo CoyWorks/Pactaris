@@ -46,3 +46,15 @@ test('the create page offers only kinds the standing authority allows',()=>{
  const holder=renderToStaticMarkup(React.createElement(ExchangeForm,{...props,people:[{membershipId:randomUUID(),name:'Subject',holder:false,subject:true}]}));
  assert.match(holder,/Rule breach/);assert.doesNotMatch(holder,/Permission request/);
 });
+
+test('notice cursors are exact opaque IDs',()=>{
+ const operationId=randomUUID(),after=randomUUID();
+ assert.equal(exchangeInput('noticeList',{operationId,after}).after,after);
+ assert.throws(()=>exchangeInput('noticeList',{operationId,after:'1 OR 1=1'}),ExchangeError);
+});
+
+test('sender preference input rejects duplicates and injected identifiers',()=>{
+ const operationId=randomUUID(),id=randomUUID();
+ assert.deepEqual(exchangeInput('noticeConfigure',{operationId,muted:[],mutedPeople:[id]}).mutedPeople,[id]);
+ for(const mutedPeople of [[id,id],['not-a-uuid']])assert.throws(()=>exchangeInput('noticeConfigure',{operationId,muted:[],mutedPeople}),ExchangeError);
+});

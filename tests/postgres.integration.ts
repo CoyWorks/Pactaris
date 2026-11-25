@@ -1665,6 +1665,12 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    await store.createSession(peerSession,peer,'registration-csrf',600,1200);
    await db.owner.query("INSERT INTO pactaris.memberships(household_id,id,account_id,status,technical_role) VALUES($1,$2,$3,'active','admin')",[home.householdId,peerMember,peer.id]);
    await gatewayDb.owner.query('INSERT INTO pactaris.account_households(account_id,household_id) VALUES($1,$2)',[peer.id,home.householdId]);
+   // Private activity must not change another household administrator's freshness cursor.
+   const peerBaseline=await api(base+'/workspace/changes','GET',undefined,peerSession);assert.equal(peerBaseline.status,200,JSON.stringify(peerBaseline.data));
+   const ownBaseline=await api(base+'/workspace/changes','GET',undefined,session);assert.equal(ownBaseline.status,200);
+   await make('habit',{title:'Private freshness fixture'});
+   const peerCheck=await api(base+'/workspace/changes?cursor='+peerBaseline.data.cursor,'GET',undefined,peerSession);assert.equal(peerCheck.status,200);assert.deepEqual(peerCheck.data.changed,[]);
+   const ownCheck=await api(base+'/workspace/changes?cursor='+ownBaseline.data.cursor,'GET',undefined,session);assert.equal(ownCheck.status,200);assert.ok(ownCheck.data.changed.includes('routines'));
    assert.equal((await post('routineRead',{routineId:habit,day:null},peerSession)).status,404);
    assert.equal((await post('routineRead',{routineId:habit,day:null,includeTrend:true},peerSession)).status,404);
    assert.equal((await post('progressReverse',{routineId:habit,eventId:event},peerSession)).status,404);
@@ -1839,6 +1845,13 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const notices=async(p:Person)=>{const r=await api(base+'/exchange/notices','GET',undefined,p.session);assert.equal(r.status,200,JSON.stringify(r.data));return r.data;};
      const forA=await notices(A);assert.ok(forA.unread>=1);assert.ok(forA.notices.some((n:any)=>n.kind==='permission'&&n.resourceId===operationId));
      assert.ok(!JSON.stringify(forA).includes('midnight'));
+     assert.ok(forA.notices.every((n:any)=>n.actorName===null));
+     // A queued notice cannot outlive the standing authority that made its content visible.
+     const visibilityTx=await db.owner.connect();try{await visibilityTx.query('BEGIN');
+      assert.equal((await visibilityTx.query("SELECT pactaris.notice_visible($1,$2,'permission',$3) AS allowed",[home.householdId,A.member,operationId])).rows[0].allowed,true);
+      await visibilityTx.query("UPDATE pactaris.assignment_policies SET state='revoked' WHERE household_id=$1 AND creator_id=$2 AND assignee_id=$3 AND state='active'",[home.householdId,A.member,B.member]);
+      assert.equal((await visibilityTx.query("SELECT pactaris.notice_visible($1,$2,'permission',$3) AS allowed",[home.householdId,A.member,operationId])).rows[0].allowed,false);
+     }finally{await visibilityTx.query('ROLLBACK');visibilityTx.release();}
      assert.ok((await notices(B)).notices.some((n:any)=>n.kind==='answered'&&n.resourceId===operationId));
      assert.ok((await notices(B)).notices.some((n:any)=>n.kind==='breach'));
      assert.equal((await notices(C)).notices.length,0);
@@ -1850,6 +1863,40 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await ex(B,'exchangeCreate',{kind:'proposal',recipientId:A.member,title:'Push me',body:'',dueAt:null})).status,200);
      const after=await pushStatus();assert.ok(after&&(!before||BigInt(after)>BigInt(before)),JSON.stringify({before,after}));
      assert.equal((await ex(A,'noticeRead',{ids:null})).status,200);
+     // Older member notices remain accessible without marking unseen pages read.
+     const seeded=(await db.owner.query("INSERT INTO pactaris.member_notices(household_id,recipient_id,actor_id,kind,resource_id) SELECT $1,$2,NULL,'permission',$3 FROM generate_series(1,32) RETURNING id",[home.householdId,A.member,operationId])).rows.map((row:any)=>row.id);
+     const first=await notices(A);assert.equal(first.notices.length,30);assert.ok(first.nextCursor);assert.equal(first.unread,32);
+     assert.equal((await api(base+'/exchange/notices?after='+first.nextCursor,'GET',undefined,B.session)).status,404);
+     assert.equal((await ex(A,'noticeRead',{ids:first.notices.map((n:any)=>n.id)})).status,200);
+     const older=await api(base+'/exchange/notices?after='+first.nextCursor,'GET',undefined,A.session);assert.equal(older.status,200);assert.ok(older.data.notices.filter((n:any)=>!n.read).length>=2);assert.equal(older.data.unread,2);
+     assert.equal(new Set([...first.notices,...older.data.notices].map((n:any)=>n.id)).size,first.notices.length+older.data.notices.length);
+     await db.owner.query('DELETE FROM pactaris.member_notices WHERE id=ANY($1::uuid[])',[seeded]);
+     // Sender preferences suppress only the recipient's new notices; the exchange still exists.
+     const mutedSender=await ex(A,'noticeConfigure',{muted:[],mutedPeople:[B.member]});assert.equal(mutedSender.status,200,JSON.stringify(mutedSender.data));
+     assert.ok(mutedSender.data.mutedPeople.includes(B.member));
+     // The preference is part of the recipient's export and is removed when its sender is erased.
+     let exportCursor:string|null=null,exported:any[]=[];
+     do{const page:any=(await db.owner.query('SELECT pactaris.authority_export_page($1,$2,$3,25) AS result',[place.instanceId,A.account.id,exportCursor])).rows[0].result;exported.push(...page.records);exportCursor=page.next;}while(exportCursor);
+     assert.ok(exported.some((row:any)=>row.kind==='noticePreferences'&&row.muted_people.includes(B.member)));
+     const privacyTx=await db.owner.connect();try{await privacyTx.query('BEGIN');
+      await privacyTx.query('UPDATE pactaris.memberships SET account_erased_at=now() WHERE household_id=$1 AND id=$2',[home.householdId,B.member]);
+      const remaining=(await privacyTx.query('SELECT muted_people FROM pactaris.notice_preferences WHERE household_id=$1 AND member_id=$2',[home.householdId,A.member])).rows[0].muted_people;
+      assert.ok(!remaining.includes(B.member));
+     }finally{await privacyTx.query('ROLLBACK');privacyTx.release();}
+     const afterMute=await ex(B,'exchangeCreate',{kind:'proposal',recipientId:A.member,title:'Sender muted',body:'',dueAt:null});assert.equal(afterMute.status,200);
+     assert.ok(!(await notices(A)).notices.some((n:any)=>n.resourceId===afterMute.data.exchangeId));
+     assert.ok((await list(A)).exchanges.some((x:any)=>x.id===afterMute.data.exchangeId));
+     assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[A.member]})).status,400);
+     assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[B.member,B.member]})).status,400);
+     assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[]})).status,200);
+     const queued=await ex(B,'exchangeCreate',{kind:'proposal',recipientId:A.member,title:'Queued',body:'',dueAt:null});assert.equal(queued.status,200);assert.ok(await pushStatus());
+     const pausedSenderTx=await db.owner.connect();try{await pausedSenderTx.query('BEGIN');
+      await pausedSenderTx.query('UPDATE pactaris.memberships SET safety_paused=true WHERE household_id=$1 AND id=$2',[home.householdId,B.member]);
+      const status=(await pausedSenderTx.query("SELECT pactaris.task_delivery_command($1,$2,$3,$4,'partnerPushStatus',$5) AS r",[home.householdId,place.instanceId,A.account.id,randomUUID(),{membershipId:A.member,pushAfter:'0',pushSince:'2000-01-01T00:00:00.000Z'}])).rows[0].r;
+      assert.equal(status.pushSequence,null);
+     }finally{await pausedSenderTx.query('ROLLBACK');pausedSenderTx.release();}
+     assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[B.member]})).status,200);assert.equal(await pushStatus(),null);
+     assert.equal((await ex(A,'noticeConfigure',{muted:[],mutedPeople:[]})).status,200);assert.equal((await ex(A,'noticeRead',{ids:null})).status,200);
      // Muted kinds create no notice (and so no push); unmuting restores them.
      assert.equal((await ex(A,'noticeConfigure',{muted:['proposal','bogus']})).status,400);
      const muted=await ex(A,'noticeConfigure',{muted:['proposal']});assert.equal(muted.status,200);assert.deepEqual(muted.data.muted,['proposal']);
@@ -1890,6 +1937,23 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       return post(A,'partnerAssign',{assigneeId:D.member,agreementId:choice.agreementId,agreementVersion:choice.agreementVersion,epoch:choice.epoch,safetyVersion:choice.safetyVersion,fields:taskFields,policyId:policy.policyId,policyVersion:policy.version});
      };
      const assigned=await direct();assert.equal(assigned.status,200,JSON.stringify(assigned.data));assert.equal((await read(D,assigned.data.taskId)).state,'assigned');
+     // Freshness cursors are bound to the exact membership and never depend on notice settings.
+     const changes=async(p:Person,cursor?:string)=>api(base+'/workspace/changes'+(cursor?'?cursor='+cursor:''),'GET',undefined,p.session);
+     const startChanges=await changes(D);assert.equal(startChanges.status,200,JSON.stringify(startChanges.data));assert.ok(startChanges.data.cursor);assert.deepEqual(startChanges.data.changed,['catalog','dynamic','library','notices','routines','tasks','workspace']);
+     assert.equal((await changes(A,startChanges.data.cursor)).status,409);
+     // Muting a sender does not hide or block a task that sender assigns.
+     const configure=(input:Record<string,unknown>)=>api(base+'/exchange/noticeConfigure','POST',{operationId:randomUUID(),...input},D.session);
+     assert.equal((await configure({muted:[],mutedPeople:[A.member]})).status,200);
+     const quietTask=await direct();assert.equal(quietTask.status,200);assert.equal((await read(D,quietTask.data.taskId)).state,'assigned');
+     const fresh=await changes(D,startChanges.data.cursor);assert.equal(fresh.status,200,JSON.stringify(fresh.data));assert.ok(fresh.data.changed.includes('tasks'));assert.ok(fresh.data.changed.includes('notices'));
+     const unchanged=await changes(D,fresh.data.cursor);assert.equal(unchanged.status,200);assert.deepEqual(unchanged.data.changed,[]);assert.equal(unchanged.data.cursor,fresh.data.cursor);
+     const parallel=await Promise.all([direct(),direct()]);assert.ok(parallel.every(r=>r.status===200));
+     const parallelChanges=await changes(D,unchanged.data.cursor);assert.equal(parallelChanges.status,200);assert.ok(parallelChanges.data.changed.includes('tasks'));
+     const caughtUp=await changes(D,parallelChanges.data.cursor);assert.equal(caughtUp.status,200);assert.deepEqual(caughtUp.data.changed,[]);
+     for(const r of parallel)assert.equal((await move(A,'partnerCancel',r.data.taskId)).status,200);
+     const inbox=await post(D,'partnerInbox',{});assert.equal(inbox.status,200);assert.ok(!inbox.data.inbox.some((item:any)=>item.taskId===quietTask.data.taskId));
+     assert.equal((await configure({muted:[],mutedPeople:[]})).status,200);
+     assert.equal((await move(A,'partnerCancel',quietTask.data.taskId)).status,200);
      // A personal pause blocks; resuming restores authority without any re-acceptance.
      assert.equal((await consent(D,'selfPause',{})).status,200);
      assert.equal((await au(A,'pointsAdjust',{subjectId:D.member,points:5,reason:''})).status,409);
@@ -1904,6 +1968,14 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      // Habits the Dom sets, with automatic outcomes; a pause means the period is skipped.
      const habitFields={title:'Morning check-in',description:'',period:'daily',mode:'minimum',target:1,timeZone:'UTC',rewardPoints:3,penaltyPoints:2,punishment:'Corner time',milestoneEvery:null,milestonePoints:null};
      const habit=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:habitFields});assert.equal(habit.status,200,JSON.stringify(habit.data));
+     // An automatic habit notice is still readable but cannot be pushed while its holder is paused.
+     const pushPauseTx=await db.owner.connect();
+     try{await pushPauseTx.query('BEGIN');
+      const visible=()=>pushPauseTx.query("SELECT pactaris.notice_visible(household_id,$2,'habit',id) AS readable,pactaris.notice_push_visible(household_id,$2,'habit',id) AS deliverable FROM pactaris.authority_habits WHERE id=$1",[habit.data.resourceId,D.member]);
+      assert.deepEqual((await visible()).rows[0],{readable:true,deliverable:true});
+      await pushPauseTx.query('UPDATE pactaris.memberships SET safety_paused=true WHERE id=$1',[A.member]);
+      assert.deepEqual((await visible()).rows[0],{readable:true,deliverable:false});
+     }finally{await pushPauseTx.query('ROLLBACK');pushPauseTx.release();}
      assert.equal((await au(B,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:habitFields})).status,404);
      assert.equal((await au(D,'habitRecord',{habitId:habit.data.resourceId,count:1})).status,200);
      assert.equal((await au(B,'habitRecord',{habitId:habit.data.resourceId,count:1})).status,404);
