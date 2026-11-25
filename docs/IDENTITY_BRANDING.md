@@ -5,7 +5,7 @@ This uses the corrected Pactaris artwork and CSS from the original Authentik bra
 ## Prepare
 
 1. Keep an authenticated administrator session open. In **System > Brands**, identify the existing Brand used for the public Identity hostname. If it uses the fallback Brand, record that Brand's actual domain field. Record its UUID, domain, and the assigned web certificate.
-2. Use `--upload-assets` to prepare the branded media from this checkout. For a manual rollout, in **Customization > Files**, upload `logo-dark.svg`, `favicon.svg` and `flow-background.jpg` from [apps/identity/branding](../apps/identity/branding). Use the folder `pactaris` for the new media paths. Keep previous files available for rollback.
+2. Use `--upload-assets` to prepare the branded media from this checkout. For a manual rollout, in **Customization > Files**, upload `logo-dark.svg`, `favicon.svg` and `flow-background.svg` from [apps/identity/branding](../apps/identity/branding). Use the folder `pactaris` for the new media paths. Keep previous files available for rollback.
 3. Use an Authentik API token with permission to read and change that Brand. The upload option also requires Authentik permission to view and manage media. Enter it at the interactive prompt. Keep the backup in a root-only directory.
 
 Run a preview from the reviewed checkout on the Identity host. Use the exact UUID and domain recorded above.
@@ -48,6 +48,22 @@ python3 scripts/identity_brand.py --brand "$PACTARIS_BRAND_UUID" --domain "$PACT
 ```
 
 [Authentik Branding](https://docs.goauthentik.io/customize/branding/) · [File picker paths](https://docs.goauthentik.io/customize/file-picker/) · [Brand update API](https://api.goauthentik.io/reference/core-brands-partial-update/)
+
+## Look and footer (25 November 2026)
+
+Owner decision: Identity looks like the app and the main website on every flow.
+
+- The flow background is `flow-background.svg`, the same dark gradient as the website hero. No flow has its own background, so every flow uses the Brand default.
+- `pactaris-authentik.css` gives the flow card the app's surface colour, border and radius, and hides authentik's "Powered by authentik" footer line.
+- Set manually, outside the script:
+  - Brand attribute `{"settings": {"theme": {"base": "dark"}}}`: dark only, like the app.
+  - **System > Settings > Footer links**: Privacy → `https://pactaris.app/privacy`, Terms → `https://pactaris.app/terms`.
+- Flow titles without `%(app)s`:
+  - `default-authentication-flow`: "Welcome to Pactaris"
+  - both authorization flows: `identity.redirectTitle`
+  - `default-provider-invalidation-flow`: `identity.signedOutTitle`
+
+On the live Identity the Brand pointed at media files that no longer existed, so the logo and background were missing. The assets were uploaded again under content-versioned names and the Brand now points at those.
 
 ## Rehearsal evidence
 

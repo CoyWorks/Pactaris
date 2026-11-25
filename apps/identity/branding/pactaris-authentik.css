@@ -38,3 +38,17 @@ ak-flow-executor::part(locale-select) { /* keep language selector available */ }
 ak-flow-executor::part(branding) {
   background-color: #241a30;
 }
+
+/* Match the Pactaris app and website: same dark surfaces, border and radius on every flow. */
+ak-flow-executor::part(main) {
+  background-color: #1f1830;
+  border: 1px solid #2f2645;
+  border-radius: 18px;
+  overflow: hidden;
+}
+ak-flow-executor::part(branding) {
+  border-bottom: 1px solid #2f2645;
+}
+
+/* Footer: show only the configured links (Privacy, Terms), not the "Powered by" line. */
+ak-brand-links li[data-kind="text"] { display: none; }
