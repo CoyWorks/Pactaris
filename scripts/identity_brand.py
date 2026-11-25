@@ -20,7 +20,7 @@ BRANDING = SOURCE / 'apps/identity/branding'
 MEDIA = {
     'branding_logo': 'pactaris/logo-dark.svg',
     'branding_favicon': 'pactaris/favicon.svg',
-    'branding_default_flow_background': 'pactaris/flow-background.jpg',
+    'branding_default_flow_background': 'pactaris/flow-background.svg',
 }
 FIELDS = ('branding_title', 'branding_custom_css', *MEDIA)
 # Authentik renders a flow's raw title before its first challenge arrives, so the
@@ -66,7 +66,7 @@ def asset_exists(origin, token, name):
 def upload_asset(origin, token, name, content):
     boundary = uuid4().hex
     filename = Path(name).name
-    mime = 'image/svg+xml' if filename.endswith('.svg') else 'image/jpeg'
+    mime = 'image/svg+xml'
     form = (
         f'--{boundary}\r\nContent-Disposition: form-data; name="usage"\r\n\r\nmedia\r\n'
         f'--{boundary}\r\nContent-Disposition: form-data; name="name"\r\n\r\n{name}\r\n'
