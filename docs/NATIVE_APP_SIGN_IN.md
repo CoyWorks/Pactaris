@@ -36,6 +36,7 @@ Native passkeys through the platform credential APIs against Identity. This need
 ## Decided (owner, 25 November 2026)
 
 - A periodic full login on a trusted phone is fine, as long as notifications keep flowing in the meantime (point 4). The proposed interval is 30 days.
+- The web app keeps its current behaviour for now: push stays bound to the session (docs/WEB_PUSH.md), so notifications stop when the app session ends, until the next sign-in.
 - Household actions are allowed after a fingerprint sign-in. Only sensitive profile actions ask for confirmation with password or second step (point 6).
 
 ## Open questions
