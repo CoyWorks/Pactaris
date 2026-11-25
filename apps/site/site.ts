@@ -1,9 +1,9 @@
 // The public main website (pactaris.app): a few static pages rendered once from the message
 // catalog. No cookies, no scripts, no API; sign-in and sign-up link to the app origin.
 import {createTranslator,type MessageKey} from '../../packages/i18n/index.js';
-import {logoSvg,faviconSvg,siteCss} from './assets.js';
+import {logoSvg,faviconSvg,siteCss,logoEmailPng} from './assets.js';
 
-export type SiteFile={type:string;body:string};
+export type SiteFile={type:string;body:string|Buffer};
 type T=ReturnType<typeof createTranslator>;
 
 const escape=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
@@ -85,6 +85,7 @@ export function renderSite(language:string,appOrigin:string,siteOrigin:string,si
     ['/site.css',{type:'text/css; charset=utf-8',body:siteCss}],
     ['/logo.svg',{type:'image/svg+xml',body:logoSvg}],
     ['/favicon.svg',{type:'image/svg+xml',body:faviconSvg}],
+    ['/logo-email.png',{type:'image/png',body:logoEmailPng}],
     ['/robots.txt',{type:'text/plain; charset=utf-8',body:`User-agent: *\nAllow: /\n`}],
   ]);
 }

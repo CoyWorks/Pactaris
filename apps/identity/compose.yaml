@@ -41,6 +41,8 @@ services:
       - "${BIND_ADDRESS:?}:${HTTPS_PORT:?}:9443"
     volumes:
       - media:/data
+      # Pactaris email templates (docs/IDENTITY_BRANDING.md), shipped with each release.
+      - ./templates:/templates:ro
   worker:
     image: ghcr.io/goauthentik/server:2026.8.5@sha256:602227a86455d6772e3d16b7d852713c4f864f40df5df894abd1285bb53979a5
     command: worker
@@ -51,6 +53,8 @@ services:
         condition: service_healthy
     volumes:
       - media:/data
+      # Pactaris email templates (docs/IDENTITY_BRANDING.md), shipped with each release.
+      - ./templates:/templates:ro
 # No Docker socket mount; this app does not require automatic outpost deployment.
 volumes:
   database:

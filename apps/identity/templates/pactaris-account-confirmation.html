@@ -1,0 +1,42 @@
+{% load i18n %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="supported-color-schemes" content="dark light">
+<title>Confirm your email address for Pactaris</title>
+</head>
+<body style="margin:0;padding:0;background:#14101f;">
+<!-- Pactaris email confirmation (docs/IDENTITY_BRANDING.md). One image: the logo from the main website; no tracking. -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#14101f;">
+<tr><td align="center" style="padding:32px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#1f1830;border:1px solid #2f2645;border-radius:18px;font-family:Inter,system-ui,-apple-system,'Segoe UI',Arial,sans-serif;">
+<tr><td style="padding:28px 32px 0 32px;">
+<img src="https://pactaris.app/logo-email.png" width="156" height="44" alt="Pactaris" style="display:block;border:0;outline:none;text-decoration:none;height:44px;width:156px;color:#f8f1f8;font-size:22px;font-weight:700;">
+</td></tr>
+<tr><td style="padding:20px 32px 0 32px;">
+<h1 style="margin:0;font-size:24px;line-height:1.25;font-weight:700;color:#f1ecfb;">Confirm your email address</h1>
+</td></tr>
+<tr><td style="padding:12px 32px 0 32px;font-size:16px;line-height:1.6;color:#d6cde8;">
+{% if user.username %}Hi {{ user.username }}, p{% else %}P{% endif %}lease confirm that this is your email address. The link works for 30 minutes.
+</td></tr>
+<tr><td style="padding:24px 32px 8px 32px;">
+<a href="{{ url }}" rel="noopener noreferrer" target="_blank" style="display:inline-block;background:#f1ecfb;color:#1a1428;text-decoration:none;font-weight:600;font-size:16px;padding:14px 24px;border-radius:12px;">Confirm email address</a>
+</td></tr>
+<tr><td style="padding:16px 32px 0 32px;font-size:13px;line-height:1.6;color:#b3a8c9;word-break:break-all;overflow-wrap:anywhere;">
+If the button does not work, copy this link into your browser:<br><a href="{{ url }}" style="color:#c4b0ff;">{{ url }}</a>
+</td></tr>
+<tr><td style="padding:16px 32px 28px 32px;font-size:13px;line-height:1.6;color:#b3a8c9;">
+Did not ask for this? Then you can ignore this email; nothing changes.
+</td></tr>
+</table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;font-family:Inter,system-ui,-apple-system,'Segoe UI',Arial,sans-serif;">
+<tr><td align="center" style="padding:20px 16px 0 16px;font-size:12px;line-height:1.6;color:#8f85a6;">
+Pactaris · For adults (18+) only · <a href="https://pactaris.app/privacy" style="color:#8f85a6;">Privacy</a> · <a href="mailto:info@pactaris.app" style="color:#8f85a6;">info@pactaris.app</a>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

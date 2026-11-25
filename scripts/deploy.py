@@ -625,6 +625,8 @@ def deploy(args):
                     run([shutil.which('node'), str(release / 'dist/server/scripts/migrate.js'), args.component],
                         cwd=release, env={**os.environ, 'APP_CONFIG': str(base / 'config.json')})
             if args.component == 'identity':
+                # authentik runs as an unprivileged container user and only needs to read the templates.
+                run(['chmod', '-R', 'a+rX', str(release / 'apps/identity/templates')])
                 run(compose(base, release) + ['config', '--quiet'])
                 if args.action != 'resume':
                     run(compose(base, release) + ['pull'])
