@@ -44,6 +44,16 @@ In Authentik, set the Email stages for local enrollment verification and recover
 
 With a fresh test account, check registration, receipt and consumption of the verification link, then sign in to Pactaris. Check password recovery, rejection of an expired or consumed link and authenticator enrollment and recovery for the administrator. Keep an active operator session during MFA rollout until a second operator sign-in and its recovery path succeed.
 
+## OVH MX Plan first-time setup
+
+On an already installed gateway, run the interactive helper as root:
+
+```bash
+python3 /opt/pactaris-source/scripts/setup-invitation-smtp.py
+```
+
+Enter the full OVH mailbox address and its password when prompted. The helper creates a private relay file with implicit TLS on port 465, a queue encryption key, and a root-only backup of the prior gateway configuration. It refuses to replace an existing relay file, configured relay path, or backup. Preserve the relay file and key in protected backups. The command prints the gateway and worker restart command; run it separately, then verify readiness with `bash /opt/pactaris-source/status.sh --component gateway --root /opt/pactaris`. No email is sent until an invitation is created or an operator sends a test. Existing operator-saved SMTP credentials override the file defaults. Real relay delivery remains operator acceptance.
+
 ## Automatic invitation email
 
 Enable invitation email once on the central gateway. Each Instance keeps deciding whether its invitation is valid. The gateway uses the configured relay to send a generic message with a link at the configured Pactaris origin. Use the same relay as Identity if desired. Keep SMTP access and encryption keys on the central hosts.
