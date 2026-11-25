@@ -1,0 +1,205 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+# Self-service account creation for Pactaris (docs/ACCOUNT_CREATION.md), authentik 2026.8.5.
+# Username, email and password; the account stays inactive until the emailed link is opened,
+# which also records the address as verified (same attribute as pactaris-account-verify-email).
+# After this import, set this flow as the enrollment flow of the identification stage used by
+# the authentication flow, so "Sign up" appears on the sign-in page.
+version: 1
+metadata:
+  name: Pactaris-Enrollment
+  labels:
+    blueprints.goauthentik.io/instantiate: "false"
+context:
+  # Where people land after confirming: the app signs them in with the new Identity session.
+  done_url: https://app.pactaris.app/auth/login
+entries:
+  - model: authentik_stages_prompt.prompt
+    id: field-username
+    state: present
+    identifiers:
+      name: pactaris-enrollment-field-username
+    attrs:
+      field_key: username
+      label: Username
+      type: username
+      required: true
+      placeholder: Username
+      placeholder_expression: false
+      order: 0
+  - model: authentik_stages_prompt.prompt
+    id: field-email
+    state: present
+    identifiers:
+      name: pactaris-enrollment-field-email
+    attrs:
+      field_key: email
+      label: Email address
+      type: email
+      required: true
+      placeholder: Email address
+      placeholder_expression: false
+      order: 10
+  - model: authentik_stages_prompt.prompt
+    id: field-password
+    state: present
+    identifiers:
+      name: pactaris-enrollment-field-password
+    attrs:
+      field_key: password
+      label: Password
+      type: password
+      required: true
+      placeholder: Password
+      placeholder_expression: false
+      order: 20
+  - model: authentik_stages_prompt.prompt
+    id: field-password-repeat
+    state: present
+    identifiers:
+      name: pactaris-enrollment-field-password-repeat
+    attrs:
+      field_key: password_repeat
+      label: Repeat password
+      type: password
+      required: true
+      placeholder: Repeat password
+      placeholder_expression: false
+      order: 30
+  - model: authentik_stages_prompt.prompt
+    id: field-adult
+    state: present
+    identifiers:
+      name: pactaris-enrollment-field-adult
+    attrs:
+      field_key: adult
+      label: I am 18 years or older
+      type: checkbox
+      required: true
+      placeholder_expression: false
+      order: 40
+
+  - model: authentik_policies_password.passwordpolicy
+    id: password-policy
+    state: present
+    identifiers:
+      name: pactaris-enrollment-password
+    attrs:
+      password_field: password
+      error_message: Choose a longer or less common password (at least 10 characters).
+      check_static_rules: true
+      length_min: 10
+      amount_digits: 0
+      amount_uppercase: 0
+      amount_lowercase: 0
+      amount_symbols: 0
+      check_have_i_been_pwned: false
+      check_zxcvbn: true
+      zxcvbn_score_threshold: 2
+  - model: authentik_policies_expression.expressionpolicy
+    id: adult-policy
+    state: present
+    identifiers:
+      name: pactaris-enrollment-adult
+    attrs:
+      expression: |
+        # Pactaris is for adults only; the app asks again and records the confirmation.
+        if request.context.get("prompt_data", {}).get("adult") is True:
+            return True
+        ak_message("Pactaris is only for people aged 18 or older.")
+        return False
+
+  - model: authentik_stages_prompt.promptstage
+    id: prompt-stage
+    state: present
+    identifiers:
+      name: pactaris-enrollment-prompt
+    attrs:
+      fields:
+        - !KeyOf field-username
+        - !KeyOf field-email
+        - !KeyOf field-password
+        - !KeyOf field-password-repeat
+        - !KeyOf field-adult
+      validation_policies:
+        - !KeyOf password-policy
+        - !KeyOf adult-policy
+  - model: authentik_stages_user_write.userwritestage
+    id: write-stage
+    state: present
+    identifiers:
+      name: pactaris-enrollment-write
+    attrs:
+      user_creation_mode: always_create
+      create_users_as_inactive: true
+      user_type: internal
+  - model: authentik_stages_email.emailstage
+    id: email-stage
+    state: present
+    identifiers:
+      name: pactaris-enrollment-email
+    attrs:
+      use_global_settings: true
+      template: email/account_confirmation.html
+      subject: Confirm your email address for Pactaris
+      token_expiry: minutes=30
+      activate_user_on_success: true
+  - model: authentik_policies_expression.expressionpolicy
+    id: record-verified
+    state: present
+    identifiers:
+      name: pactaris-enrollment-record-verified-email
+    attrs:
+      expression: |
+        # Runs after the email stage: only the emailed link for this same account records it.
+        user = request.context.get("pending_user")
+        token = request.context.get("is_restored")
+        if user and user.pk and user.email and token and token.user_id == user.pk:
+            user.attributes["email_verified_address"] = user.email
+            user.save(update_fields=["attributes"])
+        return True
+  - model: authentik_stages_user_login.userloginstage
+    id: login-stage
+    state: present
+    identifiers:
+      name: pactaris-enrollment-login
+    attrs:
+      session_duration: seconds=0
+  - model: authentik_stages_redirect.redirectstage
+    id: done-stage
+    state: present
+    identifiers:
+      name: pactaris-enrollment-done
+    attrs:
+      mode: static
+      target_static: !Context done_url
+      keep_context: false
+
+  - model: authentik_flows.flow
+    id: flow
+    state: present
+    identifiers:
+      slug: pactaris-enrollment
+    attrs:
+      name: Pactaris - create account
+      title: Create your Pactaris account
+      designation: enrollment
+      authentication: require_unauthenticated
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf flow, stage: !KeyOf prompt-stage}
+    attrs: {order: 10}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf flow, stage: !KeyOf write-stage}
+    attrs: {order: 20}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf flow, stage: !KeyOf email-stage}
+    attrs: {order: 30}
+  - model: authentik_flows.flowstagebinding
+    id: login-binding
+    identifiers: {target: !KeyOf flow, stage: !KeyOf login-stage}
+    attrs: {order: 40, evaluate_on_plan: false, re_evaluate_policies: true}
+  - model: authentik_policies.policybinding
+    identifiers: {target: !KeyOf login-binding, order: 0}
+    attrs: {policy: !KeyOf record-verified}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf flow, stage: !KeyOf done-stage}
+    attrs: {order: 50}

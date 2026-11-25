@@ -89,6 +89,8 @@ export type GatewayConfig = Omit<InstanceConfig, 'instanceId' | 'oidc' | 'delega
   session: { idleSeconds: number; absoluteSeconds: number; requireVerifiedEmail: boolean; passkeyIsMfa: boolean; app: { idleSeconds: number; absoluteSeconds: number } };
   onboarding: { maxOwnedHouseholds: number };
   accountSecurity?: AccountSecurityConfig;
+  /** The public main website, served on its own origin(s); aliases redirect to `origin`. */
+  site?: { origin: string; aliases: string[]; signUpUrl?: string };
 };
 export const accountFlowKinds = ['password','totp','passkey','recovery','verifyEmail'] as const;
 export type AccountFlowKind = typeof accountFlowKinds[number];
@@ -139,11 +141,29 @@ export function parseGatewayConfig(value: unknown, development = false): Gateway
     operatorSubjects.some(subject=>typeof subject!=='string'||!subject.trim()||subject.length>255))
     invalid('operatorSubjects');
   const onboarding=object(c.onboarding??{maxOwnedHouseholds:1},'onboarding');
+  let site:GatewayConfig['site'];
+  if(c.site!==undefined){
+    const v=object(c.site,'site'),siteOrigin=origin(v.origin,'site.origin',development),aliases=v.aliases??[];
+    if(!Array.isArray(aliases)||aliases.length>5)invalid('site.aliases');
+    const list=aliases.map((a,i)=>origin(a,'site.aliases.'+i,development));
+    const hosts=[siteOrigin,...list].map(o=>new URL(o).host);
+    if(new Set(hosts).size!==hosts.length||hosts.includes(new URL(base.publicOrigin).host))invalid('site');
+    let signUpUrl:string|undefined;
+    if(v.signUpUrl!==undefined){
+      const parsed=typeof v.signUpUrl==='string'&&URL.canParse(v.signUpUrl)?new URL(v.signUpUrl):undefined;
+      if(!parsed||parsed.username||parsed.password||parsed.search||parsed.hash)invalid('site.signUpUrl');
+      origin(parsed.origin,'site.signUpUrl',development);signUpUrl=parsed.href;
+    }
+    site={origin:siteOrigin,aliases:list,...(signUpUrl?{signUpUrl}:{})};
+  }
+  // The delegation issuer is an identifier the Instances trust. It defaults to the public origin and
+  // can stay at an earlier origin when the app moves, so Instance configuration need not change.
+  const issuer=d.issuer===undefined?base.publicOrigin:origin(d.issuer,'delegation.issuer',development);
   return { ...shared, gatewayId: instanceId,operatorSubjects,
     webPushFile: c.webPushFile===undefined?undefined:file(c.webPushFile,'webPushFile'),
     invitationMailFile: c.invitationMailFile===undefined ? undefined : file(c.invitationMailFile,'invitationMailFile'), oidc: { ...oidc, clientSecretFile: file(o.clientSecretFile,'oidc.clientSecretFile') },
-    delegation: { issuer: base.publicOrigin, keyId, privateKeyFile: file(d.privateKeyFile,'delegation.privateKeyFile') },
-    trustedProxyAddresses: proxies, ...(accountSecurity?{accountSecurity}:{}), session: {idleSeconds,absoluteSeconds,requireVerifiedEmail,passkeyIsMfa,app:{idleSeconds:appIdle,absoluteSeconds:appAbsolute}},onboarding:{maxOwnedHouseholds:integer(onboarding.maxOwnedHouseholds,'onboarding.maxOwnedHouseholds',1,20)} };
+    delegation: { issuer, keyId, privateKeyFile: file(d.privateKeyFile,'delegation.privateKeyFile') },
+    trustedProxyAddresses: proxies, ...(accountSecurity?{accountSecurity}:{}), session: {idleSeconds,absoluteSeconds,requireVerifiedEmail,passkeyIsMfa,app:{idleSeconds:appIdle,absoluteSeconds:appAbsolute}},onboarding:{maxOwnedHouseholds:integer(onboarding.maxOwnedHouseholds,'onboarding.maxOwnedHouseholds',1,20)},...(site?{site}:{}) };
 }
 export function loadGatewayConfig(path: string, development = false): GatewayConfig {
   try { return parseGatewayConfig(JSON.parse(readFileSync(path,'utf8')),development); }

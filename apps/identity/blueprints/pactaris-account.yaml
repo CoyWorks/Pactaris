@@ -10,9 +10,9 @@ metadata:
     blueprints.goauthentik.io/instantiate: "false"
 context:
   # Where every flow ends. Must be the configured Pactaris public origin.
-  return_url: https://pactaris.app/profile
+  return_url: https://app.pactaris.app/profile
   # After confirming an email address: sign in again so the new claim reaches Pactaris.
-  verified_return_url: https://pactaris.app/auth/login
+  verified_return_url: https://app.pactaris.app/auth/login
   service_account: pactaris-gateway-account
 entries:
   - model: authentik_stages_redirect.redirectstage

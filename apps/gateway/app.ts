@@ -36,6 +36,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
 import type { GatewayConfig } from '../../packages/config/index.js';
 import type { OidcLogin } from '../../packages/auth/oidc.js';
+import { siteRoutes } from './site-routes.js';
 import { hash, type GatewayStore, type Session } from './store.js';
 import type { HouseholdClient } from '../../packages/routing/private-client.js';
 import { uuid } from '../../packages/auth/delegation.js';
@@ -81,6 +82,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
 
   app.get('/health/live',(_req,res)=>{res.json({status:'alive'});});
   app.get('/health/ready',async(_req,res)=>{try{await store.probe();res.json({status:'ready'});}catch{res.status(503).json({status:'unavailable',messageKey:'errors.unavailable'});}});
+  if(config.site)siteRoutes(app,config.site,config.publicOrigin,config.locale.language);
   app.use((req,res,next)=>{if(req.get('host')!==new URL(config.publicOrigin).host){res.status(400).json({code:'invalid_host',messageKey:'errors.request'});return;}next();});
   app.get('/api/status',async(req,res)=>{
     let readiness='unavailable';try{await store.probe();readiness='ready';}catch{}

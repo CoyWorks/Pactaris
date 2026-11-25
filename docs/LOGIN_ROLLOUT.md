@@ -88,7 +88,7 @@ proxy_ssl_verify_depth 2;
 proxy_ssl_trusted_certificate /etc/nginx/pactaris/backend-ca.crt;
 ```
 
-Preserve the working identity.coyworks.nl backend/proxy until a separate Identity-domain migration is performed. Public app and IdP origins need not share a parent domain. The public app callback is at the gateway, not an Instance. The www hostname should redirect to the configured canonical app origin.
+Preserve the working identity.coyworks.nl backend/proxy until a separate Identity-domain migration is performed. Public app and IdP origins need not share a parent domain. The public app callback is at the gateway, not an Instance. The www hostname should redirect to the configured canonical app origin. Since 25 November 2026 the app moves to `app.pactaris.app` and `pactaris.app` becomes the main website; see [MAIN_SITE.md](MAIN_SITE.md).
 
 Do not publish/route `/internal/` APIs as browser features. After validating the gateway, retire/restrict the old browser-facing Instance test site; keep its operational/private upstream connectivity. A normal user never sees a server chooser, Instance URL, data-plane token or IdP secret.
 

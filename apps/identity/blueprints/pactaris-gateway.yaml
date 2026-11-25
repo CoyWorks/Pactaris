@@ -10,8 +10,8 @@ context:
   application_slug: pactaris
   provider_name: Pactaris-OIDC
   profile_mapping_name: pactaris-profile
-  instance_origin: https://pactaris.app/
-  redirect_uri: https://pactaris.app/auth/oidc/callback
+  instance_origin: https://app.pactaris.app/
+  redirect_uri: https://app.pactaris.app/auth/oidc/callback
   signing_key_name: authentik Self-signed Certificate
 entries:
   # Minimal profile: do not disclose central group memberships through the profile scope.
