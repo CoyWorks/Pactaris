@@ -90,11 +90,12 @@ export type GatewayConfig = Omit<InstanceConfig, 'instanceId' | 'oidc' | 'delega
   onboarding: { maxOwnedHouseholds: number };
   accountSecurity?: AccountSecurityConfig;
 };
-export const accountFlowKinds = ['password','totp','passkey','recovery'] as const;
+export const accountFlowKinds = ['password','totp','passkey','recovery','verifyEmail'] as const;
 export type AccountFlowKind = typeof accountFlowKinds[number];
 export type AccountSecurityConfig = { identityOrigin: string; tokenFile: string; loginFlow: string; flows: Record<AccountFlowKind,string> };
 const defaultAccountFlows: Record<AccountFlowKind,string> = {
   password:'pactaris-account-password',totp:'pactaris-account-totp',passkey:'pactaris-account-passkey',recovery:'pactaris-account-recovery',
+  verifyEmail:'pactaris-account-verify-email',
 };
 // Self-service sign-in security through Identity (docs/ACCOUNT_SECURITY.md). Off unless configured.
 function parseAccountSecurity(value: unknown, issuer: string, development: boolean): AccountSecurityConfig|undefined {

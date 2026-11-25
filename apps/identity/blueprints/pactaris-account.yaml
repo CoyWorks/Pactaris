@@ -11,6 +11,8 @@ metadata:
 context:
   # Where every flow ends. Must be the configured Pactaris public origin.
   return_url: https://pactaris.app/profile
+  # After confirming an email address: sign in again so the new claim reaches Pactaris.
+  verified_return_url: https://pactaris.app/auth/login
   service_account: pactaris-gateway-account
 entries:
   - model: authentik_stages_redirect.redirectstage
@@ -138,6 +140,83 @@ entries:
   - model: authentik_flows.flowstagebinding
     identifiers: {target: !KeyOf recovery-flow, stage: !KeyOf return}
     attrs: {order: 100}
+
+  # Email confirmation (docs/VERIFIED_EMAIL.md). Authentik 2025.10+ asserts email_verified
+  # false by default; this flow records the confirmed address, and the pactaris-email scope
+  # mapping asserts true only while the current address equals the confirmed one.
+  - model: authentik_policies_expression.expressionpolicy
+    id: pending-current-user
+    state: present
+    identifiers:
+      name: pactaris-account-pending-current-user
+    attrs:
+      expression: |
+        # The email stage needs a pending user; in this flow it is the signed-in person.
+        plan = request.context.get("flow_plan")
+        if plan and request.user.is_authenticated and "pending_user" not in plan.context:
+            plan.context["pending_user"] = request.user
+        return True
+  - model: authentik_policies_expression.expressionpolicy
+    id: record-verified-email
+    state: present
+    identifiers:
+      name: pactaris-account-record-verified-email
+    attrs:
+      expression: |
+        # Runs after the email stage. Only a flow token for this same account, created by
+        # the mandatory email stage, records the address it was sent to.
+        user = request.context.get("pending_user")
+        token = request.context.get("is_restored")
+        if user and user.pk and user.email and token and token.user_id == user.pk:
+            user.attributes["email_verified_address"] = user.email
+            user.save(update_fields=["attributes"])
+        return True
+  - model: authentik_stages_email.emailstage
+    id: verify-email-stage
+    state: present
+    identifiers:
+      name: pactaris-account-verify-email
+    attrs:
+      use_global_settings: true
+      template: email/account_confirmation.html
+      subject: Confirm your email address for Pactaris
+      token_expiry: minutes=30
+      activate_user_on_success: false
+  - model: authentik_stages_redirect.redirectstage
+    id: return-verified
+    state: present
+    identifiers:
+      name: pactaris-account-return-verified
+    attrs:
+      mode: static
+      target_static: !Context verified_return_url
+      keep_context: false
+  - model: authentik_flows.flow
+    id: verify-email-flow
+    state: present
+    identifiers:
+      slug: pactaris-account-verify-email
+    attrs:
+      name: Pactaris - confirm email address
+      title: Confirm your email address
+      designation: stage_configuration
+      authentication: require_authenticated
+      # Without an Identity session, follow the link's relative `next` to sign in first.
+      denied_action: message_continue
+  - model: authentik_flows.flowstagebinding
+    id: verify-email-binding
+    identifiers: {target: !KeyOf verify-email-flow, stage: !KeyOf verify-email-stage}
+    attrs: {order: 10, evaluate_on_plan: false, re_evaluate_policies: true}
+  - model: authentik_policies.policybinding
+    identifiers: {target: !KeyOf verify-email-binding, order: 0}
+    attrs: {policy: !KeyOf pending-current-user}
+  - model: authentik_flows.flowstagebinding
+    id: verify-return-binding
+    identifiers: {target: !KeyOf verify-email-flow, stage: !KeyOf return-verified}
+    attrs: {order: 100, evaluate_on_plan: false, re_evaluate_policies: true}
+  - model: authentik_policies.policybinding
+    identifiers: {target: !KeyOf verify-return-binding, order: 0}
+    attrs: {policy: !KeyOf record-verified-email}
 
   # The gateway's API identity: list and remove authenticator devices, nothing else.
   - model: authentik_rbac.role

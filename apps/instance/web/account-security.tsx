@@ -8,7 +8,7 @@ type Overview={available:false}|{available:true;links:Record<AccountFlowKind,str
 
 /** Password, authenticator apps, passkeys and recovery codes, managed from Pactaris.
  *  Identity keeps the credentials (docs/ACCOUNT_SECURITY.md). */
-export function AccountSecurity({csrfToken,language,format,timeZone}:{csrfToken:string;language:string;format:string;timeZone:string}){
+export function AccountSecurity({csrfToken,language,format,timeZone,emailVerified}:{csrfToken:string;language:string;format:string;timeZone:string;emailVerified?:boolean}){
   const t=createTranslator(language);
   const [data,setData]=useState<Overview>(),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>();
   const [notice,setNotice]=useState<MessageKey>(),[confirm,setConfirm]=useState<string>();
@@ -53,6 +53,9 @@ export function AccountSecurity({csrfToken,language,format,timeZone}:{csrfToken:
     {notice&&<p role="status">{t(notice)}</p>}
     {data.signInAgain&&<p className="notice">{t('security.signInAgain')} <a href={signInHref('/auth/reauth')}>{t('portal.signIn')}</a></p>}
     {data.devicesUnavailable&&<p role="alert">{t('security.devicesUnavailable')}</p>}
+    <h3>{t('security.emailTitle')}</h3>
+    <p className="muted">{t(emailVerified?'security.emailVerified':'security.emailNotVerified')}</p>
+    {!emailVerified&&link('verifyEmail','email.confirm')}
     <h3>{t('security.passwordTitle')}</h3>
     <p className="muted">{t('security.passwordHelp')}</p>
     {link('password','security.changePassword')}

@@ -8,6 +8,7 @@ People manage their password, passkeys (Face ID, fingerprint, device PIN), authe
 |---|---|
 | See your passkeys, authenticator apps and recovery codes | Pactaris. The gateway asks Identity for this person's own devices. |
 | Remove one | Pactaris, after a sign-in in the last five minutes. The gateway first checks that the device belongs to this person, then deletes it in Identity. |
+| Confirm your email address | An Identity flow sends a link; opening it records the address and signs you in to Pactaris again ([VERIFIED_EMAIL.md](VERIFIED_EMAIL.md)). |
 | Change password, add a passkey, authenticator app or recovery codes | A short flow on Identity in Pactaris styling. It ends with a redirect back to `/profile`. |
 
 - **Adding a method needs Identity's own page.** Passkeys are bound to the Identity hostname, so creating one must happen there. The same holds for password checks and authenticator secrets, which never pass through the gateway.
@@ -23,9 +24,10 @@ People manage their password, passkeys (Face ID, fingerprint, device PIN), authe
    - the role and the service account
 
    The flows reuse the default password prompt and write stages, and the default TOTP, WebAuthn and static setup stages. Passkey settings (user verification and a resident key) come from [PASSKEY_SIGN_IN.md](PASSKEY_SIGN_IN.md).
-2. **Add the claim.** In the profile scope mapping of the Pactaris provider (`pactaris-profile`, or `pactaris-instance1-profile` on the first deployment), add `"pactaris_identity_user": request.user.pk`. The repository blueprints include it.
-3. **Create a token.** In **Directory > Tokens and App passwords**, create a token for `pactaris-gateway-account` with intent **API** and no expiry. Copy the key once.
-4. **Store the token.** Write it next to the gateway's `oidc.clientSecretFile`, in the gateway secrets folder (`/opt/pactaris/gateway/secrets/identity-account.token` on the first deployment). Give it the same owner, group and mode (`root:<gateway service user>`, `0640`). The service runs with `ProtectSystem=strict`. It cannot enter `/etc/pactaris/bootstrap/login`, which is root-only on purpose because it holds migration and backup credentials. Never commit the token. Check that the service user can read it:
+2. **Switch the email mapping.** Identity needs SMTP (global `AUTHENTIK_EMAIL__*` settings). The blueprint also creates the flow `pactaris-account-verify-email`. In **Customization > Property Mappings**, create the scope mapping `pactaris-email` (scope `email`) with the expression from `apps/identity/blueprints/pactaris-gateway.yaml`. In the Pactaris provider, replace the managed email mapping with it. Existing accounts are unconfirmed until they confirm once.
+3. **Add the claim.** In the profile scope mapping of the Pactaris provider (`pactaris-profile`, or `pactaris-instance1-profile` on the first deployment), add `"pactaris_identity_user": request.user.pk`. The repository blueprints include it.
+4. **Create a token.** In **Directory > Tokens and App passwords**, create a token for `pactaris-gateway-account` with intent **API** and no expiry. Copy the key once.
+5. **Store the token.** Write it next to the gateway's `oidc.clientSecretFile`, in the gateway secrets folder (`/opt/pactaris/gateway/secrets/identity-account.token` on the first deployment). Give it the same owner, group and mode (`root:<gateway service user>`, `0640`). The service runs with `ProtectSystem=strict`. It cannot enter `/etc/pactaris/bootstrap/login`, which is root-only on purpose because it holds migration and backup credentials. Never commit the token. Check that the service user can read it:
 
 ```bash
 S=$(python3 -c "import json;print(json.load(open('/opt/pactaris/gateway/config.json'))['oidc']['clientSecretFile'])")
@@ -34,7 +36,7 @@ read -rs TOKEN && printf '%s' "$TOKEN" > "$N" && unset TOKEN
 chown --reference="$S" "$N" && chmod --reference="$S" "$N"
 sudo -u "$(stat -c %G "$S")" test -r "$N" && echo readable
 ```
-5. **Configure the gateway and restart it:**
+6. **Configure the gateway and restart it:**
 
 ```json
 "accountSecurity": {"tokenFile":"/opt/pactaris/gateway/secrets/identity-account.token"}
@@ -43,7 +45,7 @@ sudo -u "$(stat -c %G "$S")" test -r "$N" && echo readable
 Optional fields:
 - `identityOrigin`: defaults to the issuer's origin.
 - `loginFlow`: defaults to `default-authentication-flow`.
-- `flows`: per-flow slugs (`password`, `totp`, `passkey`, `recovery`).
+- `flows`: per-flow slugs (`password`, `totp`, `passkey`, `recovery`, `verifyEmail`).
 
 Without `accountSecurity`, the profile page says that sign-in settings are not available.
 

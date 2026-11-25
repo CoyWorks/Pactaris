@@ -150,6 +150,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       assert.equal((await store.consumeLogin('login-cookie','s1'))?.client,'app');
       assert.equal(await store.session(legacy,60,true),undefined);
       assert.ok(await store.session(verified,60,true));
+      assert.equal((await store.session(verified,60))?.emailVerified,true);assert.equal((await store.session(legacy,60))?.emailVerified,false);
       assert.equal((await store.sessionsForAccount(account.id,verified,true)).sessions.length,1);
       await store.account('https://idp.fixture.invalid/','subject-a','Fixture user','updated@example.invalid');
       assert.equal(await store.session(verified,60,true),undefined);

@@ -396,7 +396,7 @@ test('sign-in security: own devices only, CSRF and fresh sign-in before removal'
   const store=new FixtureStore() as FixtureStore&{identityUser:(id:string)=>Promise<number|undefined>;recentlyAuthenticated:(t:string)=>Promise<boolean>};
   let identity:number|undefined=42,recent=false;const removed:string[]=[];
   store.identityUser=async()=>identity;store.recentlyAuthenticated=async()=>recent;
-  const links={password:'https://identity.example.invalid/if/flow/p/',totp:'t',passkey:'k',recovery:'r'};
+  const links={password:'https://identity.example.invalid/if/flow/p/',totp:'t',passkey:'k',recovery:'r',verifyEmail:'v'};
   const security={links:()=>links,
     overview:async(user:number)=>{assert.equal(user,42);return {links,devices:[{id:'webauthn:7',kind:'webauthn' as const,name:'Phone',createdAt:null,lastUsedAt:null}]};},
     remove:async(user:number,id:string)=>{assert.equal(user,42);if(id!=='webauthn:7')return 'not_found' as const;removed.push(id);return 'removed' as const;}};
