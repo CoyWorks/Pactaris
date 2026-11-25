@@ -69,7 +69,7 @@ On the live Identity the Brand pointed at media files that no longer existed, so
 
 Owner request, 25 November 2026: no authentik branding in emails either.
 
-- `apps/identity/templates/pactaris-account-confirmation.html` is a self-contained Pactaris email. It uses the app colours, has no images or attachments, and has a footer with Privacy and contact instead of "Powered by authentik". It uses only `url` and `user.username` from the email stage context.
+- `apps/identity/templates/pactaris-account-confirmation.html` is a self-contained Pactaris email. It uses the app colours and shows the Pactaris logo from `https://pactaris.app/logo-email.png` (a PNG, because mail clients do not show SVG; served by the main website, no attachment). It has a footer with Privacy and contact instead of "Powered by authentik". It uses only `url` and `user.username` from the email stage context.
 - `apps/identity/compose.yaml` mounts `apps/identity/templates` read-only at `/templates` in the server and worker containers, where authentik looks for custom templates. The deploy script makes that folder readable for the container user.
 - Both email stages use it: `pactaris-account-verify-email` and `pactaris-enrollment-email` (`template: pactaris-account-confirmation.html` in the blueprints). Switch a live stage to it only after the Identity release with the mount is running; authentik refuses a template it cannot find.
 - The sender's display name comes from `AUTHENTIK_EMAIL__FROM` in `identity.env`, for example `Pactaris <info@pactaris.app>`.

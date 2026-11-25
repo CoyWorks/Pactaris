@@ -23,7 +23,7 @@ test('the main website serves its pages without cookies or scripts and links to 
   assert.ok(!home.body.includes('<script'));
   assert.ok(home.body.includes('href="https://app.pactaris.app/auth/login"'));
   assert.ok(home.body.includes('A CoyWorks project'));assert.ok(home.body.includes('mailto:info@pactaris.app'));
-  for(const path of ['/privacy','/terms','/privacy/','/site.css','/logo.svg','/favicon.svg','/robots.txt'])
+  for(const path of ['/privacy','/terms','/privacy/','/site.css','/logo.svg','/favicon.svg','/logo-email.png','/robots.txt'])
     assert.equal((await inject(app,{url:path,headers:{host:'pactaris.app'}})).statusCode,200,path);
   assert.ok((await inject(app,{url:'/terms',headers:{host:'pactaris.app'}})).body.includes('Draft.'));
   const missing=await inject(app,{url:'/nope',headers:{host:'pactaris.app'}});assert.equal(missing.statusCode,404);assert.ok(missing.body.includes('Page not found'));
@@ -45,7 +45,7 @@ test('old app links on the site origin and the www alias redirect, other hosts p
 
 test('every site text comes from the catalog and is escaped',()=>{
   const files=renderSite('en',appOrigin,site.origin);
-  for(const [path,file] of files)if(file.type.startsWith('text/html'))assert.ok(!/\bsite\.[a-zA-Z]+\b/.test(file.body.replace(/site\.css/g,'')),path);
+  for(const [path,file] of files)if(file.type.startsWith('text/html'))assert.ok(!/\bsite\.[a-zA-Z]+\b/.test(String(file.body).replace(/site\.css/g,'')),path);
 });
 
 test('site and delegation issuer configuration is validated',()=>{
