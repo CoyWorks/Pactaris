@@ -178,7 +178,7 @@ entries:
       name: pactaris-account-verify-email
     attrs:
       use_global_settings: true
-      template: email/account_confirmation.html
+      template: pactaris-account-confirmation.html
       subject: Confirm your email address for Pactaris
       token_expiry: minutes=30
       activate_user_on_success: false
