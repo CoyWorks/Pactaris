@@ -52,10 +52,10 @@ function LinkPage({link,data,householdId,session,language,format,timeZone,onClos
  const manages=link.isPrimary||link.legacy,canTransfer=link.isPrimary||!link.subHasPrimary;
  const transferCandidates=(data.members??[]).filter(m=>m.membershipId!==link.subId&&(link.isPrimary?m.membershipId!==link.domId:true)&&above(m.rank));
  const openTransfer=(data.transfers??[]).find(x=>x.subId===link.subId);
- const title=link.role==='sub'?link.domName:link.subName;
+ const {name:title,usedLabel}=linkName(link);
  const settings={linkId:link.linkId,version:link.version,private:link.private,canSpendPoints:link.canSpendPoints,canPropose:link.canPropose};
- return <Layer title={title||t('partner.unnamed')} backLabel={t('nav.back')} onClose={onClose}>
-  <p className="muted">{[link.label,t(link.role==='dom'?'authority.youAreDom':link.role==='sub'?'authority.youAreSub':'authority.viewOnly'),t(link.state==='invited'?'authority.invited':'authority.active'),link.isPrimary&&t('authority.primary')].filter(Boolean).join(t('catalog.separator'))}</p>
+ return <Layer title={title||t('authority.newMember')} backLabel={t('nav.back')} onClose={onClose}>
+  <p className="muted">{[usedLabel?undefined:link.label,t(link.role==='dom'?'authority.youAreDom':link.role==='sub'?'authority.youAreSub':'authority.viewOnly'),t(stateKey(link)),link.isPrimary&&t('authority.primary')].filter(Boolean).join(t('catalog.separator'))}</p>
   {link.state==='active'&&link.role==='dom'&&<p className="muted">{t(link.isPrimary?'authority.primaryHelp':link.legacy?'authority.legacyHelp':'authority.secondaryHelp')}</p>}
   {error&&<p role="alert">{t(error)}</p>}
   {link.role==='sub'&&link.state==='invited'&&<div className="notice" role="group"><p>{t('authority.acceptNotice')}</p>
@@ -112,9 +112,21 @@ function InvitePage({data,householdId,session,language,onClose,onChanged}:{data:
   </form>}
  </Layer>;
 }
+/** The person on the other side of a link. A Dom sees the name they gave the sub when the sub
+ *  has not chosen a name in this dynamic yet. */
+function linkName(link:AuthorityLink):{name:string;usedLabel:boolean}{
+ if(link.role==='sub')return {name:link.domName,usedLabel:false};
+ if(link.role==='dom')return link.subName?{name:link.subName,usedLabel:false}:{name:link.label,usedLabel:!!link.label};
+ return {name:link.domName&&link.subName?`${link.domName} → ${link.subName}`:'',usedLabel:false};
+}
+/** State from the reader's side: a sub sees an open request as "asks to be your Dom". */
+function stateKey(link:AuthorityLink):MessageKey{
+ if(link.state!=='invited')return 'authority.active';
+ return link.role==='sub'?'authority.asksToBeYourDom':'authority.invited';
+}
 function LinkRow({link,language,onOpen}:{link:AuthorityLink;language:string;onOpen:()=>void}){
- const t=createTranslator(language),name=link.role==='sub'?link.domName:link.role==='dom'?link.subName:`${link.domName} → ${link.subName}`;
- return <li><button type="button" onClick={onOpen}><span className="grow"><span>{name||t('partner.unnamed')}</span><span className="muted">{[link.label,t(link.state==='invited'?'authority.invited':'authority.active'),link.isPrimary&&t('authority.primary'),link.legacy&&t('authority.noPrimary')].filter(Boolean).join(t('catalog.separator'))}</span></span>
+ const t=createTranslator(language),{name,usedLabel}=linkName(link);
+ return <li><button type="button" onClick={onOpen}><span className="grow"><span>{name||t('authority.newMember')}</span><span className="muted">{[usedLabel?undefined:link.label,t(stateKey(link)),link.isPrimary&&t('authority.primary'),link.legacy&&t('authority.noPrimary')].filter(Boolean).join(t('catalog.separator'))}</span></span>
   {link.role==='sub'&&link.state==='invited'&&<span className="dot" aria-label={t('today.attention')}/>}<Icon name="chevron"/></button></li>;
 }
 /** Doms and subs: links, invitations, delegation, ranking and household visibility. */

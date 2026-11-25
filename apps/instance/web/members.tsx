@@ -37,7 +37,7 @@ export function MemberAdministration({householdId,session,language,format,timeZo
   try{
    const r=await fetch('/api/households/'+householdId+'/members/'+current.action,{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({...current.payload,operationId:current.operationId})}),data=await r.json();
    if(!r.ok){setError(errorKey(data.messageKey));setDraft(undefined);setRefresh(v=>v+1);return;}
-   if(data.status==='complete'){setDraft(undefined);edited.current=false;setNaming(false);setNotice('members.confirmed');}
+   if(data.status==='complete'){setDraft(undefined);edited.current=false;setNaming(false);setNotice(current.action==='alias'?'members.nameSaved':'members.confirmed');}
    else setNotice('members.unknown');
    setRefresh(v=>v+1);
   }catch{setNotice('members.unknown');}finally{clearTimeout(deadline);setBusy(false);}
@@ -61,8 +61,8 @@ export function MemberAdministration({householdId,session,language,format,timeZo
   {!listing?<button type="button" disabled={busy} onClick={()=>setRefresh(v=>v+1)}>{t('members.refresh')}</button>:<>
    {listing.operations.some(op=>op.status==='pending'&&op.operationId!==draft?.operationId)&&<p role="status">{t('members.otherPending')}</p>}
    <ul className="menu">
-    <li><button type="button" onClick={()=>setNaming(true)}><span className="grow"><span>{t('members.name')}</span><span className="muted">{self?.displayName||t('partner.unnamed')}</span></span><Icon name="chevron"/></button></li>
-    {listing.members.filter(m=>!m.isSelf).map(m=><li key={m.membershipId}><button type="button" onClick={()=>setOpenMember(m.membershipId)}><span className="grow"><span>{m.displayName||t('partner.unnamed')}</span><span className="muted">{t(roles[m.technicalRole]??'members.role.participant')}</span></span><Icon name="chevron"/></button></li>)}
+    <li><button type="button" onClick={()=>setNaming(true)}><span className="grow"><span>{self?.displayName||t('members.nameNotSet')}</span><span className="muted">{[t('members.you'),self&&t(roles[self.technicalRole]??'members.role.participant')].filter(Boolean).join(t('catalog.separator'))}</span></span><Icon name="chevron"/></button></li>
+    {listing.members.filter(m=>!m.isSelf).map(m=><li key={m.membershipId}><button type="button" onClick={()=>setOpenMember(m.membershipId)}><span className="grow"><span>{m.displayName||t('authority.newMember')}</span><span className="muted">{t(roles[m.technicalRole]??'members.role.participant')}</span></span><Icon name="chevron"/></button></li>)}
    </ul>
    {listing.nextCursor&&<button type="button" disabled={busy} onClick={()=>{void more();}}>{t('portal.more')}</button>}
    {!!listing.offers.length&&<><h3>{t('members.offers')}</h3><ul>{listing.offers.map(o=><li key={o.offerId}>

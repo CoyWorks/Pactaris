@@ -16,7 +16,7 @@ test('basic setup and tasks do not require a partner, relationship or implied as
 });
 test('the initial workspace opens on Today with bottom tabs, a safety shield and no inline safety forms',()=>{
  const html=renderToStaticMarkup(React.createElement(HouseholdWorkspace,{householdId:randomUUID(),session:{account:{id:randomUUID(),displayName:''},csrfToken:'fixture'},language:'en',format:'en-GB',avatar:null,onLeave:()=>{},children:null}));
- assert.match(html,/<nav class="bottom-nav" aria-label="Household workspace navigation"/);assert.match(html,/aria-current="page"[^>]*>.*?Today/);
+ assert.match(html,/<nav class="bottom-nav" aria-label="Dynamic navigation"/);assert.match(html,/aria-current="page"[^>]*>.*?Today/);
  for(const label of ['Tasks','Routines','Library','Dynamic'])assert.match(html,new RegExp('<span>'+label+'</span>'));
  assert.match(html,/aria-label="Safety and my limits"/);assert.match(html,/<details open="" hidden="" class="safety-drawer"/);
  assert.doesNotMatch(html,/Create proposal|Create agreement proposal|Transfer ownership/);

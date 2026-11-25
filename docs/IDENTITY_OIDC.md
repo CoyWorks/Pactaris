@@ -15,7 +15,7 @@ Source: [pactaris-instance1.yaml](../apps/identity/blueprints/pactaris-instance1
 | Application | Pactaris Instance 1 |
 | Slug | `pactaris-instance1` |
 | Provider | `Pactaris-Instance1-OIDC` |
-| Authorization flow | `default-provider-authorization-explicit-consent` |
+| Authorization flow | `default-provider-authorization-implicit-consent` (Pactaris is a first-party app; no consent screen, owner decision 25 November 2026) |
 | Client type | Confidential |
 | Grant types | Authorization Code only |
 | Callback | `https://instance1.coyworks.nl/auth/oidc/callback`, exact/strict |

@@ -18,6 +18,9 @@ import {AppearancePanel} from './appearance.js';
 import {NotificationSettings} from './notification-settings.js';
 import {AccountSecurity} from './account-security.js';
 import {EmailVerificationNotice} from './email-verification.js';
+import {setMemberName} from './member-name.js';
+import {pendingInvite} from './pending-invite.js';
+import {deviceDefaults} from './presentation-options.js';
 type Session={account:{id:string;displayName:string};csrfToken:string;presentation?:Presentation;preferredName?:string;emailVerified?:boolean};
 type Summary={id:string;name:string};
 // Per-browser convenience only: which dynamic this account opened last. Cleared on sign-out.
@@ -88,7 +91,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
       const r=await fetch('/api/households',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({operationId,name:submittedName})});
       const data=await r.json() as Operation&{messageKey?:string};
       if(!r.ok){setError(requestError(data));return;}
-      if(data.status==='complete'){setName('');setCreateId(undefined);navigate('/households/'+data.householdId);return;}
+      if(data.status==='complete'){setName('');setCreateId(undefined);await setMemberName(data.householdId,session.csrfToken,session.preferredName??session.account.displayName);navigate('/households/'+data.householdId);return;}
       setCreatePending(true);setRefresh(v=>v+1);
     }catch{setCreatePending(true);setError('onboarding.unknown');}finally{setBusy(false);}
   }
@@ -119,10 +122,13 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   const autoOpen=!!only&&!selectedId&&!profile&&!showAll&&!createPending;
   useEffect(()=>{if(autoOpen&&only)navigate('/households/'+only.id,true);},[autoOpen,only]);
   useEffect(()=>{if(session&&selectedId&&selected)writeLast(session.account.id,selectedId);},[session,selectedId,selected]);
+  // Back to an invitation that was opened before signing in (pending-invite.ts).
+  useEffect(()=>{if(session&&path!=='/join'&&pendingInvite())navigate('/join',true);},[session?.account.id,path]);// eslint-disable-line react-hooks/exhaustive-deps
   const signedOut=!loading&&!session&&!loadError&&path!=='/join';
   useEffect(()=>{if(signedOut&&claimAutoSignIn(standalone(),Date.now()))window.location.assign(signInHref());},[signedOut]);
-  if(path==='/join')return <InvitationJoin session={session} loading={loading} language={language} format={session?.presentation?.format??format} timeZone={session?.presentation?.timeZone??timeZone}/>;
-  const displayFormat=session?.presentation?.format??format,displayZone=session?.presentation?.timeZone??timeZone;
+  const device=deviceDefaults({format,timeZone});
+  if(path==='/join')return <InvitationJoin session={session} loading={loading} language={language} format={session?.presentation?.format??device.format} timeZone={session?.presentation?.timeZone??device.timeZone}/>;
+  const displayFormat=session?.presentation?.format??device.format,displayZone=session?.presentation?.timeZone??device.timeZone;
   const initial=(session?.account.displayName.trim()||t('portal.account')).slice(0,1).toUpperCase();
   const avatar=<Link to="/profile" className="avatar" aria-label={t('profile.title')}>{initial}</Link>;
   const problem=!loading&&loadError&&<section>
@@ -165,7 +171,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
         ?{...current,account:{...current.account,displayName:value.displayName},preferredName:value.preferredName??undefined}:current)}/></Layer>}
     {panel==='time'&&<Layer title={t('account.presentationTitle')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
      <AccountPresentation key={'presentation:'+session.account.id} csrfToken={session.csrfToken} language={language} embedded
-      saved={session.presentation} defaults={{format,timeZone}} onSave={value=>setSession(current=>
+      saved={session.presentation} defaults={device} onSave={value=>setSession(current=>
         current?.account.id===session.account.id?{...current,presentation:value??undefined}:current)}/></Layer>}
     {panel==='sessions'&&<Layer title={t('account.sessionsTitle')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
      <AccountSessions key={'sessions:'+session.account.id} csrfToken={session.csrfToken} language={language} format={displayFormat} timeZone={displayZone} onSignOut={()=>{void logout();}}/></Layer>}

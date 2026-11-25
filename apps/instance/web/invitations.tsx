@@ -3,7 +3,9 @@ import {Hint} from './navigation.js';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import {signInHref} from './auto-sign-in.js';
 import {EmailVerificationNotice} from './email-verification.js';
-type Session={account:{id:string;displayName:string};csrfToken:string;emailVerified?:boolean};
+import {setMemberName} from './member-name.js';
+import {forgetInvite,parseInviteHash,pendingInvite,rememberInvite} from './pending-invite.js';
+type Session={account:{id:string;displayName:string};csrfToken:string;emailVerified?:boolean;preferredName?:string};
 type Invite={invitationId:string;status:string;role:string;expiresAt:string;delivery?:string};
 const errorKey=(key:unknown):MessageKey=>(['invitations.invalid','invitations.denied','invitations.conflict','invitations.capacity','invitations.proof','invitations.unavailable','errors.rateLimited','errors.request'] as unknown[]).includes(key)?key as MessageKey:'invitations.unavailable';
 function secret(){const data=crypto.getRandomValues(new Uint8Array(32));return btoa(String.fromCharCode(...data)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');}
@@ -57,9 +59,14 @@ export function InvitationManager({householdId,session,language,format,timeZone}
 }
 export function InvitationJoin({session,loading,language,format,timeZone}:{session?:Session;loading:boolean;language:string;format:string;timeZone:string}){
  const t=createTranslator(language);
- const [claim]=useState(()=>{const match=/^#([a-f0-9-]{36})\.([A-Za-z0-9_-]{43})$/i.exec(window.location.hash);return match?{invitationId:match[1]!,token:match[2]!}:undefined;});
+ // The link's fragment, or one kept across sign-in in this tab (pending-invite.ts).
+ const [claim]=useState(()=>parseInviteHash(window.location.hash)??pendingInvite());
+ const [resumed]=useState(()=>!parseInviteHash(window.location.hash)&&!!claim);
+ const [memberName,setMemberNameDraft]=useState(()=>session?.preferredName??session?.account.displayName??'');
+ useEffect(()=>{if(session)setMemberNameDraft(current=>current||session.preferredName||session.account.displayName||'');},[session]);
  const [preview,setPreview]=useState<{name:string;role:string;termsVersion:string;expiresAt:string;accountId:string}>(),[error,setError]=useState<MessageKey>(),[busy,setBusy]=useState(false),[decision,setDecision]=useState<{action:'accept'|'decline';id:string}>(),[pending,setPending]=useState(false),[declined,setDeclined]=useState(false);
  useEffect(()=>{if(claim)window.history.replaceState(null,'','/join');},[claim]);
+ useEffect(()=>{if(resumed&&session&&!preview&&!busy&&!error)void review();},[resumed,session?.account.id]);// eslint-disable-line react-hooks/exhaustive-deps
  useEffect(()=>{setPreview(undefined);setDecision(undefined);setPending(false);setDeclined(false);setError(undefined);},[session?.account.id]);
  async function review(){
   if(!session||!claim||busy)return;setBusy(true);setError(undefined);
@@ -73,17 +80,19 @@ export function InvitationJoin({session,loading,language,format,timeZone}:{sessi
   try{
    const r=await fetch('/api/invitations/'+claim.invitationId+'/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({token:claim.token,operationId:op.id,...(action==='accept'?{termsVersion:preview.termsVersion}:{})})}),body=await r.json();
    if(!r.ok){setError(errorKey(body.messageKey));setDecision(undefined);return;}
-   if(body.status==='accepted'){window.location.assign('/households/'+body.householdId);return;}
-   if(body.status==='declined'){setDeclined(true);setPending(false);return;}
+   if(body.status==='accepted'){forgetInvite();await setMemberName(body.householdId,session.csrfToken,memberName);window.location.assign('/households/'+body.householdId);return;}
+   if(body.status==='declined'){forgetInvite();setDeclined(true);setPending(false);return;}
    if(body.status==='left'){setError('invitations.left');setPending(false);return;}
    setPending(true);
   }catch{setPending(true);setError('invitations.unknownResponse');}finally{setBusy(false);}
  }
  return <main><header><span className="eyebrow">{t('app.title')}</span></header><h1>{t('invitations.joinTitle')}</h1>
-  {loading?<p role="status">{t('portal.loading')}</p>:!claim?<p role="alert">{t('invitations.invalidLink')}</p>:!session?<section><p>{t('invitations.signInThenReopen')}</p><a className="button" href={signInHref()}>{t('portal.signIn')}</a></section>:<>
+  {loading?<p role="status">{t('portal.loading')}</p>:!claim?<p role="alert">{t('invitations.invalidLink')}</p>:!session?<section><p>{t('invitations.signInToContinue')}</p><a className="button" href={signInHref()} onClick={()=>rememberInvite(claim)}>{t('portal.signIn')}</a></section>:<>
    {error&&<p role="alert">{t(error)}</p>}
    {(!preview||preview.accountId!==session.account.id)&&!declined&&<button type="button" disabled={busy} onClick={()=>{void review();}}>{t('invitations.review')}</button>}
    {preview&&preview.accountId===session.account.id&&!declined&&<section><h2>{preview.name}</h2><p>{t('invitations.participant')}</p><p>{t('invitations.noConsent')}</p><p>{t('invitations.expires')} <time dateTime={preview.expiresAt} title={timeZone}>{formatTime(new Date(preview.expiresAt),format,timeZone)}</time></p>
+    {!pending&&<label>{t('invitations.yourName')}<input autoComplete="nickname" maxLength={80} disabled={busy} value={memberName} onChange={e=>setMemberNameDraft(e.target.value)}/></label>}
+    <p className="muted">{t('invitations.yourNameHelp')}</p>
     {pending?<div role="status"><p>{t('invitations.pending')}</p><button type="button" disabled={busy} onClick={()=>{void respond(decision?.action??'accept');}}>{t('onboarding.retry')}</button></div>:<>
      <button type="button" disabled={busy} onClick={()=>{void respond('accept');}}>{t('invitations.accept')}</button><button type="button" disabled={busy} onClick={()=>{void respond('decline');}}>{t('invitations.decline')}</button>
     </>}
@@ -91,7 +100,7 @@ export function InvitationJoin({session,loading,language,format,timeZone}:{sessi
    {declined&&<p role="status">{t('invitations.declined')}</p>}
    {error==='invitations.proof'&&(session.emailVerified===false
      ?<EmailVerificationNotice language={language} emailVerified={false} body="invitations.verifyFirst"/>
-     :<p>{t('invitations.signInThenReopen')} <a href={signInHref('/auth/reauth')}>{t('portal.signIn')}</a></p>)}
+     :<p>{t('invitations.signInAgainToContinue')} <a href={signInHref('/auth/reauth')} onClick={()=>claim&&rememberInvite(claim)}>{t('portal.signIn')}</a></p>)}
   </>}
   <p><a href="/">{t('portal.back')}</a></p>
  </main>;

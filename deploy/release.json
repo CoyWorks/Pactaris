@@ -652,6 +652,13 @@
       "path": "migrations/instance/0065_notice_push_pause.sql",
       "sha256": "a5dfee45ccebb4f301908b0f79bbf24cbd53f2b495fb8ce8395c2c1218c4be45",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0066_inbox_task_titles",
+      "path": "migrations/instance/0066_inbox_task_titles.sql",
+      "sha256": "97094cfde0ac16c139aaf63552187057876a188298a1094a524577d4021cebd0",
+      "backwardCompatible": true
     }
   ]
 }

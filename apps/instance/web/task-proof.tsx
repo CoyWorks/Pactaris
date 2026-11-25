@@ -22,23 +22,27 @@ async function shrink(file:File):Promise<{type:string;bytes:Blob}>{
 export function ProofAttach({householdId,csrfToken,taskId,proof,language,disabled,onChanged}:{householdId:string;csrfToken:string;taskId:string;proof?:TaskProofState|null;language:string;disabled:boolean;onChanged:()=>void}){
  const t=createTranslator(language),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>();
  const pending=proof&&!proof.bound&&proof.state==='stored'?proof:undefined;
+ // A local preview of the photo picked on this device; the stored copy is not shown back.
+ const [preview,setPreview]=useState<string>();
+ useEffect(()=>()=>{if(preview)URL.revokeObjectURL(preview);},[preview]);
  async function upload(file:File){
   setBusy(true);setError(undefined);
   try{
    const image=await shrink(file);
    const r=await fetch(`/api/households/${householdId}/participant-tasks/${taskId}/proof`,{method:'POST',cache:'no-store',headers:{'Content-Type':image.type,'X-CSRF-Token':csrfToken,'X-Operation-Id':crypto.randomUUID()},body:image.bytes});
-   if(!r.ok)throw await r.json().catch(()=>({}));onChanged();
+   if(!r.ok)throw await r.json().catch(()=>({}));setPreview(URL.createObjectURL(image.bytes));onChanged();
   }catch(e){setError(proofFailure(e));}finally{setBusy(false);}
  }
  async function remove(){
   if(!pending)return;setBusy(true);setError(undefined);
   try{
+   setPreview(undefined);
    const r=await fetch(`/api/households/${householdId}/proofs/${pending.proofId}/remove`,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({operationId:crypto.randomUUID()})});
    if(!r.ok)throw await r.json().catch(()=>({}));onChanged();
   }catch(e){setError(proofFailure(e));}finally{setBusy(false);}
  }
  return <section className="settings-group"><h4>{t('proof.title')}</h4><Hint label={t('hint.more')}>{t('proof.attachHelp')}</Hint>
-  {pending&&<p>{t('proof.attached')}</p>}{busy&&<p role="status">{t('proof.uploading')}</p>}{error&&<p role="alert">{t(error)}</p>}
+  {pending&&<p>{t('proof.attached')}</p>}{pending&&preview&&<img className="proof-preview" src={preview} alt={t('proof.previewAlt')}/>}{busy&&<p role="status">{t('proof.uploading')}</p>}{error&&<p role="alert">{t(error)}</p>}
   <label className="button">{t(pending?'proof.replace':'proof.attach')}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden disabled={disabled||busy}
    onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)void upload(file);}}/></label>
   {pending&&<button type="button" className="secondary" disabled={disabled||busy} onClick={()=>{void remove();}}>{t('proof.remove')}</button>}

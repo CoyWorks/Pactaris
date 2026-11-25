@@ -2203,7 +2203,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       assert.deepEqual((await post(B,'partnerInboxConfigure',{preferences:quietPrefs})).data.inboxPreferences,quietPrefs);
       assert.deepEqual((await post(A,'partnerInboxPreferences',{})).data.inboxPreferences,defaultPrefs);
       assert.deepEqual((await post(B,'partnerInboxPreferences',{})).data.inboxPreferences,quietPrefs);
-      assert.ok((await post(B,'partnerInbox',{})).data.inbox.some((notice:{taskId:string})=>notice.taskId===legacy));
+      assert.ok((await post(B,'partnerInbox',{})).data.inbox.some((notice:{taskId:string;title?:string})=>notice.taskId===legacy&&!!notice.title));
       const inboxState=async(p:Person)=>{
         const result=await api(base+'/workspace/unread','GET',undefined,p.session);
         assert.equal(result.status,200);

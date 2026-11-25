@@ -14,7 +14,7 @@ Every member has a notice list per dynamic (bell in the top bar). Notices are cr
 | `habit` | sub | a habit period was checked (not for skipped periods) |
 | `purchase` | Dom who listed the reward | a sub bought a reward in the shop (migration `0042_reward_shop`) |
 
-Task notices (assigned, submitted, reviewed, reminders) stay in the existing task inbox and appear on the same page. A withdrawn exchange removes its notices; leaving a dynamic or erasing an account removes the person's notices. Opening the page marks the displayed notices read; older notices remain unread until displayed. The member-notice list is paginated with a recipient-bound cursor. Notices have no actor for automatic outcomes.
+Task notices (assigned, submitted, reviewed, reminders) stay in the existing task inbox and appear on the same page. In the app each task notice shows the task title and opens the task; it is marked read when opened. The title comes from the Instance (`0066_inbox_task_titles`) and only for the recipient's own task notices. Push notifications stay generic. A withdrawn exchange removes its notices; leaving a dynamic or erasing an account removes the person's notices. Opening the page marks the displayed notices read; older notices remain unread until displayed. The member-notice list is paginated with a recipient-bound cursor. Notices have no actor for automatic outcomes.
 
 ## Settings
 
