@@ -14,7 +14,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution requirements. The che
 
 # Current login slice — 0.2.0-alpha.1
 
-Read [LOGIN_GATEWAY.md](LOGIN_GATEWAY.md) and [LOGIN_ROLLOUT.md](LOGIN_ROLLOUT.md) for the central OIDC/session gateway, migration/backup roles and real-host rollout. The sections below describe the original 0.1 foundation checkpoint and its historical limits. Parent issues remain open for their wider criteria.
+Read [LOGIN_GATEWAY.md](LOGIN_GATEWAY.md) and [LOGIN_ROLLOUT.md](LOGIN_ROLLOUT.md) for the central OIDC/session gateway, migration/backup roles and real-host rollout. See [schema/README.md](schema/README.md) for the generated database schema overview. The sections below describe the original 0.1 foundation checkpoint and its historical limits. Parent issues remain open for their wider criteria.
 
 # Foundation checkpoint — 0.1.0-alpha.1
 
