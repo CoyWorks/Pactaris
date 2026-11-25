@@ -36,7 +36,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
 import type { GatewayConfig } from '../../packages/config/index.js';
 import type { OidcLogin } from '../../packages/auth/oidc.js';
-import type { GatewayStore, Session } from './store.js';
+import { hash, type GatewayStore, type Session } from './store.js';
 import type { HouseholdClient } from '../../packages/routing/private-client.js';
 import { uuid } from '../../packages/auth/delegation.js';
 import { createTranslator,type MessageKey } from '../../packages/i18n/index.js';
@@ -51,7 +51,13 @@ import { normalizeEmail } from '../../packages/auth/email.js';
 import { OnboardingError,type OnboardingService } from './onboarding.js';
 import { accountSecurityRoutes,type AccountSecurity } from './account-security.js';
 const token=()=>randomBytes(32).toString('base64url');
-const LOGIN='__Host-pactaris-login',SESSION='__Host-pactaris-session';
+const LOGIN='__Host-pactaris-login',SESSION='__Host-pactaris-session',INVITE='__Host-pactaris-invite';
+// Invitation ID plus the SHA-256 of the link secret, so the secret itself never leaves the browser tab.
+function inviteCookie(req:express.Request):{invitationId:string;tokenHash:string}|undefined{
+  const values=(req.headers.cookie??'').split(';').map(v=>v.trim()).filter(v=>v.startsWith(INVITE+'='));
+  const match=values.length===1?/^([a-f0-9-]{36})\.([a-f0-9]{64})$/.exec(values[0]!.slice(INVITE.length+1)):null;
+  return match&&uuid(match[1])?{invitationId:match[1]!,tokenHash:match[2]!}:undefined;
+}
 export function cookie(req:express.Request,name:string):string|undefined {
   const values=(req.headers.cookie??'').split(';').map(v=>v.trim()).filter(v=>v.startsWith(name+'='));
   if(values.length!==1)return;
@@ -97,6 +103,15 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       setCookie(res,LOGIN,binding,300);res.redirect(302,url);
     }catch{loginFailure(req,res,503,'login_unavailable','errors.loginUnavailable');}
   });
+  // Remembers an invitation across sign-in so it can admit a new account while registration is closed.
+  app.post('/api/auth/invitation',express.json({limit:512,strict:true,inflate:false}),(req,res)=>{
+    const body=req.body as Record<string,unknown>|undefined;
+    if(req.get('origin')!==config.publicOrigin||!body||Object.keys(body).sort().join(',')!=='invitationId,token'
+      ||!uuid(body.invitationId)||typeof body.token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(body.token)){
+      res.status(400).json({code:'invalid_invitation',messageKey:'errors.request'});return;
+    }
+    setCookie(res,INVITE,`${body.invitationId}.${hash(body.token)}`,1800);res.status(204).end();
+  });
   app.get('/auth/oidc/callback',async(req,res)=>{
     const binding=cookie(req,LOGIN);setCookie(res,LOGIN,'',0);
     // Build from preserved configuration, never Host/X-Forwarded-Host or a returnTo URL.
@@ -110,7 +125,9 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
         loginFailure(req,res,403,'email_verification_required','account.verifyEmail');return;
       }
       const operator=identity.issuer===config.oidc.issuer&&config.operatorSubjects.includes(identity.subject);
-      if(admin&&!operator&&await admin.registrationClosedFor(identity.issuer,identity.subject)){
+      const invite=inviteCookie(req);if(invite)setCookie(res,INVITE,'',0);
+      if(admin&&!operator&&await admin.registrationClosedFor(identity.issuer,identity.subject)
+        &&!(invite&&email&&await admin.invitationAdmits(invite.invitationId,invite.tokenHash,email))){
         loginFailure(req,res,403,'registration_closed','errors.registrationClosed');return;
       }
       const account=await store.account(identity.issuer,identity.subject,identity.name,email,identity.identityUser);
@@ -362,6 +379,13 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     await store.updateAccountPresentation(session.account.id,value);
     res.json({presentation:value});
   });
+  app.post('/api/account/adult-confirmation',express.json({limit:256,strict:true,inflate:false}),async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)||!req.body||Object.keys(req.body).join(',')!=='adult'||req.body.adult!==true||!store.confirmAdult){
+      res.status(400).json({code:'request_denied',messageKey:'errors.request'});return;
+    }
+    await store.confirmAdult(session.account.id);res.json({adultConfirmed:true});
+  });
   accountSecurityRoutes(app,store,accountSecurity,authenticate,csrfAllowed,req=>cookie(req,SESSION));
   app.put('/api/account/display-name',express.json({limit:1024,strict:true,inflate:false}),async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;
@@ -475,6 +499,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     if(!input||Object.keys(input).sort().join(',')!=='name,operationId'||!uuid(input.operationId)||typeof input.name!=='string'||!input.name.trim()||input.name!==input.name.trim()||[...input.name].length>120||(/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(input.name)||disguisedText(input.name))){
       res.status(400).json({code:'request_denied',messageKey:'errors.request'});return;
     }
+    if(session.adultConfirmed===false){res.status(403).json({code:'adult_confirmation_required',messageKey:'account.adultRequired'});return;}
     if(!onboarding){onboardingFailure(res,undefined);return;}
     if(!await store.throttle('onboarding.create:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
     try{const operation=await onboarding.create(session.account.id,input.operationId,input.name);
@@ -547,6 +572,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     if(!uuid(req.params.invitationId)||!['preview','accept','decline'].includes(action)||!body||Object.keys(body).sort().join(',')!==expected||
       typeof body.token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(body.token)||(action!=='preview'&&!uuid(body.operationId))||
       (action==='accept'&&(typeof body.termsVersion!=='string'||!/^[1-9][0-9]{0,15}$/.test(body.termsVersion)))){inviteFailure(res,new InvitationError('invalid'));return;}
+    if(action==='accept'&&session.adultConfirmed===false){res.status(403).json({code:'adult_confirmation_required',messageKey:'account.adultRequired'});return;}
     if(!await store.throttle('invite:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
     try{if(!invitations)throw new InvitationError('unavailable');
       res.json(await invitations.respond(session.account.id,cookie(req,SESSION)!,req.params.invitationId,action==='preview'?'invitePreview':action==='accept'?'inviteAccept':'inviteDecline',body.token,action==='preview'?randomUUID():body.operationId,body.termsVersion));

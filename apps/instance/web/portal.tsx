@@ -17,11 +17,12 @@ import {Skeleton} from './today-habits.js';
 import {AppearancePanel} from './appearance.js';
 import {NotificationSettings} from './notification-settings.js';
 import {AccountSecurity} from './account-security.js';
+import {AdultConfirmation} from './adult-confirmation.js';
 import {EmailVerificationNotice} from './email-verification.js';
 import {setMemberName} from './member-name.js';
 import {pendingInvite} from './pending-invite.js';
 import {deviceDefaults} from './presentation-options.js';
-type Session={account:{id:string;displayName:string};csrfToken:string;presentation?:Presentation;preferredName?:string;emailVerified?:boolean};
+type Session={account:{id:string;displayName:string};csrfToken:string;presentation?:Presentation;preferredName?:string;emailVerified?:boolean;adultConfirmed?:boolean};
 type Summary={id:string;name:string};
 // Per-browser convenience only: which dynamic this account opened last. Cleared on sign-out.
 const lastKey='pactaris.lastDynamic';
@@ -127,6 +128,8 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   const signedOut=!loading&&!session&&!loadError&&path!=='/join';
   useEffect(()=>{if(signedOut&&claimAutoSignIn(standalone(),Date.now()))window.location.assign(signInHref());},[signedOut]);
   const device=deviceDefaults({format,timeZone});
+  if(session&&session.adultConfirmed===false)return <AdultConfirmation language={language} csrfToken={session.csrfToken} busy={busy} onSignOut={()=>{void logout();}}
+    onConfirmed={()=>setSession(current=>current?.account.id===session.account.id?{...current,adultConfirmed:true}:current)}/>;
   if(path==='/join')return <InvitationJoin session={session} loading={loading} language={language} format={session?.presentation?.format??device.format} timeZone={session?.presentation?.timeZone??device.timeZone}/>;
   const displayFormat=session?.presentation?.format??device.format,displayZone=session?.presentation?.timeZone??device.timeZone;
   const initial=(session?.account.displayName.trim()||t('portal.account')).slice(0,1).toUpperCase();

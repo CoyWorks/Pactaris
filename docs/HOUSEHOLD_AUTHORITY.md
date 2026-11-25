@@ -44,6 +44,10 @@ Someone with task authority over a sub can set a daily or weekly habit for them:
 
 The worker (`run_authority_habits`) checks each ended period once. It applies outcomes only with live points-and-punishments authority, an active household, no pause on either person and no blocked activity (`reward` for points given, `consequence` otherwise). Otherwise the period is recorded as *skipped*; skipped and paused periods are never made up later, and resuming a paused habit starts at the current period. Periods missed while the worker was down are evaluated for at most a week back. Entries can be reversed until their period has been checked.
 
+## Counting above the goal
+
+Owner decision, 25 November 2026; migration `0067_habit_extra_points`. An "at least" habit can always be counted past its goal. The Dom decides whether those extra counts earn points: `extra_points` (1–10 000 per extra count) and `extra_limit` (1–1 000 extra counts per period), set together or not at all and only for "at least" habits; switching a habit to "at most" clears them. When the worker records a reached period with points on, it adds `min(total − goal, extra_limit) × extra_points` as one point change and records it as `extraPoints` in the period's outcome. The same pause, block and authority rules as other habit outcomes apply.
+
 ## Streaks and milestones
 
 Migration `0043_habit_streaks`. A **streak** is the number of consecutive periods a habit was reached, counting back from the latest closed period; a paused (`skipped`) period is neutral — it neither breaks nor extends the streak — and a `missed` period breaks it. `habit_streaks` returns the current and longest streak and is included in `habitList`.

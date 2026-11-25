@@ -6,7 +6,7 @@ export type LoginAttempt = {state:string;nonce:string;verifier:string};
 export type LoginClient = 'browser'|'app';
 export type Account = {id:string;displayName:string};
 export type AccountPresentation = {format:string;timeZone:string};
-export type Session = {account:Account;csrfToken:string;expiresAt:string;presentation?:AccountPresentation;preferredName?:string;emailVerified?:boolean};
+export type Session = {account:Account;csrfToken:string;expiresAt:string;presentation?:AccountPresentation;preferredName?:string;emailVerified?:boolean;adultConfirmed?:boolean};
 export type SessionView = {id:string;current:boolean;createdAt:string;expiresAt:string};
 export type Placement = {householdId:string;instanceId:string;endpoint:string;tlsServerName:string;caFile:string;version:string};
 export interface GatewayStore {
@@ -18,6 +18,7 @@ export interface GatewayStore {
   consumeLogin(cookie:string,state:string):Promise<(LoginAttempt&{client?:LoginClient})|undefined>;
   account(issuer:string,subject:string,name:string,verifiedEmail?:string,identityUser?:number):Promise<Account>;
   identityUser?(accountId:string):Promise<number|undefined>;
+  confirmAdult?(accountId:string):Promise<void>;
   createSession(token:string,account:Account,csrfToken:string,idle:number,absolute:number,verifiedEmail?:string,mfaAt?:number,authAt?:number):Promise<void>;
   session(token:string,idle:number,requireVerifiedEmail?:boolean):Promise<Session|undefined>;
   recentlyAuthenticated?(token:string):Promise<boolean>;
@@ -70,10 +71,14 @@ export class PgGatewayStore implements GatewayStore {
       FROM pactaris.accounts a WHERE s.token_hash=$1 AND a.id=s.account_id AND a.status='active' AND s.expires_at>now() AND s.idle_expires_at>now()
       AND (NOT $3::boolean OR s.recipient_email=a.verified_email)
       RETURNING a.id,COALESCE(a.preferred_display_name,a.display_name) AS display_name,a.preferred_display_name,s.csrf_token,s.expires_at,a.locale_format,a.time_zone,
-        (s.recipient_email IS NOT NULL AND s.recipient_email=a.verified_email) AS email_verified`,[hash(token),idle,requireVerifiedEmail]);
-    const row=r.rows[0];return row?{account:{id:row.id,displayName:row.display_name},csrfToken:row.csrf_token,expiresAt:row.expires_at.toISOString(),emailVerified:row.email_verified===true,
+        (s.recipient_email IS NOT NULL AND s.recipient_email=a.verified_email) AS email_verified,a.adult_confirmed_at IS NOT NULL AS adult_confirmed`,[hash(token),idle,requireVerifiedEmail]);
+    const row=r.rows[0];return row?{account:{id:row.id,displayName:row.display_name},csrfToken:row.csrf_token,expiresAt:row.expires_at.toISOString(),emailVerified:row.email_verified===true,adultConfirmed:row.adult_confirmed===true,
       ...(row.preferred_display_name?{preferredName:row.preferred_display_name}:{}),
       ...(row.locale_format&&row.time_zone?{presentation:{format:row.locale_format,timeZone:row.time_zone}}:{})}:undefined;
+  }
+  /** Records the one-time 18+ confirmation; the first time stays the recorded time. */
+  async confirmAdult(accountId:string){
+    await this.pool.query("UPDATE pactaris.accounts SET adult_confirmed_at=COALESCE(adult_confirmed_at,now()) WHERE id=$1 AND status='active'",[accountId]);
   }
   async identityUser(accountId:string){
     const r=await this.pool.query(`SELECT identity_user_id FROM pactaris.accounts WHERE id=$1 AND status='active'`,[accountId]);

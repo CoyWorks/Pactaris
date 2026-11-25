@@ -4,7 +4,12 @@ import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18
 import {signInHref} from './auto-sign-in.js';
 import {EmailVerificationNotice} from './email-verification.js';
 import {setMemberName} from './member-name.js';
-import {forgetInvite,parseInviteHash,pendingInvite,rememberInvite} from './pending-invite.js';
+import {carryInvite,forgetInvite,parseInviteHash,pendingInvite,rememberInvite,type InviteClaim} from './pending-invite.js';
+
+function signInWithInvite(e:React.MouseEvent<HTMLAnchorElement>,claim:InviteClaim){
+ e.preventDefault();rememberInvite(claim);const href=e.currentTarget.href;
+ void carryInvite(claim).finally(()=>window.location.assign(href));
+}
 type Session={account:{id:string;displayName:string};csrfToken:string;emailVerified?:boolean;preferredName?:string};
 type Invite={invitationId:string;status:string;role:string;expiresAt:string;delivery?:string};
 const errorKey=(key:unknown):MessageKey=>(['invitations.invalid','invitations.denied','invitations.conflict','invitations.capacity','invitations.proof','invitations.unavailable','errors.rateLimited','errors.request'] as unknown[]).includes(key)?key as MessageKey:'invitations.unavailable';
@@ -87,7 +92,7 @@ export function InvitationJoin({session,loading,language,format,timeZone}:{sessi
   }catch{setPending(true);setError('invitations.unknownResponse');}finally{setBusy(false);}
  }
  return <main><header><span className="eyebrow">{t('app.title')}</span></header><h1>{t('invitations.joinTitle')}</h1>
-  {loading?<p role="status">{t('portal.loading')}</p>:!claim?<p role="alert">{t('invitations.invalidLink')}</p>:!session?<section><p>{t('invitations.signInToContinue')}</p><a className="button" href={signInHref()} onClick={()=>rememberInvite(claim)}>{t('portal.signIn')}</a></section>:<>
+  {loading?<p role="status">{t('portal.loading')}</p>:!claim?<p role="alert">{t('invitations.invalidLink')}</p>:!session?<section><p>{t('invitations.signInToContinue')}</p><a className="button" href={signInHref()} onClick={e=>signInWithInvite(e,claim)}>{t('portal.signIn')}</a></section>:<>
    {error&&<p role="alert">{t(error)}</p>}
    {(!preview||preview.accountId!==session.account.id)&&!declined&&<button type="button" disabled={busy} onClick={()=>{void review();}}>{t('invitations.review')}</button>}
    {preview&&preview.accountId===session.account.id&&!declined&&<section><h2>{preview.name}</h2><p>{t('invitations.participant')}</p><p>{t('invitations.noConsent')}</p><p>{t('invitations.expires')} <time dateTime={preview.expiresAt} title={timeZone}>{formatTime(new Date(preview.expiresAt),format,timeZone)}</time></p>
@@ -100,7 +105,7 @@ export function InvitationJoin({session,loading,language,format,timeZone}:{sessi
    {declined&&<p role="status">{t('invitations.declined')}</p>}
    {error==='invitations.proof'&&(session.emailVerified===false
      ?<EmailVerificationNotice language={language} emailVerified={false} body="invitations.verifyFirst"/>
-     :<p>{t('invitations.signInAgainToContinue')} <a href={signInHref('/auth/reauth')} onClick={()=>claim&&rememberInvite(claim)}>{t('portal.signIn')}</a></p>)}
+     :<p>{t('invitations.signInAgainToContinue')} <a href={signInHref('/auth/reauth')} onClick={e=>{if(claim)signInWithInvite(e,claim);}}>{t('portal.signIn')}</a></p>)}
   </>}
   <p><a href="/">{t('portal.back')}</a></p>
  </main>;

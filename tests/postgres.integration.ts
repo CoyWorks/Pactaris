@@ -16,7 +16,7 @@ import {GatewayConsent} from '../apps/gateway/consent.js';
 import {GatewayRelationships} from '../apps/gateway/relationships.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createECDH,randomUUID,randomBytes } from 'node:crypto';
+import { createECDH,createHash,randomUUID,randomBytes } from 'node:crypto';
 import { mkdtemp,readFile,writeFile,rm,mkdir,cp,utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -121,6 +121,9 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
  try{
   const gatewayDb=await component('gateway','gateway'),a=await component('instance_a','instance'),b=await component('instance_b','instance');
   const store=new PgGatewayStore(gatewayDb.pool,()=>requireSchema(gatewayDb.pool,'gateway'));
+  // Fixture accounts count as adults; the 18+ guard itself is tested with the registration account below.
+  await gatewayDb.owner.query(`CREATE FUNCTION pactaris.fixture_adult() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN NEW.adult_confirmed_at=coalesce(NEW.adult_confirmed_at,now());RETURN NEW;END$$;
+   CREATE TRIGGER fixture_adult BEFORE INSERT ON pactaris.accounts FOR EACH ROW EXECUTE FUNCTION pactaris.fixture_adult()`);
   const account=await store.account('https://idp.fixture.invalid/','subject-a','Fixture user'),other=await store.account('https://idp.fixture.invalid/','subject-b','Other fixture');
   assert.notEqual(account.id,other.id);
   const sameSubjectOtherIssuer=await store.account('https://other-idp.fixture.invalid/','subject-a','Fixture user');assert.notEqual(account.id,sameSubjectOtherIssuer.id);
@@ -659,6 +662,17 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await api('/api/households','POST',{operationId:registrationId,name:registrationName},'x'.repeat(43))).status,401);
   assert.equal((await api('/api/households','POST',{operationId:registrationId,name:registrationName},undefined,{origin:'https://wrong.fixture.invalid'})).status,403);
   assert.equal((await api('/api/households','POST',{operationId:registrationId,name:registrationName,endpoint:'https://169.254.169.254/'})).status,400);
+  // Creating a dynamic needs the one-time 18+ confirmation; the first confirmation time is kept.
+  await gatewayDb.owner.query('UPDATE pactaris.accounts SET adult_confirmed_at=NULL WHERE id=$1',[registrant.id]);
+  assert.equal((await api('/api/session')).data.adultConfirmed,false);
+  const underConfirmed=await api('/api/households','POST',{operationId:registrationId,name:registrationName});
+  assert.equal(underConfirmed.status,403);assert.equal(underConfirmed.data.code,'adult_confirmation_required');
+  assert.equal((await api('/api/account/adult-confirmation','POST',{adult:false})).status,400);
+  assert.equal((await api('/api/account/adult-confirmation','POST',{adult:true})).status,200);
+  const confirmedAt=(await gatewayDb.owner.query('SELECT adult_confirmed_at FROM pactaris.accounts WHERE id=$1',[registrant.id])).rows[0].adult_confirmed_at;
+  assert.equal((await api('/api/account/adult-confirmation','POST',{adult:true})).status,200);
+  assert.deepEqual((await gatewayDb.owner.query('SELECT adult_confirmed_at FROM pactaris.accounts WHERE id=$1',[registrant.id])).rows[0].adult_confirmed_at,confirmedAt);
+  assert.equal((await api('/api/session')).data.adultConfirmed,true);
   const registered=await api('/api/households','POST',{operationId:registrationId,name:registrationName});assert.equal(registered.status,201);
   const registeredId=registered.data.householdId;
   assert.equal(registered.data.status,'complete');assert.ok(!registered.body.includes('instance'));assert.ok(!registered.body.includes('127.0.0.1'));assert.ok(!registered.body.includes(registrationName));
@@ -746,6 +760,12 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    return {email,token,operationId,response,id:response.data.invitationId as string};
   };
   const first=await makeInvite('first@example.invalid');assert.equal(first.response.status,201);
+  // While registration is closed, a matching invitation (ID, secret hash and verified email) admits a new account.
+  const admitting=new AdminConsole(gatewayDb.pool,'https://idp.fixture.invalid/',[]),firstHash=createHash('sha256').update(first.token).digest('hex');
+  assert.equal(await admitting.invitationAdmits(first.id,firstHash,first.email),true);
+  assert.equal(await admitting.invitationAdmits(first.id,firstHash,'someone-else@example.invalid'),false);
+  assert.equal(await admitting.invitationAdmits(first.id,createHash('sha256').update('wrong').digest('hex'),first.email),false);
+  assert.equal(await admitting.invitationAdmits(randomUUID(),firstHash,first.email),false);
   assert.equal((await api(baseInvite,'POST',{email:first.email,token:first.token,operationId:first.operationId},ownerSession)).data.invitationId,first.id);
   assert.equal((await api(baseInvite,'POST',{email:'changed@example.invalid',token:first.token,operationId:first.operationId},ownerSession)).status,409);
   await (async()=>{
@@ -2021,6 +2041,23 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const missed=(await db.owner.query('SELECT result,outcome FROM pactaris.authority_habit_results WHERE habit_id=$1',[habit.data.resourceId])).rows;
      assert.equal(missed.length,1);assert.equal(missed[0].result,'missed');assert.equal(missed[0].outcome.points,-2);assert.ok(missed[0].outcome.punishmentTaskId);
      assert.equal((await view(D)).myPoints,'3');assert.equal((await read(D,missed[0].outcome.punishmentTaskId)).state,'assigned');
+     // Extra counts above the goal earn points per count, up to the limit; only for 'at least' habits.
+     assert.equal((await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:{...habitFields,extraPoints:2}})).status,400);
+     assert.equal((await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:{...habitFields,mode:'maximum',extraPoints:2,extraLimit:3}})).status,400);
+     const extra=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:{...habitFields,rewardPoints:null,penaltyPoints:null,punishment:null,extraPoints:2,extraLimit:3}});
+     assert.equal(extra.status,200,JSON.stringify(extra.data));
+     assert.equal((await au(D,'habitRecord',{habitId:extra.data.resourceId,count:5})).status,200);
+     const listedExtra=(await api(base+'/authority/habits','GET',undefined,D.session)).data.habits.find((x:any)=>x.habitId===extra.data.resourceId);
+     assert.equal(listedExtra.extraPoints,2);assert.equal(listedExtra.extraLimit,3);
+     await db.owner.query("UPDATE pactaris.authority_habit_entries SET occurred_at=occurred_at-interval '1 day' WHERE habit_id=$1",[extra.data.resourceId]);
+     await db.owner.query("UPDATE pactaris.authority_habits SET next_period=pactaris.habit_period_start('daily','UTC',now())-1 WHERE id=$1",[extra.data.resourceId]);
+     await db.pool.query('SELECT pactaris.run_authority_habits($1)',[instanceId]);
+     const extraResult=(await db.owner.query('SELECT result,outcome FROM pactaris.authority_habit_results WHERE habit_id=$1',[extra.data.resourceId])).rows;
+     assert.equal(extraResult[0].result,'reached');assert.equal(extraResult[0].outcome.extraPoints,6);
+     // Keep the running point total for the assertions below.
+     await db.owner.query("DELETE FROM pactaris.point_adjustments WHERE household_id=$1 AND recipient_id=$2 AND points=6",[home.householdId,D.member]);
+     await db.owner.query("UPDATE pactaris.authority_habits SET state='archived' WHERE id=$1",[extra.data.resourceId]);
+     assert.equal((await view(D)).myPoints,'3');
      // Both parties can schedule a break; outsiders cannot. Weekly overlap skips the whole week.
      const weekly=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:{...habitFields,period:'weekly'}});
      assert.equal(weekly.status,200,JSON.stringify(weekly.data));

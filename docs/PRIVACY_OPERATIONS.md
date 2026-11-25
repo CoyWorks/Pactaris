@@ -73,7 +73,7 @@ Pactaris processes data about sexual practices and intimate relationships. Treat
 
 ## Content policy (draft outline)
 
-- Pactaris is for consenting adults only. Accounts that appear to belong to minors are suspended pending review; reports in the "possible minor" category are handled first.
+- Pactaris is for consenting adults only. Accounts that appear to belong to minors are suspended pending review; reports in the "possible minor" category are handled first. Every account confirms once that the person is 18 or older ([AGE_CONFIRMATION.md](AGE_CONFIRMATION.md)).
 - Consent is explicit, individual and revocable. Content or behaviour that promotes non-consensual activity, coercion, blackmail or covert monitoring is not allowed.
 - No content involving minors, no illegal content and no sharing of another person's private data without their consent.
 - Harassment through invitations, reports or other features leads to suspension.
