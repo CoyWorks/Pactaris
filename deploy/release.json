@@ -659,6 +659,20 @@
       "path": "migrations/instance/0066_inbox_task_titles.sql",
       "sha256": "97094cfde0ac16c139aaf63552187057876a188298a1094a524577d4021cebd0",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0028_adult_confirmation",
+      "path": "migrations/gateway/0028_adult_confirmation.sql",
+      "sha256": "d7e84df38187b060b6a640fc6e0b00dffe2e4b7a8c9b755e9e685c9b8fe9c788",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0067_habit_extra_points",
+      "path": "migrations/instance/0067_habit_extra_points.sql",
+      "sha256": "cafb6c5d69961a34c93cd604ce75380c3b778a3d9bf3e8fc16b723372fb8538e",
+      "backwardCompatible": true
     }
   ]
 }

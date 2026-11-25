@@ -27,3 +27,12 @@ export function pendingInvite(now=Date.now(),store=tab()):InviteClaim|undefined{
 export function forgetInvite(store=tab()):void{
   try{store?.removeItem(key);}catch{/* storage unavailable */}
 }
+
+/**
+ * Tells the gateway about the invitation before sign-in, so a new account can still be created
+ * while registration is closed. Only a hash of the secret is kept, in a short-lived cookie.
+ * Failure is harmless: sign-in continues and open registration needs no invitation.
+ */
+export async function carryInvite(claim:InviteClaim,send:typeof fetch=fetch):Promise<void>{
+  try{await send('/api/auth/invitation',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({invitationId:claim.invitationId,token:claim.token})});}catch{/* sign in anyway */}
+}

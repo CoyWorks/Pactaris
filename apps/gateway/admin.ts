@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import type pg from 'pg';
 import {uuid} from '../../packages/auth/delegation.js';
 import {disguisedText} from '../../packages/auth/text.js';
@@ -120,6 +121,19 @@ export class AdminConsole{
   const r=await this.pool.query(`SELECT (SELECT registration FROM pactaris.platform_settings WHERE singleton)='closed'
    AND NOT EXISTS(SELECT 1 FROM pactaris.accounts WHERE issuer=$1 AND subject=$2) AS closed`,[issuer,subject]);
   return r.rows[0]?.closed===true;
+ }
+ /**
+  * Owner decision, 25 November 2026: while registration is closed, a person who arrives through an
+  * invitation may still get an account. The invitation must exist, be under seven days old and match
+  * the link secret and the verified email, recomputed from the creation request hash.
+  */
+ async invitationAdmits(invitationId:string,tokenHash:string,email:string):Promise<boolean>{
+  if(!uuid(invitationId)||!/^[a-f0-9]{64}$/.test(tokenHash))return false;
+  const r=await this.pool.query(`SELECT creator_account_id,household_id,create_operation_id,request_hash FROM pactaris.invitation_routes
+   WHERE id=$1 AND created_at>now()-interval '7 days'`,[invitationId]);
+  const row=r.rows[0];if(!row)return false;
+  const expected=createHash('sha256').update(JSON.stringify([row.creator_account_id,row.household_id,row.create_operation_id,tokenHash,email])).digest('hex');
+  return expected===row.request_hash;
  }
  async saveSettings(operatorId:string,input:SettingsInput):Promise<PlatformSettings|undefined>{
   const db=await this.pool.connect();

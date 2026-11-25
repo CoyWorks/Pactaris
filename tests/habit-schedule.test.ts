@@ -15,3 +15,10 @@ test('break commands accept only complete calendar dates and exact fields',()=>{
  assert.deepEqual(authorityInput('habitBreakAdd',input),input);
  for(const bad of [{...input,start:'2026-02-30'},{...input,end:'2026-11-30'},{...input,subjectId:habitId}]) assert.throws(()=>authorityInput('habitBreakAdd',bad));
 });
+
+test('extra points above the goal come as a pair, within range and only for at-least habits',()=>{
+ assert.equal(validHabitFields({...fields,extraPoints:2,extraLimit:3}),true);
+ assert.equal(validHabitFields({...fields,extraPoints:null,extraLimit:null}),true);
+ for(const bad of [{extraPoints:2},{extraLimit:3},{extraPoints:2,extraLimit:null},{extraPoints:0,extraLimit:3},{extraPoints:2,extraLimit:1001},{extraPoints:2,extraLimit:3,mode:'maximum'},{unknown:1}])
+  assert.equal(validHabitFields({...fields,...bad}),false);
+});

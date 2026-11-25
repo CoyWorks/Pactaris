@@ -422,3 +422,15 @@ test('sign-in security: own devices only, CSRF and fresh sign-in before removal'
   const plain=fixture(),{cookie}=await login(plain);
   assert.deepEqual((await inject(plain.app,{url:'/api/account/security',headers:{...headers,cookie}})).json(),{available:false});
 });
+
+test('an invitation is remembered across sign-in as an ID plus secret hash, never the secret itself',async()=>{
+  const f=fixture(),invitationId='40000000-0000-4000-8000-000000000001',token='A'.repeat(43);
+  const post=(body:unknown,origin='https://pactaris.app')=>inject(f.app,{method:'POST',url:'/api/auth/invitation',headers:{...headers,origin,'content-type':'application/json'},payload:JSON.stringify(body)});
+  assert.equal((await post({invitationId,token},'https://evil.invalid')).statusCode,400);
+  assert.equal((await post({invitationId,token:'short'})).statusCode,400);
+  assert.equal((await post({invitationId,token,extra:1})).statusCode,400);
+  const ok=await post({invitationId,token});assert.equal(ok.statusCode,204);
+  const set=String(ok.headers['set-cookie']);
+  assert.match(set,/^__Host-pactaris-invite=40000000-0000-4000-8000-000000000001\.[a-f0-9]{64}; Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=1800/);
+  assert.ok(!set.includes(token));
+});
