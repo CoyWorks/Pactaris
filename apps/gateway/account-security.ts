@@ -20,7 +20,9 @@ const kinds:Record<string,DeviceKind> = {
   'authentik_stages_authenticator_static.staticdevice':'static',
 };
 
-export class SecurityUnavailable extends Error { constructor() { super('account_security.unavailable'); } }
+// The reason is a short code for the operator log; it never contains the token or response data.
+export type UnavailableReason='token_unreadable'|'token_invalid'|'network'|'token_rejected'|`http_${number}`|'invalid_body'|'invalid_user';
+export class SecurityUnavailable extends Error { constructor(readonly reason:UnavailableReason) { super('account_security.unavailable'); } }
 
 function stamp(value:unknown):string|null {
   if(typeof value!=='string')return null;
@@ -50,25 +52,25 @@ export class AccountSecurity {
   private async call(method:'GET'|'DELETE',path:string):Promise<unknown> {
     let token=this.token;
     if(!token){
-      try{token=this.readToken();}catch{throw new SecurityUnavailable();}
-      if(!token||/\s/.test(token))throw new SecurityUnavailable();
+      try{token=this.readToken();}catch{throw new SecurityUnavailable('token_unreadable');}
+      if(!token||/\s/.test(token))throw new SecurityUnavailable('token_invalid');
       this.token=token;
     }
     let response:Response;
     try{
       response=await this.request(this.config.identityOrigin+path,{method,redirect:'error',signal:AbortSignal.timeout(6000),
         headers:{Authorization:'Bearer '+token,Accept:'application/json'}});
-    }catch{throw new SecurityUnavailable();}
-    if(response.status===401||response.status===403){this.token=undefined;throw new SecurityUnavailable();}
+    }catch{throw new SecurityUnavailable('network');}
+    if(response.status===401||response.status===403){this.token=undefined;throw new SecurityUnavailable('token_rejected');}
     if(method==='DELETE'&&(response.status===204||response.status===404))return null;
-    if(!response.ok)throw new SecurityUnavailable();
-    try{return await response.json();}catch{throw new SecurityUnavailable();}
+    if(!response.ok)throw new SecurityUnavailable(`http_${response.status}`);
+    try{return await response.json();}catch{throw new SecurityUnavailable('invalid_body');}
   }
 
   async devices(identityUser:number):Promise<SecurityDevice[]> {
-    if(!Number.isSafeInteger(identityUser)||identityUser<1)throw new SecurityUnavailable();
+    if(!Number.isSafeInteger(identityUser)||identityUser<1)throw new SecurityUnavailable('invalid_user');
     const body=await this.call('GET',`/api/v3/authenticators/admin/all/?user=${identityUser}`);
-    if(!Array.isArray(body))throw new SecurityUnavailable();
+    if(!Array.isArray(body))throw new SecurityUnavailable('invalid_body');
     const devices:SecurityDevice[]=[];
     for(const item of body.slice(0,100)){
       if(!item||typeof item!=='object')continue;
@@ -95,6 +97,11 @@ export class AccountSecurity {
   }
 }
 
+function logUnavailable(error:unknown){
+  const reason=error instanceof SecurityUnavailable?error.reason:'unexpected';
+  process.stderr.write(JSON.stringify({code:'account_security.unavailable',reason})+'\n');
+}
+
 // Routes live here, outside createGatewayApp, to keep that function's control flow small.
 export function accountSecurityRoutes(app:express.Express,store:GatewayStore,security:Pick<AccountSecurity,'overview'|'remove'|'links'>|undefined,
   authenticate:(req:express.Request,res:express.Response)=>Promise<Session|undefined>,
@@ -108,7 +115,7 @@ export function accountSecurityRoutes(app:express.Express,store:GatewayStore,sec
     if(identityUser===undefined){res.json({available:true,links,devices:null,signInAgain:true});return;}
     try{res.json({available:true,...await security.overview(identityUser)});}
     catch(error){
-      if(!(error instanceof SecurityUnavailable))process.stderr.write(JSON.stringify({code:'account_security.failed'})+'\n');
+      logUnavailable(error);
       res.json({available:true,links,devices:null,devicesUnavailable:true});
     }
   });
@@ -128,6 +135,6 @@ export function accountSecurityRoutes(app:express.Express,store:GatewayStore,sec
     try{
       if(await security.remove(identityUser,String(req.params.id))==='not_found'){missing(res);return;}
       res.status(204).end();
-    }catch{res.status(503).json({code:'security_unavailable',messageKey:'errors.unavailable'});}
+    }catch(error){logUnavailable(error);res.status(503).json({code:'security_unavailable',messageKey:'errors.unavailable'});}
   });
 }

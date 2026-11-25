@@ -25,11 +25,19 @@ People manage their password, passkeys (Face ID, fingerprint, device PIN), authe
    The flows reuse the default password prompt and write stages, and the default TOTP, WebAuthn and static setup stages. Passkey settings (user verification and a resident key) come from [PASSKEY_SIGN_IN.md](PASSKEY_SIGN_IN.md).
 2. **Add the claim.** In the profile scope mapping of the Pactaris provider (`pactaris-profile`, or `pactaris-instance1-profile` on the first deployment), add `"pactaris_identity_user": request.user.pk`. The repository blueprints include it.
 3. **Create a token.** In **Directory > Tokens and App passwords**, create a token for `pactaris-gateway-account` with intent **API** and no expiry. Copy the key once.
-4. **Store the token.** Write it on the gateway host to a root-owned file. Use the same owner, group and mode as the existing `oidc.clientSecretFile`, for example `/etc/pactaris/bootstrap/login/identity-account.token`. Never commit it.
+4. **Store the token.** Write it next to the gateway's `oidc.clientSecretFile`, in the gateway secrets folder (`/opt/pactaris/gateway/secrets/identity-account.token` on the first deployment). Give it the same owner, group and mode (`root:<gateway service user>`, `0640`). The service runs with `ProtectSystem=strict`. It cannot enter `/etc/pactaris/bootstrap/login`, which is root-only on purpose because it holds migration and backup credentials. Never commit the token. Check that the service user can read it:
+
+```bash
+S=$(python3 -c "import json;print(json.load(open('/opt/pactaris/gateway/config.json'))['oidc']['clientSecretFile'])")
+N=$(dirname "$S")/identity-account.token
+read -rs TOKEN && printf '%s' "$TOKEN" > "$N" && unset TOKEN
+chown --reference="$S" "$N" && chmod --reference="$S" "$N"
+sudo -u "$(stat -c %G "$S")" test -r "$N" && echo readable
+```
 5. **Configure the gateway and restart it:**
 
 ```json
-"accountSecurity": {"tokenFile":"/etc/pactaris/bootstrap/login/identity-account.token"}
+"accountSecurity": {"tokenFile":"/opt/pactaris/gateway/secrets/identity-account.token"}
 ```
 
 Optional fields:
@@ -38,6 +46,22 @@ Optional fields:
 - `flows`: per-flow slugs (`password`, `totp`, `passkey`, `recovery`).
 
 Without `accountSecurity`, the profile page says that sign-in settings are not available.
+
+## Troubleshooting
+
+When the page says your sign-in methods could not be loaded, the gateway logs `account_security.unavailable` with a reason. The log never contains the token.
+
+| Reason | Meaning |
+|---|---|
+| `token_unreadable` | The service cannot read `tokenFile`. Check the file's owner and mode, and that it is outside root-only folders. |
+| `token_invalid` | The file is empty or contains whitespace inside the token. |
+| `token_rejected` | Identity answered 401 or 403: the token was deleted, or the role lost its permissions. |
+| `network` | Identity was unreachable or slower than 6 seconds. |
+| `http_<status>` / `invalid_body` | Identity returned an unexpected answer. |
+
+```bash
+journalctl -u 'pactaris-gateway-*' --since '-1 hour' --no-pager | grep account_security
+```
 
 ## Rollback
 

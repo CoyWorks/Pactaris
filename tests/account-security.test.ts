@@ -52,12 +52,14 @@ test('Identity failures are unavailable, and a rejected token is read again',asy
   let reads=0;
   const {request}=fake([{status:403},{status:200,body:[]},{status:500}]);
   const security=new AccountSecurity(config,request,()=>{reads++;return 'token-'+reads;});
-  await assert.rejects(security.devices(42),SecurityUnavailable);
+  const reason=(code:string)=>(error:unknown)=>error instanceof SecurityUnavailable&&error.reason===code;
+  await assert.rejects(security.devices(42),reason('token_rejected'));
   assert.deepEqual(await security.devices(42),[]);
   assert.equal(reads,2);
-  await assert.rejects(security.devices(42),SecurityUnavailable);
-  await assert.rejects(new AccountSecurity(config,request,()=>{throw Error('missing');}).devices(42),SecurityUnavailable);
-  await assert.rejects(security.devices(0),SecurityUnavailable);
+  await assert.rejects(security.devices(42),reason('http_500'));
+  await assert.rejects(new AccountSecurity(config,request,()=>{throw Error('missing');}).devices(42),reason('token_unreadable'));
+  await assert.rejects(new AccountSecurity(config,request,()=>'two words').devices(42),reason('token_invalid'));
+  await assert.rejects(security.devices(0),reason('invalid_user'));
 });
 
 test('links sign in at Identity first and return to the same flow',()=>{
