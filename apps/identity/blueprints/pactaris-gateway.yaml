@@ -30,6 +30,23 @@ entries:
             "pactaris_identity_user": request.user.pk,
         }
 
+  # email_verified is true only while the current address is the one confirmed through the
+  # pactaris-account-verify-email flow (pactaris-account.yaml, docs/VERIFIED_EMAIL.md).
+  - model: authentik_providers_oauth2.scopemapping
+    id: pactaris-email
+    state: present
+    identifiers:
+      name: pactaris-email
+    attrs:
+      scope_name: email
+      expression: |
+        email = request.user.email
+        verified_address = request.user.attributes.get("email_verified_address")
+        return {
+            "email": email,
+            "email_verified": bool(email and verified_address == email),
+        }
+
   - model: authentik_providers_oauth2.oauth2provider
     id: pactaris-provider
     state: present
@@ -53,7 +70,7 @@ entries:
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !KeyOf pactaris-profile
-        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !KeyOf pactaris-email
       access_code_validity: minutes=1
       access_token_validity: minutes=5
 

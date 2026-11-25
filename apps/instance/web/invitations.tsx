@@ -2,7 +2,8 @@ import React,{useEffect,useState} from 'react';
 import {Hint} from './navigation.js';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import {signInHref} from './auto-sign-in.js';
-type Session={account:{id:string;displayName:string};csrfToken:string};
+import {EmailVerificationNotice} from './email-verification.js';
+type Session={account:{id:string;displayName:string};csrfToken:string;emailVerified?:boolean};
 type Invite={invitationId:string;status:string;role:string;expiresAt:string;delivery?:string};
 const errorKey=(key:unknown):MessageKey=>(['invitations.invalid','invitations.denied','invitations.conflict','invitations.capacity','invitations.proof','invitations.unavailable','errors.rateLimited','errors.request'] as unknown[]).includes(key)?key as MessageKey:'invitations.unavailable';
 function secret(){const data=crypto.getRandomValues(new Uint8Array(32));return btoa(String.fromCharCode(...data)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');}
@@ -88,7 +89,9 @@ export function InvitationJoin({session,loading,language,format,timeZone}:{sessi
     </>}
    </section>}
    {declined&&<p role="status">{t('invitations.declined')}</p>}
-   {error==='invitations.proof'&&<p>{t('invitations.signInThenReopen')} <a href={signInHref()}>{t('portal.signIn')}</a></p>}
+   {error==='invitations.proof'&&(session.emailVerified===false
+     ?<EmailVerificationNotice language={language} emailVerified={false} body="invitations.verifyFirst"/>
+     :<p>{t('invitations.signInThenReopen')} <a href={signInHref('/auth/reauth')}>{t('portal.signIn')}</a></p>)}
   </>}
   <p><a href="/">{t('portal.back')}</a></p>
  </main>;

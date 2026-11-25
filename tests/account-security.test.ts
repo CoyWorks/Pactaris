@@ -6,7 +6,7 @@ import {parseGatewayConfig,ConfigError} from '../packages/config/index.js';
 import {readFileSync} from 'node:fs';
 
 const config={identityOrigin:'https://identity.example.invalid',tokenFile:'/secret/token',loginFlow:'default-authentication-flow',
-  flows:{password:'pactaris-account-password',totp:'pactaris-account-totp',passkey:'pactaris-account-passkey',recovery:'pactaris-account-recovery'}};
+  flows:{password:'pactaris-account-password',totp:'pactaris-account-totp',passkey:'pactaris-account-passkey',recovery:'pactaris-account-recovery',verifyEmail:'pactaris-account-verify-email'}};
 const devices=[
   {pk:'7',name:'iPhone',type:'authentik_stages_authenticator_webauthn.WebAuthnDevice',confirmed:true,created:'2026-11-01T10:00:00Z',last_used:null},
   {pk:'3',name:'Authenticator',type:'authentik_stages_authenticator_totp.TOTPDevice',confirmed:true,created:'2026-10-01T10:00:00Z',last_used:'2026-11-20T08:00:00Z'},
@@ -67,7 +67,7 @@ test('links sign in at Identity first and return to the same flow',()=>{
   const url=new URL(links.passkey);
   assert.equal(url.origin+url.pathname,'https://identity.example.invalid/if/flow/pactaris-account-passkey/');
   assert.equal(url.searchParams.get('next'),'/if/flow/default-authentication-flow/?next=%2Fif%2Fflow%2Fpactaris-account-passkey%2F');
-  assert.deepEqual(Object.keys(links).sort(),['passkey','password','recovery','totp']);
+  assert.deepEqual(Object.keys(links).sort(),['passkey','password','recovery','totp','verifyEmail']);
 });
 
 test('device ids and the identity user claim are strict',()=>{

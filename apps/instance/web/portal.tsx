@@ -17,7 +17,8 @@ import {Skeleton} from './today-habits.js';
 import {AppearancePanel} from './appearance.js';
 import {NotificationSettings} from './notification-settings.js';
 import {AccountSecurity} from './account-security.js';
-type Session={account:{id:string;displayName:string};csrfToken:string;presentation?:Presentation;preferredName?:string};
+import {EmailVerificationNotice} from './email-verification.js';
+type Session={account:{id:string;displayName:string};csrfToken:string;presentation?:Presentation;preferredName?:string;emailVerified?:boolean};
 type Summary={id:string;name:string};
 // Per-browser convenience only: which dynamic this account opened last. Cleared on sign-out.
 const lastKey='pactaris.lastDynamic';
@@ -140,6 +141,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
     <header className="app-bar"><button type="button" className="icon-button" aria-label={t('nav.back')} onClick={()=>{if(window.history.length>1)window.history.back();else navigate('/');}}><Icon name="back"/></button><h1>{t('profile.title')}</h1></header>
     <div className="profile-card"><span className="avatar large" aria-hidden="true">{initial}</span><strong>{session.account.displayName||t('portal.account')}</strong></div>
     {error&&<p role="alert">{t(error)}</p>}
+    <EmailVerificationNotice language={language} emailVerified={session.emailVerified}/>
     <h2 className="group-title">{t('profile.preferences')}</h2>
     <ul className="menu">
      <ProfileRow title={t('account.displayNameTitle')} detail={session.account.displayName} onOpen={()=>setPanel('name')}/>
@@ -168,7 +170,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
     {panel==='sessions'&&<Layer title={t('account.sessionsTitle')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
      <AccountSessions key={'sessions:'+session.account.id} csrfToken={session.csrfToken} language={language} format={displayFormat} timeZone={displayZone} onSignOut={()=>{void logout();}}/></Layer>}
     {panel==='security'&&<Layer title={t('security.title')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
-     <AccountSecurity key={'security:'+session.account.id} csrfToken={session.csrfToken} language={language} format={displayFormat} timeZone={displayZone}/></Layer>}
+     <AccountSecurity key={'security:'+session.account.id} csrfToken={session.csrfToken} language={language} format={displayFormat} timeZone={displayZone} emailVerified={session.emailVerified}/></Layer>}
     {panel==='report'&&<Layer title={t('account.reportTitle')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
      <ReportPanel csrfToken={session.csrfToken} language={language}/></Layer>}
     <DeleteAccountPanel csrfToken={session.csrfToken} language={language}/>
@@ -182,6 +184,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   return <main className="page">
     <header className="app-bar"><h1>{t('portal.title')}</h1>{avatar}</header>
     {problem}{error&&<p role="alert">{t(error)}</p>}
+    <EmailVerificationNotice language={language} emailVerified={session.emailVerified}/>
     {listing&&<section className="plain" aria-live="polite">
       {listing.partial&&<p role="status">{t('portal.partial')}</p>}
       {inbox?.partial&&<p role="status">{t('inbox.selectorPartial')}</p>}

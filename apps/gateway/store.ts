@@ -6,7 +6,7 @@ export type LoginAttempt = {state:string;nonce:string;verifier:string};
 export type LoginClient = 'browser'|'app';
 export type Account = {id:string;displayName:string};
 export type AccountPresentation = {format:string;timeZone:string};
-export type Session = {account:Account;csrfToken:string;expiresAt:string;presentation?:AccountPresentation;preferredName?:string};
+export type Session = {account:Account;csrfToken:string;expiresAt:string;presentation?:AccountPresentation;preferredName?:string;emailVerified?:boolean};
 export type SessionView = {id:string;current:boolean;createdAt:string;expiresAt:string};
 export type Placement = {householdId:string;instanceId:string;endpoint:string;tlsServerName:string;caFile:string;version:string};
 export interface GatewayStore {
@@ -69,8 +69,9 @@ export class PgGatewayStore implements GatewayStore {
     const r=await this.pool.query(`UPDATE pactaris.sessions s SET idle_expires_at=LEAST(s.expires_at,now()+COALESCE(s.idle_seconds,$2)*interval '1 second')
       FROM pactaris.accounts a WHERE s.token_hash=$1 AND a.id=s.account_id AND a.status='active' AND s.expires_at>now() AND s.idle_expires_at>now()
       AND (NOT $3::boolean OR s.recipient_email=a.verified_email)
-      RETURNING a.id,COALESCE(a.preferred_display_name,a.display_name) AS display_name,a.preferred_display_name,s.csrf_token,s.expires_at,a.locale_format,a.time_zone`,[hash(token),idle,requireVerifiedEmail]);
-    const row=r.rows[0];return row?{account:{id:row.id,displayName:row.display_name},csrfToken:row.csrf_token,expiresAt:row.expires_at.toISOString(),
+      RETURNING a.id,COALESCE(a.preferred_display_name,a.display_name) AS display_name,a.preferred_display_name,s.csrf_token,s.expires_at,a.locale_format,a.time_zone,
+        (s.recipient_email IS NOT NULL AND s.recipient_email=a.verified_email) AS email_verified`,[hash(token),idle,requireVerifiedEmail]);
+    const row=r.rows[0];return row?{account:{id:row.id,displayName:row.display_name},csrfToken:row.csrf_token,expiresAt:row.expires_at.toISOString(),emailVerified:row.email_verified===true,
       ...(row.preferred_display_name?{preferredName:row.preferred_display_name}:{}),
       ...(row.locale_format&&row.time_zone?{presentation:{format:row.locale_format,timeZone:row.time_zone}}:{})}:undefined;
   }
