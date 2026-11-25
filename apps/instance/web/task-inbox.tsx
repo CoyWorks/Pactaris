@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {Hint} from './navigation.js';
+import {Hint,Icon,navigate} from './navigation.js';
 import {createTranslator} from '../../../packages/i18n/index.js';
 import type {DeliveryPreferences,InboxPreferences,PartnerResult} from '../../../packages/auth/partner.js';
 
@@ -87,6 +87,14 @@ export function TaskInbox({householdId,csrfToken,language,onRead,pointsLabel}:{h
  function editDelivery(changes:Partial<DeliveryPreferences>){
   setDelivery(current=>current?{...current,...changes}:current);setDeliverySaved(false);
  }
+ async function markRead(id:string){
+  if(items?.find(row=>row.id===id)?.read)return;
+  try{
+   await request('partnerInboxRead',{taskId:id},AbortSignal.timeout(12000));
+   setItems(rows=>rows?.map(row=>row.id===id?{...row,read:true}:row));
+   setRevision(value=>value+1);onRead();
+  }catch{setFailed(true);}
+ }
  return <section><h3>{t('inbox.title')}</h3>
   <button type="button" aria-expanded={showPreferences} disabled={saving} onClick={()=>{
    setPreferences(undefined);setDelivery(undefined);setDeliverySaved(false);setSaved(false);setShowPreferences(!showPreferences);
@@ -125,15 +133,11 @@ export function TaskInbox({householdId,csrfToken,language,onRead,pointsLabel}:{h
   {failed&&<p role="alert">{t('inbox.error')}</p>}
   {balance!==undefined&&<p>{pointsLabel?t('inbox.namedBalance',{label:pointsLabel}):t('inbox.balance')} <strong>{balance}</strong></p>}
   {items?.length===0&&<p>{t('inbox.empty')}</p>}
-  <ul>{items?.map(item=><li key={item.id}>{t(labels[item.kind])} {!item.read&&<button type="button" onClick={async()=>{
-   try{
-    await request('partnerInboxRead',{taskId:item.id},AbortSignal.timeout(12000));
-    setItems(rows=>rows?.map(row=>row.id===item.id?{...row,read:true}:row));
-    setRevision(value=>value+1);
-    onRead();
-   }
-   catch{setFailed(true);}
-  }}>{t('inbox.read')}</button>}</li>)}</ul>
+  <ul className="menu">{items?.map(item=><li key={item.id}><button type="button" onClick={()=>{void markRead(item.id);
+    navigate('/households/'+householdId+'?view=participantTasks&task='+encodeURIComponent(item.taskId));}}>
+    {!item.read&&<span className="dot" aria-label={t('inbox.unread')}/>}
+    <span className="grow"><span className="row-title">{item.title||t(labels[item.kind])}</span>{item.title&&<span className="muted">{t(labels[item.kind])}</span>}</span>
+    <Icon name="chevron"/></button></li>)}</ul>
   {items?.length===25&&<button type="button" onClick={()=>setAfter(items.at(-1)?.id)}>{t('portal.more')}</button>}
   {after&&<button type="button" onClick={()=>setAfter(undefined)}>{t('workspace.firstPage')}</button>}
   <button type="button" onClick={()=>setRevision(n=>n+1)}>{t('common.refresh')}</button>

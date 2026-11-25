@@ -47,6 +47,7 @@ export function AccountPresentation({csrfToken,language,saved,defaults,onSave,em
       if(!busy)void save({format:draft.format.trim(),timeZone:draft.timeZone.trim()});
     }}>
       <Hint label={t('hint.more')}>{t('account.presentationDescription')}</Hint>
+      {!saved&&<p className="notice">{t('account.presentationDevice')}</p>}
       <label htmlFor="account-format">{t('account.presentationFormat')}</label>
       <select id="account-format" value={draft.format} required disabled={busy}
         onChange={event=>{setDone(false);setDraft({...draft,format:event.target.value});}}>

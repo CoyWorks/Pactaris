@@ -597,6 +597,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   // Operator console: reports with notes and reopen, account search and detail, households without
   // names, settings with optimistic versioning, the registration gate and the audit log.
   const admin=new AdminConsole(gatewayDb.pool,'https://idp.fixture.invalid/',['subject-a']);
+  await (async()=>{
   const noteId=randomUUID();
   assert.equal(await admin.addNote(account.id,reportId,noteId,'Checked the logs'),true);assert.equal(await admin.addNote(account.id,reportId,noteId,'Checked the logs'),true);
   assert.equal(await admin.addNote(account.id,randomUUID(),randomUUID(),'Nothing'),false);
@@ -1103,6 +1104,9 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await graphPost('accept',{relationshipId:lostGraphId,version:'1'},graphB.session)).status,409);
   assert.equal((await graphDb.owner.query('SELECT status FROM pactaris.households WHERE id=$1',[graphHome.householdId])).rows[0].status,'paused');
   await graphDb.owner.query("UPDATE pactaris.households SET status='active' WHERE id=$1",[graphHome.householdId]);
+  // The rest of this long test runs in its own function: one very long function body exceeds the
+  // type checker's recursion limit in CI (--stack_size=512).
+  await (async()=>{
   const racingGraph=await proposeGraph([graphA.member,graphB.member],[]);
   assert.equal((await graphPost('accept',{relationshipId:racingGraph.id,version:'1'})).status,200);
   const graphRaces=await Promise.all([graphPost('accept',{relationshipId:racingGraph.id,version:'1'},graphB.session),graphPost('withdraw',{relationshipId:racingGraph.id,version:'1'})]);
@@ -2203,7 +2207,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       assert.deepEqual((await post(B,'partnerInboxConfigure',{preferences:quietPrefs})).data.inboxPreferences,quietPrefs);
       assert.deepEqual((await post(A,'partnerInboxPreferences',{})).data.inboxPreferences,defaultPrefs);
       assert.deepEqual((await post(B,'partnerInboxPreferences',{})).data.inboxPreferences,quietPrefs);
-      assert.ok((await post(B,'partnerInbox',{})).data.inbox.some((notice:{taskId:string})=>notice.taskId===legacy));
+      assert.ok((await post(B,'partnerInbox',{})).data.inbox.some((notice:{taskId:string;title?:string})=>notice.taskId===legacy&&!!notice.title));
       const inboxState=async(p:Person)=>{
         const result=await api(base+'/workspace/unread','GET',undefined,p.session);
         assert.equal(result.status,200);
@@ -2513,6 +2517,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await assert.rejects(onboardingStore.reserveCreate(other.id,beforeId,'Undispatched private name'),{kind:'conflict'});
   await gatewayDb.owner.query("UPDATE pactaris.accounts SET status='suspended' WHERE id=$1",[before.id]);
   await assert.rejects(onboardingStore.reserveCreate(before.id,randomUUID(),'Suspended request'),{kind:'denied'});
+  })();
+  })();
  }finally{
   for(const server of servers){server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
   await Promise.all(pools.map(p=>p.end()));

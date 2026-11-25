@@ -23,6 +23,6 @@ test('catalog writes require exact versions and list cursors cannot inject ident
 });
 test('private catalog screen has a standalone creation path and translated point cost',()=>{
  const html=renderToStaticMarkup(React.createElement(CatalogPanel,{householdId:randomUUID(),session:{csrfToken:'fixture'},language:'en',format:'en-GB'}));
- assert.match(html,/Reward catalog/);assert.match(html,/Create a private reward draft/);assert.match(html,/current membership/);assert.doesNotMatch(html,/Redeem now|Grant points/);
+ assert.match(html,/Reward catalog/);assert.match(html,/Create a private reward draft/);assert.match(html,/Only you can see these drafts/);assert.doesNotMatch(html,/Redeem now|Grant points/);
  assert.equal(createTranslator('en')('catalog.pointCost',{count:'1,000'}),'Proposed cost: 1,000 points');
 });

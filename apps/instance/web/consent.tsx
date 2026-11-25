@@ -54,7 +54,7 @@ export function SafetyProvider({householdId,session,language,children,compact=fa
   {state&&<><p>{t(state.householdStatus==='active'?'consent.householdActive':'consent.householdPaused')}</p><p>{t(state.selfPaused?'consent.selfPaused':'consent.selfActive')}</p></>}
   {error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}
   <button type="button" onClick={()=>{void command('selfPause',{},true);}}>{t('consent.pauseSelf')}</button>
-  <button type="button" onClick={()=>{void command('householdStop',{},true);}}>{t('consent.stopHousehold')}</button>
+  <button type="button" className="danger" onClick={()=>{void command('householdStop',{},true);}}>{t('consent.stopHousehold')}</button>
   {state?.selfPaused&&<button type="button" disabled={busy||!!draft} onClick={()=>{void command('selfResume',{epoch:state.epoch,memberEpoch:state.memberEpoch});}}>{t('consent.resumeSelf')}</button>}
   {state?.householdStatus==='paused'&&<><p>{t('consent.quorum')}</p><button type="button" disabled={busy||!!draft||state.selfPaused} onClick={()=>{void command('householdResume',{epoch:state.epoch,memberEpoch:state.memberEpoch});}}>{t(state.resumeAcknowledged?'consent.reentryAcknowledged':'consent.reentry')}</button></>}
   {draft&&<div><p>{t('consent.retryNotice')}</p><button type="button" disabled={busy} onClick={()=>{void send(draft);}}>{t('onboarding.retry')}</button><button type="button" disabled={busy} onClick={()=>setDraft(undefined)}>{t('consent.discardRetry')}</button></div>}

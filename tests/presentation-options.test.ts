@@ -24,6 +24,7 @@ test('zone offsets follow daylight saving time', () => {
 test('zone choices group by region with UTC first and include the current zone', () => {
   const groups=zoneChoices('Europe/Amsterdam',winter,' · ',['America/New_York','Europe/Amsterdam','America/Argentina/Buenos_Aires']);
   assert.deepEqual(groups.map(group=>group.region),['UTC','America','Europe']);
+  assert.deepEqual(groups[0]!.choices,[{value:'UTC',label:'UTC'}]);
   const america=groups[1]!.choices.map(item=>item.label);
   assert.ok(america.includes('New York · UTC-05:00'));
   assert.ok(america.includes('Argentina · Buenos Aires · UTC-03:00'));
@@ -36,4 +37,11 @@ test('preview uses the chosen locale and zone', () => {
   assert.match(previewTime('en-GB','Europe/Amsterdam',at)??'',/22 November 2026.*01:30:00/);
   assert.match(previewTime('en-US','America/New_York',at)??'',/November 21, 2026.*7:30:00/);
   assert.equal(previewTime('en-GB','Not/AZone',at),undefined);
+});
+
+test('device defaults come from the browser, with a fallback', async () => {
+  const {deviceDefaults}=await import('../apps/instance/web/presentation-options.js');
+  const value=deviceDefaults({format:'en-GB',timeZone:'UTC'});
+  assert.ok(Intl.DateTimeFormat.supportedLocalesOf(value.format).length===1);
+  assert.doesNotThrow(()=>new Intl.DateTimeFormat('en',{timeZone:value.timeZone}));
 });

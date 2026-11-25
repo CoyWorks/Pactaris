@@ -1,4 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
+import {createPortal} from 'react-dom';
+// Server-side rendering (tests) has no document: render in place there.
+const portal=(node:React.ReactElement)=>typeof document==='undefined'?node:createPortal(node,document.body);
 const event='pactaris:navigate';
 /** Moves within the single-page app without a full reload. */
 export function navigate(to:string,replace=false){
@@ -51,12 +54,12 @@ export function Sheet({title,closeLabel,onClose,children}:{title:string;closeLab
   (first??box.current)?.focus();
   return()=>{previous?.focus?.();};
  },[]);
- return <div className="sheet-backdrop" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+ return portal(<div className="sheet-backdrop" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
   <div className="sheet" role="dialog" aria-modal="true" aria-label={title} ref={box} tabIndex={-1}>
    <div className="sheet-head"><h2>{title}</h2><button type="button" className="icon-button" aria-label={closeLabel} onClick={onClose}><Icon name="close"/></button></div>
    {children}
   </div>
- </div>;
+ </div>);
 }
 const paths={
  today:<><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></>,
@@ -90,8 +93,10 @@ export function Layer({title,backLabel,onClose,status,children}:{title:string;ba
   layers.push(entry);document.body.classList.add('layer-open');heading.current?.focus();
   return()=>{layers.splice(layers.indexOf(entry),1);if(!layers.length)document.body.classList.remove('layer-open');previous?.focus?.();};
  },[]);
- return <div className="layer" role="dialog" aria-modal="true" aria-label={title}>
+ // Rendered at the end of <body>: a layer opened from a list row must not inherit the row's
+ // button styles or be trapped by a transformed (swipeable) ancestor.
+ return portal(<div className="layer" role="dialog" aria-modal="true" aria-label={title}>
   <div className="layer-bar"><button type="button" className="icon-button" aria-label={backLabel} onClick={()=>close.current()}><Icon name="back"/></button><h2 ref={heading} tabIndex={-1}>{title}</h2></div>
   <div className="layer-body">{status}{children}</div>
- </div>;
+ </div>);
 }

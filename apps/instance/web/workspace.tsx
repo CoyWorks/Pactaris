@@ -24,6 +24,7 @@ import {NoticesView,useNotices} from './notices.js';
 import {BoardView,useProgress} from './progress.js';
 import {ShopView} from './shop.js';
 import {GettingStarted} from './start.js';
+import {TodaySharedTasks} from './today-shared-tasks.js';
 type View='home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews'|'authority'|'notices'|'board'|'shop';
 type Tab='home'|'tasks'|'routines'|'library'|'dynamic';
 type Draft={action:string;body:Record<string,unknown>};
@@ -222,6 +223,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
      onInvite={()=>go('members')} onLink={()=>go('authority')} onTask={()=>navigate('/households/'+householdId+'?view=participantTasks&give=any')}/>}
     {data?.hasUnreadTaskInbox&&<button type="button" className="row-button" onClick={()=>go('notices')}><span className="dot" aria-hidden="true"/><span className="grow">{t('workspace.unreadShared')}</span><Icon name="chevron"/></button>}
     <Attention householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} authority={authority.data} reload={exchangeReload} onChanged={message=>{setNotice(message);refreshAll();}} onReviews={()=>go('reviews')}/>
+    <TodaySharedTasks householdId={householdId} csrfToken={session.csrfToken} language={language} reload={exchangeReload+refresh}/>
     <div className="section-head"><h2>{t('workspace.todo')}</h2><button type="button" className="link-button" onClick={()=>go('tasks')}>{t('workspace.allTasks')}</button></div>
     {today.length?<ul className="card-list">{today.map(task=>row(task,true))}</ul>:<div className="empty-card"><p>{t('workspace.nothingDue')}</p><button type="button" onClick={()=>setAdding('task')}><Icon name="plus"/>{t('today.addTask')}</button></div>}
     {authority.data&&<TodayAssignedHabits habits={assignedHabits} me={authority.data.actorMembershipId} householdId={householdId} session={session} language={language} onChanged={()=>setAuthorityReload(v=>v+1)}/>}

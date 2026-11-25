@@ -495,9 +495,10 @@ export class PrivatePartnerClient{
    }
    if(action==='partnerInbox'){
     if(!Array.isArray(r.inbox)||r.inbox.length>25)throw Error('routing.response');
-    out.inbox=r.inbox.map(({id,taskId,kind,read,at})=>{
+    out.inbox=r.inbox.map(({id,taskId,kind,read,at,title})=>{
      if(!uuid(id)||!uuid(taskId)||!['assigned','submitted','reviewed','reminder'].includes(kind)||typeof read!=='boolean'||typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('routing.response');
-     return {id,taskId,kind,read,at};
+     // Older Instances omit the title; an unexpected value is dropped rather than shown.
+     return {id,taskId,kind,read,at,...(typeof title==='string'&&title.length<=120?{title}:{})};
     });
    }
    if(action==='partnerList'||action==='partnerOptions'){if(r.nextCursor!==null&&!uuid(r.nextCursor))throw Error('routing.response');out.nextCursor=r.nextCursor;}

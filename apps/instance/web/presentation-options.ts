@@ -50,7 +50,8 @@ export function zoneChoices(current:string,now:Date,separator:string,zones:strin
     const place=(slash>0?zone.slice(slash+1):zone).replaceAll('_',' ').replaceAll('/',separator);
     const offset=zoneOffset(zone,now);
     const list=groups.get(region)??[];
-    list.push({value:zone,label:offset&&offset!==place?place+separator+offset:place});
+    // UTC needs no offset next to it.
+    list.push({value:zone,label:offset&&zone!=='UTC'?place+separator+offset:place});
     groups.set(region,list);
   }
   return [...groups].sort(([a],[b])=>a==='UTC'?-1:b==='UTC'?1:a.localeCompare(b))
@@ -61,4 +62,15 @@ export function previewTime(format:string,timeZone:string,now:Date):string|undef
   try{
     return new Intl.DateTimeFormat(format,{dateStyle:'full',timeStyle:'medium',timeZone}).format(now);
   }catch{return undefined;}
+}
+
+// Formatting locale and time zone of this device, for people who have not saved their own.
+// Falls back to the app defaults when the browser reports something unusable.
+export function deviceDefaults(fallback:{format:string;timeZone:string}):{format:string;timeZone:string}{
+  try{
+    const options=new Intl.DateTimeFormat().resolvedOptions();
+    const [format]=Intl.DateTimeFormat.supportedLocalesOf(options.locale);
+    const timeZone=options.timeZone&&new Intl.DateTimeFormat('en',{timeZone:options.timeZone}).resolvedOptions().timeZone;
+    return {format:format??fallback.format,timeZone:timeZone||fallback.timeZone};
+  }catch{return fallback;}
 }

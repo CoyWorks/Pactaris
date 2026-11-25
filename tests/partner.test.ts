@@ -41,7 +41,7 @@ test('only the recipient sees adoption; standing direction and direct mode are e
  const render=(actorId:string)=>renderToStaticMarkup(React.createElement(AssignmentPolicies,{policies:[policy],actorId,blocked:false,language:'en',onAction:()=>{}}));
  assert.match(render(policy.assigneeId),/Adopt this standing task authority/);
  assert.doesNotMatch(render(policy.creatorId),/Adopt this standing task authority/);
- assert.match(render(policy.assigneeId),/no per-task acceptance/);assert.match(render(policy.creatorId),/Revoke or decline authority/);
+ assert.match(render(policy.assigneeId),/no acceptance per task/);assert.match(render(policy.creatorId),/Revoke or decline authority/);
 });
 
 test('personal to-do query is supported without client-selected membership authority',()=>{
