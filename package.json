@@ -25,7 +25,9 @@
     "start:gateway": "node dist/server/apps/gateway/server.js",
     "start:gateway-worker": "node dist/server/apps/gateway/worker.js",
     "migrate": "node dist/server/scripts/migrate.js",
-    "test:integration": "node --import tsx --test tests/*.integration.ts"
+    "test:integration": "node --import tsx --test tests/*.integration.ts",
+    "schema:snapshot": "node --import tsx scripts/schema-snapshot.ts",
+    "schema:check": "node --import tsx scripts/schema-snapshot.ts --check"
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",
