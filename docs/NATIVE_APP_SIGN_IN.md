@@ -16,8 +16,16 @@ Status: design, not implemented. Owner decision, 25 November 2026:
    - that the device is on the trusted list and not revoked
    - that the account is active
    - that the last full login is no more than N days old (proposed: 30)
-4. **Trusted list.** The app can ask the gateway whether this phone is still trusted for the account, and if not, falls back to the full login. **Profile > Signed-in devices** shows trusted phones with their last use, and each can be removed. Account deletion, suspension, "sign out everywhere" and changing the password revoke all trusted phones.
-5. **Not MFA for operator work.** A fingerprint sign-in gives an ordinary session. The operator console keeps asking for a fresh full login with MFA.
+4. **Notifications keep flowing.** The push registration belongs to the trusted phone, not to the session. When the app session ends, or the periodic full login is due, notifications continue. Delivery stops only when the phone is removed from the trusted list, on sign-out from that phone, on "sign out everywhere", or on suspension or deletion. Pushes stay generic: no names or content, and opening one goes through the normal session check (docs/WEB_PUSH.md, docs/NOTIFICATIONS.md).
+5. **Trusted list.** The app can ask the gateway whether this phone is still trusted for the account, and if not, falls back to the full login. **Profile > Signed-in devices** shows trusted phones with their last use, and each can be removed. Account deletion, suspension, "sign out everywhere" and changing the password revoke all trusted phones.
+6. **Confirmation for sensitive profile actions.** After a fingerprint sign-in, everything works as usual, including household actions. Only sensitive profile actions first ask for confirmation with the password **or** a second-step method (authenticator code, security key or recovery code), and the confirmation is valid for five minutes:
+   - changing the password or other sign-in methods, and removing them
+   - trusting another phone, or removing one
+   - personal export
+   - deleting the account
+
+   Safety controls never wait for a confirmation: pause, stop, revoking consent and leaving a dynamic (AGENTS.md).
+7. **Not MFA for operator work.** A fingerprint sign-in gives an ordinary session. The operator console keeps asking for a fresh full login with MFA.
 
 Pactaris stores only public keys and device metadata. Biometric data never leaves the phone.
 
@@ -25,8 +33,12 @@ Pactaris stores only public keys and device metadata. Biometric data never leave
 
 Native passkeys through the platform credential APIs against Identity. This needs `assetlinks.json` and `apple-app-site-association` on the Identity domain. It also depends on the Android Credential Manager, which failed on the owner's phone in November 2026 with "an unknown error occurred while talking to the credential manager", even on webauthn.io. The device key at the gateway gives Pactaris its own trusted list, its own revocation and a clear fallback.
 
+## Decided (owner, 25 November 2026)
+
+- A periodic full login on a trusted phone is fine, as long as notifications keep flowing in the meantime (point 4). The proposed interval is 30 days.
+- Household actions are allowed after a fingerprint sign-in. Only sensitive profile actions ask for confirmation with password or second step (point 6).
+
 ## Open questions
 
-- How many days may pass between full logins on a trusted phone: 30, 90, or never?
-- Are household-sensitive actions, such as consent changes and leaving a household, allowed after a fingerprint sign-in, or do they ask for the full login?
+- The confirmation needs a short Identity flow that accepts the password or any second-step method, so not both. The gateway then uses its `auth_time`, as it does for re-authentication today. The flow still has to be designed.
 - If Identity disables a user, the gateway does not know right away. The periodic full login limits the gap. Alternatively, the gateway could check the user's status at Identity on each fingerprint sign-in, which needs one more read permission.
