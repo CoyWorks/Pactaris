@@ -392,6 +392,19 @@ test('installed app sign-in gets the app session bounds; operator sign-in never 
   assert.equal(bounds.app.idleSeconds,604800);
 });
 
+test('operator sign-in returns to the operator console with a browser session',async()=>{
+  const store=new FixtureStore(),gatewayConfig={...config(),operatorSubjects:['subject']},bounds=gatewayConfig.session;
+  const oidc:OidcLogin={start:async a=>'https://identity.example.invalid/authorize?state='+a.state,finish:async()=>({issuer:'https://identity.example.invalid/',subject:'subject',name:'Operator',identityUser:42,verifiedEmail:'private-fixture@example.invalid'})};
+  const app=createGatewayApp(gatewayConfig,store,oidc,{summary:async()=>undefined});
+  for(const [url,location] of [['/auth/operator','/operator'],['/auth/operator?client=app','/operator'],['/auth/login','/'],['/auth/reauth','/']] as const){
+    const first=await inject(app,{url,headers});assert.equal(first.statusCode,302);
+    const state=new URL(String(first.headers.location)).searchParams.get('state');
+    const callback=await inject(app,{url:'/auth/oidc/callback?code=x&state='+state,headers:{...headers,cookie:cookies(first).join('; ')}});
+    assert.equal(callback.statusCode,303);assert.equal(callback.headers.location,location);
+    assert.deepEqual(store.bounds.at(-1),[bounds.idleSeconds,bounds.absoluteSeconds]);
+  }
+});
+
 test('sign-in security: own devices only, CSRF and fresh sign-in before removal',async()=>{
   const store=new FixtureStore() as FixtureStore&{identityUser:(id:string)=>Promise<number|undefined>;recentlyAuthenticated:(t:string)=>Promise<boolean>};
   let identity:number|undefined=42,recent=false;const removed:string[]=[];
