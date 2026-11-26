@@ -14,7 +14,7 @@ export type SettingsInput={registration:Registration;announcement:Announcement|n
 export const platformTarget='00000000-0000-4000-8000-000000000000';
 const accountStates=['active','suspended','deleting','deleted'] as const;
 const reportStates=['open','closed'] as const;
-const reportCategoryValues=['bug','account','suggestion','minorSafety','other','harassment','unwantedInvitation','nonConsensual','impersonation','spam'] as const;
+const reportCategoryValues=['bug','account','suggestion','minorSafety','members','other','harassment','unwantedInvitation','nonConsensual','impersonation','spam'] as const;
 const pageSize=50;
 
 export function settingsInput(value:unknown):SettingsInput|undefined{

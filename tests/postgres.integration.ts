@@ -41,6 +41,7 @@ import { AdminConsole } from '../apps/gateway/admin.js';
 import { GatewayMaintenance } from '../apps/gateway/maintenance.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
 import {InvitationMail} from '../apps/gateway/invitation-mail.js';
+import { HouseholdPlans } from '../apps/gateway/plans.js';
 import { CalendarFeeds } from '../apps/gateway/calendar-feed.js';
 import { GatewayInvitations } from '../apps/gateway/invitations.js';
 import { hash } from '../apps/gateway/store.js';
@@ -398,7 +399,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const catalogService=new GatewayCatalog(store,client,new PrivateCatalogClient(signer));
   const partnerService=new GatewayPartner(store,client,new PrivatePartnerClient(signer));
   const proofService=new GatewayProof(store,client,new PrivateProofClient(signer));
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService,partnerService,undefined,undefined,undefined,undefined,undefined,undefined,undefined,exchangeService,authorityService,proofService,undefined,undefined,undefined,new CalendarFeeds(gatewayDb.pool));
+  const plans=new HouseholdPlans(gatewayDb.pool,signer,false,{currency:'EUR',monthly:{level1:499,level2:899}});
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService,partnerService,undefined,undefined,undefined,undefined,undefined,undefined,undefined,exchangeService,authorityService,proofService,undefined,undefined,undefined,new CalendarFeeds(gatewayDb.pool),plans);
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -2091,6 +2093,50 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await api(feedPath,'GET',undefined,'')).status,404);
      assert.equal((await api(base+'/calendar-feed','DELETE',undefined,D.session)).data.active,false);
      assert.equal((await api(new URL(renewed.data.url).pathname,'GET',undefined,'')).status,404);
+     // Household plans: limits reach the Instance; anyone sees the plan; only the holder stops a subscription;
+     // only the owner changes the level, after a quote with the new monthly price.
+     const caps=async()=>(await db.owner.query('SELECT capabilities,plan_version FROM pactaris.household_entitlements WHERE household_id=$1',[home.householdId])).rows[0];
+     const freeView=await api(base+'/plan','GET',undefined,D.session);assert.equal(freeView.status,200,freeView.body);
+     assert.equal(freeView.data.tier,'free');assert.equal(freeView.data.limits['members.active.max'],4);assert.deepEqual(freeView.data.history,[]);
+     assert.equal(freeView.data.price,null);assert.equal(freeView.data.canChangeLevel,false);
+     assert.equal((await api(base+'/plan/extend','POST',{tier:'level2',months:2},D.session)).status,400);
+     assert.equal((await api(base+'/plan/extend','POST',{months:2},D.session)).data.code,'level_required');
+     assert.equal((await api(base+'/plan/quote','POST',{tier:'level1'},D.session)).data.code,'owner_only');
+     const fromFree=await api(base+'/plan/quote','POST',{tier:'level1'},A.session);assert.equal(fromFree.status,200,fromFree.body);
+     assert.deepEqual(fromFree.data.price,{amount:499,currency:'EUR'});assert.equal(fromFree.data.needsPayment,true);
+     assert.equal((await api(base+'/plan/level','POST',{tier:'level1',version:fromFree.data.version},A.session)).data.code,'payments_unavailable');
+     await plans.credit(home.householdId,'level1',3,'operator',{operatorId:A.account.id});
+     assert.equal((await caps()).capabilities['members.active.max'],8);assert.equal((await caps()).capabilities['plan.key'],'level1');
+     await plans.setExtraMembers(A.account.id,home.householdId,2);assert.equal((await caps()).capabilities['members.active.max'],10);
+     const subId=await plans.startSubscription(B.account.id,home.householdId,'level1','manual','fixture-subscription');
+     await assert.rejects(plans.startSubscription(D.account.id,home.householdId,'level1','manual','fixture-second'));
+     await plans.credit(home.householdId,'level1',1,'subscription',{accountId:B.account.id,subscriptionId:subId,providerRef:'cycle-1'});
+     await plans.credit(home.householdId,'level1',1,'subscription',{accountId:B.account.id,subscriptionId:subId,providerRef:'cycle-1'});
+     const paid=(await api(base+'/plan','GET',undefined,D.session)).data;
+     assert.equal(paid.tier,'level1');assert.equal(paid.kind,'subscription');assert.equal(paid.subscription.mine,false);assert.equal(paid.history.length,2);
+     assert.equal(paid.history[0].source,'subscription');assert.equal(paid.history[1].name,null);
+     assert.deepEqual(paid.price,{amount:499,currency:'EUR'});assert.equal(paid.canChangeLevel,false);
+     assert.equal((await api(base+'/plan/extend','POST',{months:1},D.session)).data.code,'payments_unavailable');
+     assert.equal((await api(base+'/plan/level','POST',{tier:'level2',version:paid.version},D.session)).data.code,'owner_only');
+     const ownerView=(await api(base+'/plan','GET',undefined,A.session)).data;assert.equal(ownerView.canChangeLevel,true);
+     const up=(await api(base+'/plan/quote','POST',{tier:'level2'},A.session)).data;
+     assert.deepEqual(up.price,{amount:899,currency:'EUR'});assert.equal(up.needsPayment,false);assert.ok(Date.parse(up.paidUntil)<Date.parse(ownerView.paidUntil));
+     assert.equal((await api(base+'/plan/quote','POST',{tier:'level1'},A.session)).status,400);
+     await plans.credit(home.householdId,'level1',1,'operator',{operatorId:A.account.id});
+     assert.equal((await api(base+'/plan/level','POST',{tier:'level2',version:up.version},A.session)).data.code,'plan_changed');
+     const again=(await api(base+'/plan/quote','POST',{tier:'level2'},A.session)).data;
+     const changed=await api(base+'/plan/level','POST',{tier:'level2',version:again.version},A.session);assert.equal(changed.status,200,changed.body);
+     assert.equal(changed.data.tier,'level2');assert.deepEqual(changed.data.price,{amount:899,currency:'EUR'});assert.ok(Math.abs(Date.parse(changed.data.paidUntil)-Date.parse(again.paidUntil))<60_000);
+     assert.equal(changed.data.history[0].source,'level');assert.equal(changed.data.history[0].tier,'level2');
+     assert.equal((await caps()).capabilities['plan.key'],'level2');
+     assert.equal((await api(base+'/plan/cancel','POST',{},D.session)).status,404);
+     await gatewayDb.owner.query("UPDATE pactaris.household_plans SET paid_until=now()-interval '1 minute' WHERE household_id=$1",[home.householdId]);
+     await plans.reconcile();assert.equal((await caps()).capabilities['plan.key'],'free');assert.equal((await caps()).capabilities['members.active.max'],6);
+     const stale=(await caps()).plan_version;
+     await assert.rejects(plans.operatorSubscription(A.account.id,home.householdId,'resume'));
+     await plans.operatorSubscription(A.account.id,home.householdId,'pause');await plans.operatorSubscription(A.account.id,home.householdId,'stop');
+     assert.equal((await api(base+'/plan','GET',undefined,B.session)).data.subscription,null);
+     assert.equal(Number((await caps()).plan_version),Number(stale));
      // Both parties can schedule a break; outsiders cannot. Weekly overlap skips the whole week.
      const weekly=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:{...habitFields,period:'weekly'}});
      assert.equal(weekly.status,200,JSON.stringify(weekly.data));

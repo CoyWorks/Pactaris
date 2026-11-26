@@ -29,3 +29,7 @@ Acceptance on the deployed provider must cover fresh MFA, stale MFA, an ordinary
 
 Settings use a version number, so two operators cannot overwrite each other unnoticed. While new accounts are closed, a person without an account is refused at sign-in, unless they arrive through a valid invitation (owner decision, 25 November 2026; see [INVITATIONS.md](INVITATIONS.md#closed-registration)); existing accounts and allow-listed operators can always sign in. Stored SMTP settings that can no longer be decrypted (for example after a key change) no longer break the console: the defaults are shown with a warning and can be saved again. A refused or unreachable relay answers `smtp_failed` instead of a generic error.
 
+
+## Plans
+
+In **Households**, opening a dynamic shows its plan ([HOUSEHOLD_PLANS.md](HOUSEHOLD_PLANS.md)). There you can add months of a level, set extra member places, and pause, resume or stop the dynamic's subscription. Each change is recorded in the audit log.

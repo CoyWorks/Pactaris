@@ -1,3 +1,4 @@
+import {OperatorPlan} from './plans.js';
 import React,{useEffect,useState} from 'react';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 import {Layer} from './navigation.js';
@@ -28,13 +29,13 @@ const when=(value:string|null|undefined,f:Format)=>value?<time dateTime={value}>
 const short=(id:string)=>id.slice(0,8);
 const dot=' · ';
 
-export const categoryLabels:Record<string,MessageKey>={bug:'account.reportBug',account:'account.reportAccount',suggestion:'account.reportSuggestion',minorSafety:'account.reportMinorSafety',other:'account.reportOther',
+export const categoryLabels:Record<string,MessageKey>={bug:'account.reportBug',account:'account.reportAccount',suggestion:'account.reportSuggestion',minorSafety:'account.reportMinorSafety',members:'account.reportMembers',other:'account.reportOther',
  harassment:'account.reportHarassment',unwantedInvitation:'account.reportUnwantedInvitation',nonConsensual:'account.reportNonConsensual',impersonation:'account.reportImpersonation',spam:'account.reportSpam'};
 const accountStatus:Record<string,MessageKey>={active:'operator.statusActive',suspended:'operator.statusSuspended',deleting:'operator.statusDeleting',deleted:'operator.statusDeleted'};
 const registryStatus:Record<string,MessageKey>={active:'operator.registryActive',disabled:'operator.registryDisabled'};
 const resolutions:[string,MessageKey][]=[['actioned','operator.resolutionActioned'],['noAction','operator.resolutionNoAction'],['duplicate','operator.resolutionDuplicate']];
 const resolutionLabels:Record<string,MessageKey>={actioned:'operator.resolvedActioned',noAction:'operator.resolvedNoAction',duplicate:'operator.resolvedDuplicate'};
-const eventLabels:Record<string,MessageKey>={'report.closed':'operator.eventReportClosed','report.reopened':'operator.eventReportReopened','report.noted':'operator.eventReportNoted',
+const eventLabels:Record<string,MessageKey>={'plan.granted':'operator.eventPlanGranted','plan.members':'operator.eventPlanMembers','subscription.paused':'operator.eventSubscriptionPaused','subscription.resumed':'operator.eventSubscriptionResumed','subscription.stopped':'operator.eventSubscriptionStopped','report.closed':'operator.eventReportClosed','report.reopened':'operator.eventReportReopened','report.noted':'operator.eventReportNoted',
  'account.suspended':'operator.eventAccountSuspended','report.deleted':'operator.eventReportDeleted','operator.granted':'operator.eventOperatorGranted','operator.revoked':'operator.eventOperatorRevoked','maintenance.run':'operator.eventMaintenanceRun','account.restored':'operator.eventAccountRestored','settings.updated':'operator.eventSettingsUpdated'};
 
 type Overview={accounts:Record<string,number>;newAccounts:number;signedIn:number;households:Record<string,number>;instances:{id:string;status:string;households:number}[];reports:Record<string,number>;mail:Record<string,number>;observedAt:string};
@@ -201,15 +202,16 @@ export function OperatorsPanel({refresh,onAccount,...f}:Format&{refresh:number;o
  </section>;
 }
 
-export function HouseholdsTab({refresh,...f}:Format&{refresh:number}){
- const t=createTranslator(f.language),[after,setAfter]=useState<string>();
+export function HouseholdsTab({refresh,csrf,...f}:Format&{refresh:number;csrf:string}){
+ const t=createTranslator(f.language),[after,setAfter]=useState<string>(),[open,setOpen]=useState<string>();
  const {data,error}=useLoad<{households:{id:string;instanceId:string;status:string;members:number}[];nextCursor:string|null}>('/api/operator/households'+(after?'?after='+after:''),refresh);
  return <>
   <p className="muted">{t('operator.householdsPrivacy')}</p>
   {error&&<p role="alert">{t(error)}</p>}
   {data&&!data.households.length&&<p>{t('operator.inventoryEmpty')}</p>}
-  <ul className="card-list">{data?.households.map(h=><li key={h.id} className="row"><span className="grow"><code>{h.id}</code>
-   <span className="muted">{t(registryStatus[h.status]??'operator.registryDisabled')}{dot}{h.members} {t('operator.membersShort')}{dot}{short(h.instanceId)}</span></span></li>)}</ul>
+  <ul className="card-list">{data?.households.map(h=><li key={h.id}><button type="button" className="row row-button" onClick={()=>setOpen(h.id)}><span className="grow"><code>{h.id}</code>
+   <span className="muted">{t(registryStatus[h.status]??'operator.registryDisabled')}{dot}{h.members} {t('operator.membersShort')}{dot}{short(h.instanceId)}</span></span></button></li>)}</ul>
+  {open&&<Layer title={t('operator.planTitle')} backLabel={t('nav.back')} onClose={()=>setOpen(undefined)}><p><code>{open}</code></p><OperatorPlan householdId={open} csrf={csrf} language={f.language} format={f.format} timeZone={f.timeZone}/></Layer>}
   <Pager next={data?.nextCursor} after={after} onPage={setAfter} language={f.language}/>
  </>;
 }

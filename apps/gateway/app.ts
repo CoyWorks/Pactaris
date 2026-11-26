@@ -38,6 +38,8 @@ import type { GatewayConfig } from '../../packages/config/index.js';
 import type { OidcLogin } from '../../packages/auth/oidc.js';
 import { siteRoutes } from './site-routes.js';
 import { icsCalendar, type CalendarFeeds } from './calendar-feed.js';
+import type { HouseholdPlans } from './plans.js';
+import { PlanError, paidTiers, type PaidTier } from '../../packages/auth/plans.js';
 import { hash, type GatewayStore, type Session } from './store.js';
 import type { HouseholdClient } from '../../packages/routing/private-client.js';
 import { uuid } from '../../packages/auth/delegation.js';
@@ -72,7 +74,7 @@ type OperatorInventory={
   instances:(after:string|null)=>ReturnType<typeof listRegistryInstances>;
   placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
 };
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'|'shop'>,proof?:Pick<GatewayProof,'upload'|'view'|'remove'>,admin?:AdminConsole,maintenance?:Pick<GatewayMaintenance,'gateway'|'status'|'instances'|'runInstance'>,accountSecurity?:Pick<AccountSecurity,'overview'|'remove'|'links'>,calendarFeeds?:Pick<CalendarFeeds,'status'|'issue'|'revoke'|'resolve'>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'|'shop'>,proof?:Pick<GatewayProof,'upload'|'view'|'remove'>,admin?:AdminConsole,maintenance?:Pick<GatewayMaintenance,'gateway'|'status'|'instances'|'runInstance'>,accountSecurity?:Pick<AccountSecurity,'overview'|'remove'|'links'>,calendarFeeds?:Pick<CalendarFeeds,'status'|'issue'|'revoke'|'resolve'>,plans?:Pick<HouseholdPlans,'view'|'quote'|'changeLevel'|'cancelOwn'|'credit'|'setExtraMembers'|'operatorSubscription'|'operatorView'>) {
   const app=express();headers(app,new URL(config.publicOrigin).protocol==='https:');app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -214,6 +216,23 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     };
   }
   const invalid=(res:express.Response)=>{res.status(400).json({code:'invalid_request',messageKey:'errors.request'});};
+  // Household plans (docs/HOUSEHOLD_PLANS.md): operator detail, grants, extra members and subscription control.
+  app.get('/api/operator/households/:id/plan',operatorRoute('plan',async(req,res)=>{
+    if(!plans||!uuid(req.params.id)){invalid(res);return;}
+    try{res.json(await plans.operatorView(req.params.id));}catch(error){if(error instanceof PlanError){res.status(404).json({code:'not_found',messageKey:'errors.notFound'});return;}throw error;}
+  }));
+  app.post('/api/operator/households/:id/plan',express.json({limit:256,strict:true,inflate:false}),operatorRoute('plan.change',async(req,res,session)=>{
+    const b=req.body as Record<string,unknown>|undefined,id=req.params.id;
+    if(!plans||!uuid(id)||!b||typeof b.action!=='string'){invalid(res);return;}
+    try{
+      if(b.action==='grant'&&Object.keys(b).sort().join(',')==='action,months,tier'&&paidTiers.includes(b.tier as PaidTier)&&Number.isInteger(b.months))
+        await plans.credit(id,b.tier as PaidTier,b.months as number,'operator',{operatorId:session.account.id});
+      else if(b.action==='members'&&Object.keys(b).sort().join(',')==='action,extra'&&Number.isInteger(b.extra))await plans.setExtraMembers(session.account.id,id,b.extra as number);
+      else if(['pause','resume','stop'].includes(b.action)&&Object.keys(b).join(',')==='action')await plans.operatorSubscription(session.account.id,id,b.action as 'pause'|'resume'|'stop');
+      else{invalid(res);return;}
+      res.json(await plans.operatorView(id));
+    }catch(error){if(error instanceof PlanError){res.status(error.kind==='invalid'?400:error.kind==='conflict'?409:404).json({code:'plan_'+error.kind,messageKey:'plan.'+(error.kind==='conflict'?'conflict':'failed')});return;}throw error;}
+  }));
   const missing=(res:express.Response)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});};
   app.get('/api/operator/reports',operatorRoute('reports',async(req,res)=>{
     const query=reportQuery(req.query as Record<string,unknown>);if(!query){invalid(res);return;}
@@ -735,6 +754,62 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       if(!workspace)throw new WorkspaceError('unavailable');
       res.json(await workspace.execute(session.account.id,req.params.householdId,'calendarMark',{operationId:randomUUID(),kind:b.kind,resourceId:b.resourceId,hidden:b.hidden}));
     }catch(error){workspaceFailure(res,error);}
+  });
+  // What every member sees about the dynamic's plan, the holder's own cancel and the owner's level change.
+  // Ownership lives on the Instance: the member list says which member is the caller and their role.
+  async function ownsHousehold(accountId:string,householdId:string){
+    if(!members)return false;
+    let after:string|undefined;
+    for(let page=0;page<60;page++){
+      const r=await members.list(accountId,householdId,after),self=r.members.find(m=>m.isSelf);
+      if(self)return self.technicalRole==='owner';
+      if(!r.nextCursor)return false;after=r.nextCursor;
+    }
+    return false;
+  }
+  const planFailure=(res:express.Response,error:unknown)=>{
+    if(error instanceof PlanError){
+      const [status,code,messageKey]=error.kind==='conflict'?[409,'plan_changed','plan.quoteChanged']:error.kind==='payments'?[409,'payments_unavailable','plan.paymentsUnavailable']
+        :error.kind==='invalid'?[400,'invalid_request','errors.request']:[404,'not_found','errors.notFound'];
+      res.status(status).json({code,messageKey});return;
+    }
+    res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});
+  };
+  app.get('/api/households/:householdId/plan',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!plans||!uuid(req.params.householdId)||!await store.placement(session.account.id,req.params.householdId)){res.status(404).json({code:'not_found',messageKey:'errors.notFound'});return;}
+    try{res.json(await plans.view(session.account.id,req.params.householdId,await ownsHousehold(session.account.id,req.params.householdId)));}catch{res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});}
+  });
+  app.post('/api/households/:householdId/plan/:action',express.json({limit:256,strict:true,inflate:false}),async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    const householdId=req.params.householdId,accountId=session.account.id;
+    if(!plans||!uuid(householdId)||!await store.placement(accountId,householdId)){res.status(404).json({code:'not_found',messageKey:'errors.notFound'});return;}
+    const b=req.body as Record<string,unknown>|undefined,keys=b&&typeof b==='object'&&!Array.isArray(b)?Object.keys(b).sort().join(','):undefined;
+    try{
+      if(req.params.action==='extend'){
+        // Any member adds months at the current level; the level itself is the owner's choice.
+        if(keys!=='months'||!Number.isInteger(b!.months)||(b!.months as number)<1||(b!.months as number)>60){res.status(400).json({code:'invalid_request',messageKey:'errors.request'});return;}
+        const view=await plans.view(accountId,householdId);
+        if(view.tier==='free'){res.status(409).json({code:'level_required',messageKey:'plan.levelRequired'});return;}
+        // No payment provider yet (docs/HOUSEHOLD_PLANS.md): extending is announced but not possible.
+        res.status(409).json({code:'payments_unavailable',messageKey:'plan.paymentsUnavailable'});return;
+      }
+      if(req.params.action==='quote'||req.params.action==='level'){
+        const wanted=req.params.action==='quote'?'tier':'tier,version';
+        if(keys!==wanted||!paidTiers.includes(b!.tier as PaidTier)||(req.params.action==='level'&&typeof b!.version!=='string')){res.status(400).json({code:'invalid_request',messageKey:'errors.request'});return;}
+        if(!await ownsHousehold(accountId,householdId)){res.status(403).json({code:'owner_only',messageKey:'plan.ownerOnly'});return;}
+        if(req.params.action==='quote'){res.json(await plans.quote(householdId,b!.tier as PaidTier));return;}
+        await plans.changeLevel(accountId,householdId,b!.tier as PaidTier,b!.version as string);
+        res.json(await plans.view(accountId,householdId,true));return;
+      }
+      if(req.params.action==='cancel'){
+        if(keys!==''){res.status(400).json({code:'invalid_request',messageKey:'errors.request'});return;}
+        try{await plans.cancelOwn(accountId,householdId);}catch(error){if(error instanceof PlanError){res.status(404).json({code:'not_found',messageKey:'plan.notHolder'});return;}throw error;}
+        res.json(await plans.view(accountId,householdId,await ownsHousehold(accountId,householdId)));return;
+      }
+      res.status(404).json({code:'not_found',messageKey:'errors.notFound'});
+    }catch(error){planFailure(res,error);}
   });
   app.get('/api/households/:householdId/planner',async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;

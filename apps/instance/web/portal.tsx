@@ -43,6 +43,7 @@ export function Portal({language,format,timeZone}:{language:string;format:string
   const {path,search}=useLocation();
   const selectedId=/^\/households\/([a-f0-9-]{36})$/i.exec(path)?.[1];
   const profile=path==='/profile'||path==='/profile/notifications',notificationsPage=path==='/profile/notifications',showAll=new URLSearchParams(search).has('all');
+  useEffect(()=>{if(path==='/profile'&&new URLSearchParams(search).get('report'))setPanel('report');},[path,search]);
   const inbox=useSelectorInbox(selectedId?undefined:session?.account.id,
     [...new Set(listing?.households.map(h=>h.id))].sort().join(','));
   useEffect(()=>{
@@ -181,7 +182,8 @@ export function Portal({language,format,timeZone}:{language:string;format:string
     {panel==='security'&&<Layer title={t('security.title')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
      <AccountSecurity key={'security:'+session.account.id} csrfToken={session.csrfToken} language={language} format={displayFormat} timeZone={displayZone} emailVerified={session.emailVerified}/></Layer>}
     {panel==='report'&&<Layer title={t('account.reportTitle')} backLabel={t('nav.back')} onClose={()=>setPanel(undefined)}>
-     <ReportPanel csrfToken={session.csrfToken} language={language}/></Layer>}
+     <ReportPanel csrfToken={session.csrfToken} language={language} households={(listing?.households??[]).map(h=>({id:h.id,name:h.name}))}
+      initialCategory={new URLSearchParams(window.location.search).get('report')==='members'?'members':'bug'} initialHousehold={new URLSearchParams(window.location.search).get('household')??''}/></Layer>}
     <DeleteAccountPanel csrfToken={session.csrfToken} language={language}/>
   </main>;
   if(selectedId)return <main className="app">{problem}{error&&<p role="alert">{t(error)}</p>}

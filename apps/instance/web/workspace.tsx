@@ -26,6 +26,7 @@ import {ShopView} from './shop.js';
 import {GettingStarted} from './start.js';
 import {TodaySharedTasks} from './today-shared-tasks.js';
 import {CalendarPrivacyField,PlannerView,WeekGlance,markCalendar} from './planner.js';
+import {PlanPanel} from './plans.js';
 type View='calendar'|'home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews'|'authority'|'notices'|'board'|'shop';
 type Tab='home'|'tasks'|'routines'|'library'|'dynamic';
 type Draft={action:string;body:Record<string,unknown>};
@@ -266,7 +267,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
    {(view==='rules'||view==='notes')&&h&&<LibraryPanel key={view} householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} section={view==='notes'?'notes':'guidance'}/>}
    {view==='members'&&h&&<><InvitationManager householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone}/><MemberAdministration householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone}/></>}
    {view==='relationships'&&h&&<Relationships householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone}/>}
-   {view==='settings'&&h&&<section>{h.canEdit?<form onSubmit={e=>{e.preventDefault();const current=settings??{name:h.name,timeZone:h.timeZone,version:h.version};void change('settingsUpdate',{...current,name:current.name.trim(),timeZone:current.timeZone.trim()});}}>
+   {view==='settings'&&h&&<section><PlanPanel householdId={householdId} csrfToken={session.csrfToken} language={language} format={format} timeZone={h.timeZone}/>{h.canEdit?<form onSubmit={e=>{e.preventDefault();const current=settings??{name:h.name,timeZone:h.timeZone,version:h.version};void change('settingsUpdate',{...current,name:current.name.trim(),timeZone:current.timeZone.trim()});}}>
     <label>{t('onboarding.name')}<input required maxLength={120} disabled={blocked} value={settings?.name??h.name} onChange={e=>setSettings(old=>({...old??{name:h.name,timeZone:h.timeZone,version:h.version},name:e.target.value}))}/></label>
     <label>{t('workspace.timeZone')}<input required maxLength={100} disabled={blocked} value={settings?.timeZone??h.timeZone} onChange={e=>setSettings(old=>({...old??{name:h.name,timeZone:h.timeZone,version:h.version},timeZone:e.target.value}))}/></label><Hint label={t('hint.more')}>{t('workspace.timeZoneHelp')}</Hint><button type="submit" disabled={blocked}>{t('workspace.saveSettings')}</button>
    </form>:<p>{t('workspace.settingsDenied')}</p>}

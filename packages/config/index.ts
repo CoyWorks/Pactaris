@@ -91,6 +91,8 @@ export type GatewayConfig = Omit<InstanceConfig, 'instanceId' | 'oidc' | 'delega
   accountSecurity?: AccountSecurityConfig;
   /** The public main website, served on its own origin(s); aliases redirect to `origin`. */
   site?: { origin: string; aliases: string[]; signUpUrl?: string };
+  /** Monthly price per paid level, in minor units (cents). Shown only for the dynamic's current level. */
+  planPrices?: { currency: string; monthly: { level1: number; level2: number } };
 };
 export const accountFlowKinds = ['password','totp','passkey','recovery','verifyEmail'] as const;
 export type AccountFlowKind = typeof accountFlowKinds[number];
@@ -158,12 +160,18 @@ export function parseGatewayConfig(value: unknown, development = false): Gateway
   }
   // The delegation issuer is an identifier the Instances trust. It defaults to the public origin and
   // can stay at an earlier origin when the app moves, so Instance configuration need not change.
+  let planPrices:GatewayConfig['planPrices'];
+  if(c.planPrices!==undefined){
+    const v=object(c.planPrices,'planPrices'),m=object(v.monthly,'planPrices.monthly');
+    if(typeof v.currency!=='string'||!/^[A-Z]{3}$/.test(v.currency)||Object.keys(v).sort().join(',')!=='currency,monthly'||Object.keys(m).sort().join(',')!=='level1,level2')invalid('planPrices');
+    planPrices={currency:v.currency,monthly:{level1:integer(m.level1,'planPrices.monthly.level1',0,100000),level2:integer(m.level2,'planPrices.monthly.level2',0,100000)}};
+  }
   const issuer=d.issuer===undefined?base.publicOrigin:origin(d.issuer,'delegation.issuer',development);
   return { ...shared, gatewayId: instanceId,operatorSubjects,
     webPushFile: c.webPushFile===undefined?undefined:file(c.webPushFile,'webPushFile'),
     invitationMailFile: c.invitationMailFile===undefined ? undefined : file(c.invitationMailFile,'invitationMailFile'), oidc: { ...oidc, clientSecretFile: file(o.clientSecretFile,'oidc.clientSecretFile') },
     delegation: { issuer, keyId, privateKeyFile: file(d.privateKeyFile,'delegation.privateKeyFile') },
-    trustedProxyAddresses: proxies, ...(accountSecurity?{accountSecurity}:{}), session: {idleSeconds,absoluteSeconds,requireVerifiedEmail,passkeyIsMfa,app:{idleSeconds:appIdle,absoluteSeconds:appAbsolute}},onboarding:{maxOwnedHouseholds:integer(onboarding.maxOwnedHouseholds,'onboarding.maxOwnedHouseholds',1,20)},...(site?{site}:{}) };
+    trustedProxyAddresses: proxies, ...(accountSecurity?{accountSecurity}:{}), session: {idleSeconds,absoluteSeconds,requireVerifiedEmail,passkeyIsMfa,app:{idleSeconds:appIdle,absoluteSeconds:appAbsolute}},onboarding:{maxOwnedHouseholds:integer(onboarding.maxOwnedHouseholds,'onboarding.maxOwnedHouseholds',1,20)},...(site?{site}:{}),...(planPrices?{planPrices}:{}) };
 }
 export function loadGatewayConfig(path: string, development = false): GatewayConfig {
   try { return parseGatewayConfig(JSON.parse(readFileSync(path,'utf8')),development); }

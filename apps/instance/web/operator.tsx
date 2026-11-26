@@ -43,7 +43,7 @@ export function OperatorPage({language,format,timeZone}:{language:string;format:
     {tab==='overview'&&<OverviewTab refresh={refresh} onOpen={next=>go(next)} {...f}/>}
     {tab==='reports'&&<ReportsTab csrf={csrf} refresh={refresh} onAccount={id=>go('accounts',{account:id})} {...f}/>}
     {tab==='accounts'&&<AccountsTab csrf={csrf} refresh={refresh} selected={account} onSelect={id=>go('accounts',id?{account:id}:{})} {...f}/>}
-    {tab==='households'&&<HouseholdsTab refresh={refresh} {...f}/>}
+    {tab==='households'&&<HouseholdsTab refresh={refresh} csrf={csrf} {...f}/>}
     {tab==='instances'&&<OperatorInventory language={language} refresh={refresh}/>}
     {tab==='settings'&&<><GeneralSettings csrf={csrf} refresh={refresh} language={language}/><OperatorsPanel refresh={refresh} onAccount={id=>go('accounts',{account:id})} {...f}/><SmtpPanel csrf={csrf} refresh={refresh} language={language}/></>}
     {tab==='maintenance'&&<MaintenanceTab csrf={csrf} refresh={refresh} {...f}/>}

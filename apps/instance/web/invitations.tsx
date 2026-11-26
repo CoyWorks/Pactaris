@@ -47,7 +47,7 @@ export function InvitationManager({householdId,session,language,format,timeZone}
  if(!allowed)return error?<p role="alert">{t(error)}</p>:null;
  return <section><h2>{t('invitations.title')}</h2><Hint label={t('hint.more')}>{t('invitations.createDescription')}</Hint>
   {emailEnabled&&<p>{t('invitations.emailEnabled')}</p>}
-  {error&&<p role="alert">{t(error)}</p>}
+  {error&&<p role="alert">{t(error)}</p>}{error==='invitations.capacity'&&<p><a href={'/profile?report=members&household='+householdId}>{t('plan.moreMembers')}</a></p>}
   <form onSubmit={event=>{void create(event);}}><label htmlFor="invite-email">{t('invitations.email')}</label>
    <input id="invite-email" type="email" autoComplete="off" maxLength={254} required value={email} disabled={busy||!!draft} onChange={e=>setEmail(e.target.value)}/>
    {!link&&<button type="submit" disabled={busy||!email.trim()}>{t(draft?'onboarding.retry':'invitations.create')}</button>}

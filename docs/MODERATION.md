@@ -4,7 +4,7 @@ Platform operators run the hosted service without routine access to household co
 
 ## Reporting
 
-Every signed-in person can open **Report a problem or idea** on the Profile page, choose a category and describe what happened (at most 1000 characters). Owner decision, 21 November 2026: reports are mostly about the app itself, and Pactaris does not police what people agree to inside their dynamic. Categories: bug or error, sign-in or account problem, idea or suggestion, possible minor (the one safety category, which the platform must act on), other. Reports filed earlier keep their old abuse categories (harassment, unwanted invitation, non-consensual, impersonation, spam); operators still see and close them. The request needs the session, exact Origin and CSRF token and is throttled per account. The operation ID is the report ID, so an uncertain retry cannot file a duplicate.
+Every signed-in person can open **Report a problem or idea** on the Profile page, choose a category and describe what happened (at most 1000 characters). Owner decision, 21 November 2026: reports are mostly about the app itself, and Pactaris does not police what people agree to inside their dynamic. Categories: bug or error, sign-in or account problem, idea or suggestion, more members needed (with the dynamic; see [HOUSEHOLD_PLANS.md](HOUSEHOLD_PLANS.md)), possible minor (the one safety category, which the platform must act on), other. Reports filed earlier keep their old abuse categories (harassment, unwanted invitation, non-consensual, impersonation, spam); operators still see and close them. The request needs the session, exact Origin and CSRF token and is throttled per account. The operation ID is the report ID, so an uncertain retry cannot file a duplicate.
 
 A report may name a household only if the reporter can currently access it; the API refuses any other household ID. Operators see the category, the reporter's account ID, the optional household ID, the text and the time. They see no household names, members, tasks, agreements or other content.
 
@@ -23,3 +23,5 @@ Every close, reopen, note, suspension, restoration and settings change is record
 - A suspended person cannot sign in, so they cannot use self-service export or deletion during the suspension. Handle such requests through the support route in [the incident and request procedure](PRIVACY_OPERATIONS.md) and restore access or act on their behalf where appropriate.
 - Recipients can already decline invitations and owners/admins can revoke them. Blocking a specific person across dynamics is not implemented.
 - Operators record who reviewed a report and how evidence is shared in their support process; the application does not send report content anywhere.
+
+A report can name one of the reporter's dynamics; the form offers them. Operators see that ID, and from **Households** open the dynamic's plan to add extra member places.
