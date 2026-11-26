@@ -25,11 +25,12 @@ import {BoardView,useProgress} from './progress.js';
 import {ShopView} from './shop.js';
 import {GettingStarted} from './start.js';
 import {TodaySharedTasks} from './today-shared-tasks.js';
-type View='home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews'|'authority'|'notices'|'board'|'shop';
+import {PlannerView,WeekGlance} from './planner.js';
+type View='calendar'|'home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews'|'authority'|'notices'|'board'|'shop';
 type Tab='home'|'tasks'|'routines'|'library'|'dynamic';
 type Draft={action:string;body:Record<string,unknown>};
-const views:readonly View[]=['home','habits','checkins','rewards','participantTasks','rules','notes','tasks','dynamic','members','settings','relationships','safety','exchange','overview','reviews','authority','notices','board','shop'];
-const labels:Record<View,MessageKey>={home:'workspace.home',tasks:'workspace.mine',habits:'routines.habits',checkins:'routines.checkinsTitle',rewards:'catalog.title',participantTasks:'partner.title',rules:'library.guidance',notes:'library.notes',dynamic:'workspace.dynamic',members:'workspace.invite',settings:'workspace.settings',relationships:'workspace.relationships',safety:'workspace.safety',exchange:'exchange.title',overview:'overview.title',reviews:'reviews.title',authority:'authority.title',notices:'notices.title',board:'board.title',shop:'shop.title'};
+const views:readonly View[]=['calendar','home','habits','checkins','rewards','participantTasks','rules','notes','tasks','dynamic','members','settings','relationships','safety','exchange','overview','reviews','authority','notices','board','shop'];
+const labels:Record<View,MessageKey>={calendar:'planner.title',home:'workspace.home',tasks:'workspace.mine',habits:'routines.habits',checkins:'routines.checkinsTitle',rewards:'catalog.title',participantTasks:'partner.title',rules:'library.guidance',notes:'library.notes',dynamic:'workspace.dynamic',members:'workspace.invite',settings:'workspace.settings',relationships:'workspace.relationships',safety:'workspace.safety',exchange:'exchange.title',overview:'overview.title',reviews:'reviews.title',authority:'authority.title',notices:'notices.title',board:'board.title',shop:'shop.title'};
 const tabs:{tab:Tab;view:View;label:MessageKey;icon:IconName}[]=[
  {tab:'home',view:'home',label:'workspace.home',icon:'today'},
  {tab:'tasks',view:'tasks',label:'workspace.tasks',icon:'tasks'},
@@ -37,8 +38,8 @@ const tabs:{tab:Tab;view:View;label:MessageKey;icon:IconName}[]=[
  {tab:'library',view:'rules',label:'workspace.library',icon:'library'},
  {tab:'dynamic',view:'dynamic',label:'workspace.dynamic',icon:'dynamic'},
 ];
-const tabOf=(view:View):Tab=>view==='tasks'||view==='participantTasks'?'tasks':view==='habits'||view==='checkins'?'routines':view==='rules'||view==='notes'?'library':view==='home'?'home':'dynamic';
-const segments:Partial<Record<Tab,View[]>>={tasks:['tasks','participantTasks'],routines:['habits','checkins'],library:['rules','notes']};
+const tabOf=(view:View):Tab=>view==='tasks'||view==='participantTasks'||view==='calendar'?'tasks':view==='habits'||view==='checkins'?'routines':view==='rules'||view==='notes'?'library':view==='home'?'home':'dynamic';
+const segments:Partial<Record<Tab,View[]>>={tasks:['tasks','participantTasks','calendar'],routines:['habits','checkins'],library:['rules','notes']};
 const menu:View[]=['authority','overview','board','shop','exchange','members','relationships','rewards','reviews','safety','settings'];
 const additions:{view:View;label:MessageKey;quick?:QuickKind;query?:string}[]=[{view:'tasks',label:'workspace.addPrivateTask',quick:'task'},{view:'participantTasks',label:'workspace.addSharedTask',query:'&give=any'},{view:'habits',label:'routines.habits',quick:'habit'},{view:'checkins',label:'routines.checkinsTitle'},{view:'notes',label:'library.notes',quick:'note'},{view:'rules',label:'library.guidance'},{view:'rewards',label:'catalog.title'},{view:'exchange',label:'exchange.new'}];
 const priorities:Record<TaskFields['priority'],MessageKey>={low:'workspace.priorityLow',normal:'workspace.priorityNormal',high:'workspace.priorityHigh'};
@@ -223,6 +224,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
      onInvite={()=>go('members')} onLink={()=>go('authority')} onTask={()=>navigate('/households/'+householdId+'?view=participantTasks&give=any')}/>}
     {data?.hasUnreadTaskInbox&&<button type="button" className="row-button" onClick={()=>go('notices')}><span className="dot" aria-hidden="true"/><span className="grow">{t('workspace.unreadShared')}</span><Icon name="chevron"/></button>}
     <Attention householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} authority={authority.data} reload={exchangeReload} onChanged={message=>{setNotice(message);refreshAll();}} onReviews={()=>go('reviews')}/>
+    <WeekGlance householdId={householdId} language={language} format={format} timeZone={h.timeZone} reload={exchangeReload+':'+refresh+':'+habitsReload} onOpen={()=>go('calendar')}/>
     <TodaySharedTasks householdId={householdId} csrfToken={session.csrfToken} language={language} reload={exchangeReload+refresh}/>
     <div className="section-head"><h2>{t('workspace.todo')}</h2><button type="button" className="link-button" onClick={()=>go('tasks')}>{t('workspace.allTasks')}</button></div>
     {today.length?<ul className="card-list">{today.map(task=>row(task,true))}</ul>:<div className="empty-card"><p>{t('workspace.nothingDue')}</p><button type="button" onClick={()=>setAdding('task')}><Icon name="plus"/>{t('today.addTask')}</button></div>}
@@ -254,6 +256,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
      onStop={series=>void change('personalSeriesStop',{seriesId:series.seriesId,version:series.version})}/>}
 
    </section>}
+   {view==='calendar'&&h&&<PlannerView householdId={householdId} language={language} format={format} timeZone={h.timeZone} reload={refresh+':'+authorityReload} onOpen={go}/>}
    {view==='participantTasks'&&h&&<PartnerPanel householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} pointsSettings={data?.pointsSettings}/>}
    {view==='rewards'&&h&&<CatalogPanel householdId={householdId} session={session} language={language} format={format}/>}
    {view==='checkins'&&h&&<SharedCheckins householdId={householdId} csrfToken={session.csrfToken} language={language}/>}

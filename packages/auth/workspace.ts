@@ -9,7 +9,19 @@ export type TaskSummary=Omit<TaskFields,'description'>&{taskId:string;version:st
 export type TaskDetail=TaskSummary&{description:string};
 export type PointsSettings={enabled:boolean;label:string|null};
 export type PersonalSeries={seriesId:string;version:string;state:'active'|'blocked'|'finished'|'stopped';fields:TaskFields;schedule:TaskSchedule};
-export type WorkspaceResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';taskId?:string;task?:TaskDetail;
+export const plannerKinds=['task','taskSeries','partnerTask','partnerSeries','habit','routineHabit','ritual','checkin'] as const;
+export type PlannerKind=typeof plannerKinds[number];
+/** One dated entry. `projected`: a future occurrence that does not exist yet; `onBreak`: a planned habit break. */
+export type PlannerItem={kind:PlannerKind;id:string;day:string;at:string|null;title:string;state:string;overdue:boolean;projected:boolean;onBreak:boolean};
+export type Planner={from:string;days:number;timeZone:string;personId:string;people:{id:string;name:string;self:boolean}[];items:PlannerItem[]};
+export const plannerMaxDays=42;
+const calendarDay=(v:unknown)=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
+export function validTimeZone(v:unknown):v is string{
+ if(typeof v!=='string'||v.length>100||!/^[A-Za-z_+-]+(?:\/[A-Za-z0-9_+-]+)*$/.test(v))return false;
+ try{new Intl.DateTimeFormat('en',{timeZone:v});return true;}catch{return false;}
+}
+export {calendarDay as validCalendarDay};
+export type WorkspaceResult={planner?:Planner;householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';taskId?:string;task?:TaskDetail;
  household?:{name:string;timeZone:string;version:string;canEdit:boolean;status:'active'|'paused';epoch:string;memberEpoch:string;selfPaused:boolean;memberCount:number};
  series?:PersonalSeries[];pointsSettings?:PointsSettings;hasUnreadTaskInbox?:boolean;changeCursor?:string;changed?:('workspace'|'tasks'|'notices'|'routines'|'library'|'dynamic'|'catalog')[];counts?:{open:number;done:number;overdue:number;unassigned:number};tasks?:TaskSummary[];nextCursor?:string|null};
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -34,11 +46,13 @@ export function workspaceInput(action:WorkspaceAction,value:unknown):Record<stri
  if(action==='pointsConfigure')names.push('pointsSettings','version');
  if(action==='settingsUpdate')names.push('name','timeZone','version');
  if(action==='taskRead')names.push('taskId');
+ if(action==='plannerRead')names.push('from','days','personId','timeZone');
  if(['taskUpdate','taskComplete','taskArchive','taskReopen'].includes(action))names.push('taskId','version');
  if(action==='taskCreate'||action==='taskUpdate')names.push('fields','epoch','memberEpoch');
  if(action==='taskComplete')names.push('epoch','memberEpoch');
  if(Object.keys(value).sort().join(',')!==names.sort().join(',')||['taskId','after','seriesId'].some(k=>k in value&&!uuid(value[k]))||['version','epoch','memberEpoch'].some(k=>k in value&&!version(value[k])))throw new WorkspaceError('invalid');
  if(action==='workspaceChanges'&&value.cursor!==null&&!uuid(value.cursor))throw new WorkspaceError('invalid');
+ if(action==='plannerRead'&&(!calendarDay(value.from)||!Number.isInteger(value.days)||Number(value.days)<1||Number(value.days)>plannerMaxDays||(value.personId!==null&&!uuid(value.personId))||!validTimeZone(value.timeZone)))throw new WorkspaceError('invalid');
  if(action==='workspaceRead'&&!['open','done','archived'].includes(String(value.filter)))throw new WorkspaceError('invalid');
  if(action==='personalSeriesSave'&&(!validTaskSchedule(value.schedule)||!record(value.fields)||
   value.fields.assignment!=='self'||value.fields.dueAt!==null))throw new WorkspaceError('invalid');

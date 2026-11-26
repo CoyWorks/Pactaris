@@ -687,6 +687,15 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       if(!workspace)throw new WorkspaceError('unavailable');res.json(await workspace.read(session.account.id,req.params.householdId,String(req.query.filter??'open'),req.query.after as string|undefined));
     }catch(error){workspaceFailure(res,error);}
   });
+  app.get('/api/households/:householdId/planner',async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      const q=req.query,keys=Object.keys(q);
+      if(!uuid(req.params.householdId)||keys.some(k=>!['from','days','person','timeZone'].includes(k))||typeof q.from!=='string'||typeof q.days!=='string'||!/^[1-9][0-9]?$/.test(q.days)
+        ||(q.person!==undefined&&!uuid(q.person))||typeof q.timeZone!=='string')throw new WorkspaceError('invalid');
+      if(!workspace)throw new WorkspaceError('unavailable');
+      res.json(await workspace.execute(session.account.id,req.params.householdId,'plannerRead',{operationId:randomUUID(),from:q.from,days:Number(q.days),personId:q.person??null,timeZone:q.timeZone}));
+    }catch(error){workspaceFailure(res,error);}
+  });
   app.get('/api/households/:householdId/workspace/changes',async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;
       if(!uuid(req.params.householdId)||Object.keys(req.query).some(k=>k!=='cursor')||(req.query.cursor!==undefined&&!uuid(req.query.cursor)))throw new WorkspaceError('invalid');
