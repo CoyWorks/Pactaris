@@ -153,6 +153,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
       await store.logout(app);
       await store.beginLogin('login-cookie',{state:'s1',nonce:'n',verifier:'v'},'app');
       assert.equal((await store.consumeLogin('login-cookie','s1'))?.client,'app');
+      await store.beginLogin('login-cookie',{state:'s2',nonce:'n',verifier:'v'},'operator');
+      assert.equal((await store.consumeLogin('login-cookie','s2'))?.client,'operator');
       assert.equal(await store.session(legacy,60,true),undefined);
       assert.ok(await store.session(verified,60,true));
       assert.equal((await store.session(verified,60))?.emailVerified,true);assert.equal((await store.session(legacy,60))?.emailVerified,false);

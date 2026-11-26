@@ -3,7 +3,8 @@ import type pg from 'pg';
 import { normalizeEmail } from '../../packages/auth/email.js';
 export const hash = (token: string) => createHash('sha256').update(token).digest('hex');
 export type LoginAttempt = {state:string;nonce:string;verifier:string};
-export type LoginClient = 'browser'|'app';
+/** `operator` is a browser sign-in that returns to the operator console. */
+export type LoginClient = 'browser'|'app'|'operator';
 export type Account = {id:string;displayName:string};
 export type AccountPresentation = {format:string;timeZone:string};
 export type Session = {account:Account;csrfToken:string;expiresAt:string;presentation?:AccountPresentation;preferredName?:string;emailVerified?:boolean;adultConfirmed?:boolean};

@@ -703,6 +703,13 @@
       "backwardCompatible": true
     },
     {
+      "component": "gateway",
+      "id": "0031_operator_login_return",
+      "path": "migrations/gateway/0031_operator_login_return.sql",
+      "sha256": "7891a71c8cda6dc6ef77192587fe3e39f2cfc6de9d9a8b6f4069c0836a6ade7f",
+      "backwardCompatible": true
+    },
+    {
       "component": "instance",
       "id": "0070_plan_entitlements",
       "path": "migrations/instance/0070_plan_entitlements.sql",
