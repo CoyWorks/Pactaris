@@ -25,7 +25,7 @@ export const commandPath=(id:string,action:HouseholdAction)=>`/internal/househol
 export const digest=(body:string|Buffer)=>createHash('sha256').update(body).digest('hex');
 export const uuid=(value:unknown):value is string=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
 /** Instance-scoped revocation journal transfer. Not bound to any account or household. */
-export const journalActions=['journalPending','journalAck','journalReplay','maintenanceStatus','maintenanceRun'] as const;
+export const journalActions=['journalPending','journalAck','journalReplay','maintenanceStatus','maintenanceRun','entitlementsApply'] as const;
 /** Replay batches carry central entries, so the journal body bound exceeds the household command bound. */
 export const journalBodyLimit=32768;
 export type JournalAction=typeof journalActions[number];

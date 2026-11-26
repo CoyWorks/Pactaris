@@ -1,8 +1,8 @@
 import type pg from 'pg';
 import { uuid } from '../../packages/auth/delegation.js';
 
-/** New reports use the first five. The older abuse categories stay valid for reports already filed. */
-export const reportCategories=['bug','account','suggestion','minorSafety','other'] as const;
+/** New reports use these six; `members` asks for more member places (docs/HOUSEHOLD_PLANS.md). The older abuse categories stay valid for reports already filed. */
+export const reportCategories=['bug','account','suggestion','minorSafety','members','other'] as const;
 export const legacyReportCategories=['harassment','unwantedInvitation','nonConsensual','impersonation','spam'] as const;
 export type ReportCategory=typeof reportCategories[number];
 export const reportResolutions=['actioned','noAction','duplicate'] as const;

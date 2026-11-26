@@ -56,6 +56,8 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0008_invitation_mail'))await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.invitation_mail TO ${role}`);
       if(entries.some(m=>m.id==='0017_task_push_queue'))await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.task_push_scopes TO ${role}`);
       if(entries.some(m=>m.id==='0015_web_push'))await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.push_devices TO ${role}`);
+      if(entries.some(m=>m.id==='0030_household_plans'))await connection.query(`GRANT SELECT,INSERT,UPDATE ON pactaris.household_plans,pactaris.plan_subscriptions TO ${role}`);
+      if(entries.some(m=>m.id==='0030_household_plans'))await connection.query(`GRANT SELECT,INSERT ON pactaris.plan_credits TO ${role}`);
       if(entries.some(m=>m.id==='0029_calendar_feeds'))await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.calendar_feeds TO ${role}`);
       if(entries.some(m=>m.id==='0013_smtp_settings'))await connection.query(`GRANT SELECT,INSERT,UPDATE ON pactaris.smtp_settings TO ${role}`);
       if(entries.some(m=>m.id==='0010_account_presentation'))await connection.query(`GRANT INSERT ON pactaris.account_presentation_events TO ${role}`);
@@ -87,6 +89,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0020_private_habit_trend'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.habit_trend(uuid,uuid,uuid,uuid,uuid,bigint,date) TO ${role}`);
       if(entries.some(m=>m.id==='0061_workspace_changes'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.workspace_change_check(uuid,uuid,uuid,uuid,uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0069_calendar_privacy'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.calendar_mark(uuid,uuid,uuid,jsonb) TO ${role}`);
+      if(entries.some(m=>m.id==='0070_plan_entitlements'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.entitlements_apply(uuid,uuid,bigint,jsonb) TO ${role}`);
       if(entries.some(m=>m.id==='0068_planner'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.planner_read(uuid,uuid,uuid,jsonb) TO ${role}`);
       if(entries.some(m=>m.id==='0019_workspace_unread_inbox'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.workspace_has_unread(uuid,uuid,uuid,uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0018_task_inbox_preferences'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.task_inbox_preference_command(uuid,uuid,uuid,uuid,text,jsonb) TO ${role}`);

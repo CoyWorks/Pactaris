@@ -272,3 +272,5 @@ main.operator{max-width:64rem}
 .planner-hidden{margin-left:.5rem;font-size:.75rem;border-radius:8px;padding:0 .4rem;background:var(--chip)}
 .calendar-subscription{margin-top:1.5rem}.calendar-subscription input{margin:.5rem 0}
 .calendar-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin:.5rem 0}
+.plan-panel{margin:0 0 1.5rem}.plan-limits{grid-template-columns:2fr 1fr;font-size:.9rem}.plan-limits dd{text-align:right}
+.plan-extend{margin:1rem 0}

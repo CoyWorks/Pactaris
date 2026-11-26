@@ -694,6 +694,20 @@
       "path": "migrations/instance/0069_calendar_privacy.sql",
       "sha256": "93ceb7589d1a326cc7f37cb9a3c7a61fb12af178c6ce95e6ab8084286675aff2",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0030_household_plans",
+      "path": "migrations/gateway/0030_household_plans.sql",
+      "sha256": "6b429e413bf1199c7f6bc559e218771e57338ba2487d63395d63e25fbdd03763",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0070_plan_entitlements",
+      "path": "migrations/instance/0070_plan_entitlements.sql",
+      "sha256": "ea56f2b79117f6fbe57fa06716dfea70f31a7f8568389c21970f424e461a159d",
+      "backwardCompatible": true
     }
   ]
 }

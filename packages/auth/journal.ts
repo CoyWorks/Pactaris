@@ -21,7 +21,7 @@ export class JournalError extends Error {
   constructor(public kind:'denied'|'invalid'|'unavailable'){super('journal.'+kind);}
 }
 
-export function journalInput(action:Exclude<JournalAction,'maintenanceStatus'|'maintenanceRun'>,value:unknown):JournalInput {
+export function journalInput(action:Exclude<JournalAction,'maintenanceStatus'|'maintenanceRun'|'entitlementsApply'>,value:unknown):JournalInput {
   if(!value||typeof value!=='object'||Array.isArray(value))throw new JournalError('invalid');
   const input=value as Record<string,unknown>,keys=Object.keys(input).sort().join(',');
   if(!uuid(input.operationId))throw new JournalError('invalid');

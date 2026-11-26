@@ -2,6 +2,7 @@ import type pg from 'pg';
 import type { InstanceConfig } from '../../packages/config/index.js';
 import { DelegationError, JournalVerifier, type JournalAction } from '../../packages/auth/delegation.js';
 import { journalInput, maintenanceInput, JournalError } from '../../packages/auth/journal.js';
+import { entitlementsInput } from '../../packages/auth/plans.js';
 import { InstanceMaintenance } from './maintenance.js';
 
 /** Hands out and acknowledges content-free revocation entries for the gateway copy. */
@@ -15,6 +16,7 @@ export class InstanceJournal {
   async execute(token:string,action:JournalAction,body:Buffer):Promise<unknown> {
     const verified=await this.verifier.verify(token,action,body);
     if(action==='maintenanceStatus'||action==='maintenanceRun')return this.maintain(action,body,verified);
+    if(action==='entitlementsApply')return this.entitlements(body,verified);
     let input:ReturnType<typeof journalInput>;
     try{input=journalInput(action,JSON.parse(body.toString('utf8')));}catch{throw new JournalError('invalid');}
     if(input.operationId!==verified.operationId)throw new JournalError('invalid');
@@ -30,6 +32,25 @@ export class InstanceJournal {
         :{operationId:input.operationId,acknowledged:(await db.query('SELECT pactaris.revocation_journal_ack($1,$2::uuid[]) AS marked',[this.config.instanceId,input.entryIds])).rows[0].marked};
       await db.query('COMMIT');
       return result;
+    }catch(error){
+      await db.query('ROLLBACK');
+      if(error instanceof DelegationError||error instanceof JournalError)throw error;
+      throw new JournalError('unavailable');
+    }finally{db.release();}
+  }
+  /** Plan limits from the gateway (docs/HOUSEHOLD_PLANS.md); only a newer plan version applies. */
+  private async entitlements(body:Buffer,verified:{operationId:string;jti:string;expiresAt:Date}){
+    let input:ReturnType<typeof entitlementsInput>;
+    try{input=entitlementsInput(JSON.parse(body.toString('utf8')));}catch{throw new JournalError('invalid');}
+    if(input.operationId!==verified.operationId)throw new JournalError('invalid');
+    const db=await this.pool.connect();
+    try{
+      await db.query('BEGIN');
+      const used=await db.query('INSERT INTO pactaris.delegation_uses(jti,expires_at) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING jti',[verified.jti,verified.expiresAt]);
+      if(!used.rowCount)throw new DelegationError('journal.replay');
+      const result=(await db.query('SELECT pactaris.entitlements_apply($1,$2,$3,$4::jsonb) AS result',[this.config.instanceId,input.householdId,input.planVersion,JSON.stringify(input.capabilities)])).rows[0].result;
+      await db.query('COMMIT');
+      return {operationId:input.operationId,...result};
     }catch(error){
       await db.query('ROLLBACK');
       if(error instanceof DelegationError||error instanceof JournalError)throw error;
