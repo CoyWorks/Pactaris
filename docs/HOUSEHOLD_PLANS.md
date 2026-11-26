@@ -27,12 +27,12 @@ Owner decisions, 26 November 2026 (level change and prices updated the same day)
   - **Time added**: who added how many months of which level, and when.
   
   Amounts paid are never stored. Operator grants show as "Pactaris added…".
-- **Prices** come from the gateway configuration, in minor units (cents). Without `planPrices` no price is shown.
+- **Prices** come from the gateway configuration (`/opt/pactaris/gateway/config.json`, top level), in minor units (cents). Without `planPrices` no price is shown. Live since 26 November 2026: Level 1 €1.50 and Level 2 €3.00 per month.
 
   ```json
-  "planPrices": { "currency": "EUR", "monthly": { "level1": 0, "level2": 0 } }
+  "planPrices": { "currency": "EUR", "monthly": { "level1": 150, "level2": 300 } }
   ```
-  The amounts are placeholders until the owner sets them.
+  After a change, restart the gateway service (the worker does not use prices). Keep Level 2 at twice Level 1: the time conversion between levels assumes that ratio.
 - **No payment provider yet.** Extend answers `payments_unavailable`. PayPal is the likely first provider; check its acceptable use policy for adult-oriented services first (see docs/PLANS.md). The provider integration adds `prepaid` and `subscription` credits with its own payment reference, so a payment counts once.
 
 ## Limits (placeholders)
