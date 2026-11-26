@@ -63,7 +63,7 @@ Owner decision: Identity looks like the app and the main website on every flow.
   - both authorization flows: `identity.redirectTitle`
   - `default-provider-invalidation-flow`: `identity.signedOutTitle`
 
-Since 25 November 2026 the Brand's logo, favicon and flow background point at the main website: `https://pactaris.app/logo.svg`, `/favicon.svg` and `/flow-background.svg`. Files uploaded to Identity's media storage disappeared twice after Identity was recreated, so Identity no longer depends on its own media storage for branding.
+Since 25 November 2026 the Brand's logo, favicon and flow background point at the main website: `https://pactaris.app/logo.svg`, `/favicon.svg` and `/flow-background.svg`. Files uploaded to Identity's media storage disappeared twice after Identity was recreated, so Identity no longer depends on its own media storage for branding. The cause: in authentik 2026.8.5 `/data/media` is a link to `/media`, which was outside the `media:/data` volume; `compose.yaml` now also mounts an `uploads` volume at `/media`.
 
 On the live Identity the Brand pointed at media files that no longer existed, so the logo and background were missing. The assets were uploaded again under content-versioned names and the Brand now points at those.
 

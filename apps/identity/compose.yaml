@@ -41,6 +41,8 @@ services:
       - "${BIND_ADDRESS:?}:${HTTPS_PORT:?}:9443"
     volumes:
       - media:/data
+      # The image links /data/media to /media, so uploaded files live in /media.
+      - uploads:/media
       # Pactaris email templates (docs/IDENTITY_BRANDING.md), shipped with each release.
       - ./templates:/templates:ro
   worker:
@@ -53,9 +55,12 @@ services:
         condition: service_healthy
     volumes:
       - media:/data
+      # The image links /data/media to /media, so uploaded files live in /media.
+      - uploads:/media
       # Pactaris email templates (docs/IDENTITY_BRANDING.md), shipped with each release.
       - ./templates:/templates:ro
 # No Docker socket mount; this app does not require automatic outpost deployment.
 volumes:
   database:
   media:
+  uploads:
