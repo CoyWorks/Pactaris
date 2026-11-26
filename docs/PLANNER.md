@@ -3,7 +3,7 @@
 Owner decisions, 26 November 2026:
 - The planner lives in **Tasks → Calendar**, next to Mine and Shared.
 - **Today** shows a short overview of the coming week.
-- An ICS subscription for external calendars follows separately. It will show titles, and each item can be set to hide its title there.
+- An ICS subscription for external calendars shows titles, and each item can be set to hide its title there; see [CALENDAR_FEED.md](CALENDAR_FEED.md).
 
 ## What it shows
 
@@ -37,4 +37,4 @@ The person filter offers yourself plus everyone you hold task authority over (`a
 
 - At most 600 items per request.
 - Weekly routines and habits show once per week, on the first day of that week in the range.
-- The planner does not move or edit anything. Dragging items to another day is not part of this version.
+- The planner does not move or edit anything, except whether an item's title is hidden in calendar subscriptions ([CALENDAR_FEED.md](CALENDAR_FEED.md)). Dragging items to another day is not part of this version.

@@ -1,3 +1,4 @@
+import {CalendarPrivacyField,markCalendar} from './planner.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {PunishmentPicker} from './shop.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
@@ -84,7 +85,7 @@ export function TodayAssignedHabits({habits,me,householdId,session,language,onCh
 const empty=(timeZone:string):HabitFields=>({category:'',weekdays:[1,2,3,4,5,6,7],title:'',description:'',period:'daily',mode:'minimum',target:1,timeZone,rewardPoints:null,penaltyPoints:null,punishment:null,milestoneEvery:null,milestonePoints:null,extraPoints:null,extraLimit:null});
 function HabitForm({habit,subjectId,householdId,session,language,timeZone,canOutcomes,onClose,onSaved}:{habit?:AssignedHabit;subjectId:string;householdId:string;session:Session;language:string;timeZone:string;canOutcomes:boolean;onClose:()=>void;onSaved:(notice:MessageKey)=>void}){
  const t=createTranslator(language),[fields,setFields]=useState<HabitFields>(habit?{category:habit.category??'',weekdays:habit.weekdays,title:habit.title,description:habit.description,period:habit.period,mode:habit.mode,target:habit.target,timeZone:habit.timeZone,rewardPoints:habit.rewardPoints,penaltyPoints:habit.penaltyPoints,punishment:habit.punishment,milestoneEvery:habit.milestoneEvery,milestonePoints:habit.milestonePoints,extraPoints:habit.extraPoints??null,extraLimit:habit.extraLimit??null}:empty(timeZone));
- const [busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),operation=useRef<string|undefined>(undefined);
+ const [busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[hide,setHide]=useState(false),operation=useRef<string|undefined>(undefined);
  const set=<K extends keyof HabitFields,>(key:K,value:HabitFields[K])=>{setFields(f=>({...f,[key]:value}));operation.current=undefined;};
  const number=(value:string)=>value===''?null:Math.max(1,Math.min(10000,Math.round(Number(value))));
  async function save(e:React.FormEvent){
@@ -92,7 +93,9 @@ function HabitForm({habit,subjectId,householdId,session,language,timeZone,canOut
   const operationId=operation.current??=crypto.randomUUID();
   const clean={...fields,title:fields.title.trim(),description:fields.description.trim(),punishment:fields.punishment?.trim()||null};
   try{const result=await authoritySend(householdId,session,'habitSave',{operationId,habitId:habit?.habitId??null,subjectId:habit?null:subjectId,version:habit?.version??null,fields:clean});
-   if(result.ok){onSaved('habits.saved');return;}setError(result.key);if(!result.unknown)operation.current=undefined;}
+   if(result.ok){
+    if(!habit&&hide&&!await markCalendar(householdId,session.csrfToken,'habit',String(result.data.resourceId),true)){onSaved('calendar.markFailed');return;}
+    onSaved('habits.saved');return;}setError(result.key);if(!result.unknown)operation.current=undefined;}
   finally{setBusy(false);}
  }
  return <Layer title={t(habit?'habits.edit':'habits.new')} backLabel={t('nav.back')} onClose={onClose}>
@@ -122,6 +125,7 @@ function HabitForm({habit,subjectId,householdId,session,language,timeZone,canOut
     {fields.extraPoints!=null&&<><Hint label={t('hint.more')}>{t('habits.extraHelp')}</Hint>
      <label>{t('habits.extraPoints')}<input type="number" inputMode="numeric" min={1} max={10000} required disabled={busy} value={fields.extraPoints??''} onChange={e=>set('extraPoints',number(e.target.value)??1)}/></label>
      <label>{t('habits.extraLimit')}<input type="number" inputMode="numeric" min={1} max={1000} required disabled={busy} value={fields.extraLimit??''} onChange={e=>set('extraLimit',Math.max(1,Math.min(1000,Math.round(Number(e.target.value))||1)))}/></label></>}</>}</>}
+   {!habit&&<CalendarPrivacyField language={language} checked={hide} disabled={busy} onChange={setHide}/>}
    {error&&<p role="alert">{t(error)}</p>}
    <button type="submit" disabled={busy||!fields.title.trim()||(fields.period==='daily'&&!(fields.weekdays?.length))}>{t(busy?'onboarding.saving':'habits.save')}</button>
   </form>

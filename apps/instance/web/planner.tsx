@@ -1,10 +1,21 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
-import type {Planner,PlannerItem,PlannerKind} from '../../../packages/auth/workspace.js';
+import {calendarMarkKind,type CalendarMarkKind,type Planner,type PlannerItem,type PlannerKind} from '../../../packages/auth/workspace.js';
 import {Icon} from './navigation.js';
 
 // Planner (docs/PLANNER.md): everything with a date for one person, read-only. Dates are local
 // calendar days in the dynamic's time zone; the server limits a request to 42 days.
+/** Sets whether an item's title is hidden in calendar subscriptions (docs/CALENDAR_FEED.md). */
+export async function markCalendar(householdId:string,csrfToken:string,kind:CalendarMarkKind,resourceId:string,hidden:boolean):Promise<boolean>{
+ try{const r=await fetch('/api/households/'+householdId+'/calendar-mark',{method:'POST',headers:{'content-type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({kind,resourceId,hidden})});return r.ok;}
+ catch{return false;}
+}
+/** The checkbox on create forms. Only shown and stored when ticked; the default is a visible title. */
+export function CalendarPrivacyField({language,checked,disabled,onChange}:{language:string;checked:boolean;disabled?:boolean;onChange:(value:boolean)=>void}){
+ const t=createTranslator(language);
+ return <><label className="check"><input type="checkbox" checked={checked} disabled={disabled} onChange={e=>onChange(e.target.checked)}/>{t('calendar.hideTitle')}</label>
+  <p className="muted">{t('calendar.hideTitleHelp')}</p></>;
+}
 export type PlannerTarget='tasks'|'participantTasks'|'habits'|'checkins'|'home'|'authority';
 type Mode='agenda'|'week'|'month';
 
@@ -46,40 +57,45 @@ function Badges({item,language}:{item:PlannerItem;language:string}){
  return badges.length?<span className="planner-badges">{badges.map(k=><span key={k} className={'planner-badge '+k.split('.')[1]}>{t(k)}</span>)}</span>:null;
 }
 
-function ItemRow({item,language,format,zone,onOpen,withDate=false}:{item:PlannerItem;language:string;format:string;zone:string;onOpen:(item:PlannerItem)=>void;withDate?:boolean}){
+function ItemRow({item,language,format,zone,onOpen,withDate=false,onToggleHidden}:{item:PlannerItem;language:string;format:string;zone:string;onOpen:(item:PlannerItem)=>void;withDate?:boolean;onToggleHidden?:(item:PlannerItem)=>void}){
  const t=createTranslator(language);
  const time=withDate?new Intl.DateTimeFormat(format,{day:'numeric',month:'short',timeZone:'UTC'}).format(asDate(item.day))
   :item.at?new Intl.DateTimeFormat(format,{hour:'2-digit',minute:'2-digit',timeZone:zone}).format(new Date(item.at)):t('planner.anyTime');
- return <li><button type="button" className={'planner-item'+(item.onBreak?' muted-item':'')} onClick={()=>onOpen(item)}>
+ return <li className="planner-row"><button type="button" className={'planner-item'+(item.onBreak?' muted-item':'')} onClick={()=>onOpen(item)}>
   <span className="planner-time">{time}</span>
-  <span className="grow"><strong>{item.title}</strong><span className="muted">{t(kindLabel[item.kind])}</span></span>
+  <span className="grow"><strong>{item.title}</strong><span className="muted">{t(kindLabel[item.kind])}{item.hidden&&<span className="planner-hidden">{t('calendar.hidden')}</span>}</span></span>
   <Badges item={item} language={language}/>
- </button></li>;
+ </button>{onToggleHidden&&<button type="button" className="icon-button planner-eye" aria-pressed={item.hidden} aria-label={t(item.hidden?'calendar.showAction':'calendar.hideAction')} title={t(item.hidden?'calendar.showAction':'calendar.hideAction')} onClick={()=>onToggleHidden(item)}><Icon name={item.hidden?'eyeOff':'eye'}/></button>}</li>;
 }
 
-function DayList({day,items,today,language,format,zone,onOpen,showEmpty}:{day:string;items:PlannerItem[];today:string;language:string;format:string;zone:string;onOpen:(item:PlannerItem)=>void;showEmpty:boolean}){
+function DayList({day,items,today,language,format,zone,onOpen,showEmpty,onToggleHidden}:{day:string;items:PlannerItem[];today:string;language:string;format:string;zone:string;onOpen:(item:PlannerItem)=>void;showEmpty:boolean;onToggleHidden?:(item:PlannerItem)=>void}){
  const t=createTranslator(language);
  if(!items.length&&!showEmpty)return null;
  const label=new Intl.DateTimeFormat(format,{weekday:'long',day:'numeric',month:'long',timeZone:'UTC'}).format(asDate(day));
  return <section className="planner-day" aria-label={label}>
   <h3>{day===today?t('planner.todayLabel',{date:label}):label}</h3>
-  {items.length?<ul className="planner-list">{items.map(item=><ItemRow key={item.kind+item.id+item.day} item={item} language={language} format={format} zone={zone} onOpen={onOpen}/>)}</ul>
+  {items.length?<ul className="planner-list">{items.map(item=><ItemRow key={item.kind+item.id+item.day} item={item} language={language} format={format} zone={zone} onOpen={onOpen} onToggleHidden={onToggleHidden}/>)}</ul>
    :<p className="muted">{t('planner.nothing')}</p>}
  </section>;
 }
 
 /** Tasks → Calendar: agenda (next 7 days), week or month, for yourself or someone you hold task authority over. */
-export function PlannerView({householdId,language,format,timeZone,reload,onOpen,initialMode='agenda'}:{householdId:string;language:string;format:string;timeZone:string;reload:unknown;onOpen:(target:PlannerTarget)=>void;initialMode?:Mode}){
+export function PlannerView({householdId,csrfToken,language,format,timeZone,reload,onOpen,initialMode='agenda'}:{householdId:string;csrfToken:string;language:string;format:string;timeZone:string;reload:unknown;onOpen:(target:PlannerTarget)=>void;initialMode?:Mode}){
  const t=createTranslator(language),today=dayIn(timeZone);
  const [mode,setMode]=useState<Mode>(initialMode),[anchor,setAnchor]=useState(today),[person,setPerson]=useState<string>(),[selected,setSelected]=useState<string>();
  const lookBack=mode==='agenda'?14:0;
  const range=useMemo(()=>mode==='agenda'?{from:addDays(anchor,-14),days:21}:mode==='week'?{from:weekStart(anchor),days:7}:{from:weekStart(monthStart(anchor)),days:42},[mode,anchor]);
- const {data,failed,loading}=usePlanner(householdId,range.from,range.days,person,timeZone,reload);
+ const [marks,setMarks]=useState<Record<string,boolean>>({}),[markError,setMarkError]=useState(false);
+ const planner=usePlanner(householdId,range.from,range.days,person,timeZone,reload);
+ const {failed,loading}=planner;
+ const data=useMemo(()=>planner.data&&{...planner.data,items:planner.data.items.map(i=>i.id in marks?{...i,hidden:marks[i.id]!}:i)},[planner.data,marks]);
  const byDay=useMemo(()=>{const map=new Map<string,PlannerItem[]>();for(const item of data?.items??[]){const list=map.get(item.day)??[];list.push(item);map.set(item.day,list);}return map;},[data]);
  const days=Array.from({length:range.days-lookBack},(_,i)=>addDays(range.from,i+lookBack));
  const overdue=lookBack?(data?.items??[]).filter(i=>i.day<days[0]!&&i.overdue):[];
  const self=!person||data?.people.find(p=>p.id===person)?.self===true;
  const open=(item:PlannerItem)=>onOpen(plannerTarget(item,self));
+ const toggle=self?(item:PlannerItem)=>{const next=!item.hidden;setMarkError(false);setMarks(m=>({...m,[item.id]:next}));
+  void markCalendar(householdId,csrfToken,calendarMarkKind(item.kind),item.id,next).then(ok=>{if(!ok){setMarks(m=>({...m,[item.id]:!next}));setMarkError(true);}});}:undefined;
  const step=mode==='month'?null:7;
  const move=(direction:1|-1)=>{
   if(step)setAnchor(a=>addDays(a,direction*step));
@@ -104,11 +120,12 @@ export function PlannerView({householdId,language,format,timeZone,reload,onOpen,
    <button type="button" className="link-button" disabled={anchor===today} onClick={()=>{setAnchor(today);setSelected(undefined);}}>{t('planner.today')}</button>
   </div>
   {failed&&<p role="alert">{t('planner.failed')}</p>}
+  {markError&&<p role="alert">{t('calendar.failed')}</p>}
   {loading&&!data&&<p role="status">{t('portal.loading')}</p>}
   {data&&mode!=='month'&&<>
-   {overdue.length>0&&<section className="planner-day" aria-label={t('planner.overdueTitle')}><h3>{t('planner.overdueTitle')}</h3><ul className="planner-list">{overdue.map(item=><ItemRow key={item.kind+item.id+item.day} item={item} language={language} format={format} zone={timeZone} onOpen={open} withDate/>)}</ul></section>}
+   {overdue.length>0&&<section className="planner-day" aria-label={t('planner.overdueTitle')}><h3>{t('planner.overdueTitle')}</h3><ul className="planner-list">{overdue.map(item=><ItemRow key={item.kind+item.id+item.day} item={item} language={language} format={format} zone={timeZone} onOpen={open} onToggleHidden={toggle} withDate/>)}</ul></section>}
    {mode==='agenda'&&!days.some(d=>(byDay.get(d)??[]).length)&&<div className="empty-card"><p>{t('planner.emptyWeek')}</p></div>}
-   {days.map(day=><DayList key={day} day={day} items={byDay.get(day)??[]} today={today} language={language} format={format} zone={timeZone} onOpen={open} showEmpty={mode==='week'}/>)}
+   {days.map(day=><DayList key={day} day={day} items={byDay.get(day)??[]} today={today} language={language} format={format} zone={timeZone} onOpen={open} onToggleHidden={toggle} showEmpty={mode==='week'}/>)}
   </>}
   {data&&mode==='month'&&<>
    <div className="planner-month" role="grid" aria-label={title}>
@@ -120,8 +137,9 @@ export function PlannerView({householdId,language,format,timeZone,reload,onOpen,
       <span className="planner-dots" aria-hidden="true">{items.slice(0,3).map(i=><span key={i.kind+i.id} className={'dot'+(i.overdue?' overdue':'')}/>)}{items.length>3&&<span className="more">{t('planner.more',{count:String(items.length-3)})}</span>}</span>
      </button>;})}
    </div>
-   {selected&&<DayList day={selected} items={byDay.get(selected)??[]} today={today} language={language} format={format} zone={timeZone} onOpen={open} showEmpty/>}
+   {selected&&<DayList day={selected} items={byDay.get(selected)??[]} today={today} language={language} format={format} zone={timeZone} onOpen={open} onToggleHidden={toggle} showEmpty/>}
   </>}
+ {self&&<CalendarSubscription householdId={householdId} csrfToken={csrfToken} language={language} format={format}/>}
  </section>;
 }
 
@@ -140,5 +158,43 @@ export function WeekGlance({householdId,language,format,timeZone,reload,onOpen}:
     <strong>{Number(day.slice(8))}</strong>
     <span className={'glance-count'+(overdue?' overdue':'')+(n?'':' empty')}>{n||'·'}</span>
    </button></li>;})}</ol>
+ </section>;
+}
+
+type FeedState={active:boolean;createdAt:string|null;lastUsedAt:string|null;url?:string;webcalUrl?:string};
+/** The private ICS link for this account and dynamic: create, renew or stop it. The link is shown only once. */
+function CalendarSubscription({householdId,csrfToken,language,format}:{householdId:string;csrfToken:string;language:string;format:string}){
+ const t=createTranslator(language),[state,setState]=useState<FeedState>(),[busy,setBusy]=useState(false),[message,setMessage]=useState<MessageKey>();
+ useEffect(()=>{let live=true;void fetch('/api/households/'+householdId+'/calendar-feed',{cache:'no-store'}).then(r=>r.ok?r.json() as Promise<FeedState>:undefined).then(v=>{if(live&&v)setState(v);}).catch(()=>undefined);return()=>{live=false;};},[householdId]);
+ async function send(method:'POST'|'DELETE'){
+  if(busy)return;setBusy(true);setMessage(undefined);
+  try{const r=await fetch('/api/households/'+householdId+'/calendar-feed',{method,headers:{'X-CSRF-Token':csrfToken}});if(!r.ok)throw Error('feed');
+   setState(await r.json() as FeedState);if(method==='DELETE')setMessage('calendar.revoked');}
+  catch{setMessage('calendar.failed');}finally{setBusy(false);}
+ }
+ async function copy(url:string){try{await navigator.clipboard.writeText(url);setMessage('calendar.copied');}catch{setMessage('calendar.failed');}}
+ if(!state)return null;
+ const lastUsed=state.lastUsedAt?t('calendar.lastUsed',{time:new Intl.DateTimeFormat(format,{dateStyle:'medium',timeStyle:'short'}).format(new Date(state.lastUsedAt))}):t('calendar.neverUsed');
+ return <section className="calendar-subscription">
+  <h2>{t('calendar.subscribeTitle')}</h2>
+  <p className="muted">{t('calendar.subscribeHelp')}</p>
+  {state.url&&state.webcalUrl&&<div className="notice">
+   <p>{t('calendar.linkOnce')}</p>
+   <input readOnly value={state.url} aria-label={t('calendar.subscribeTitle')} onFocus={e=>e.target.select()}/>
+   <div className="calendar-actions">
+    <button type="button" onClick={()=>{void copy(state.url!);}}>{t('calendar.copy')}</button>
+    <a className="button" href={'https://calendar.google.com/calendar/r?cid='+encodeURIComponent(state.webcalUrl)} target="_blank" rel="noopener noreferrer">{t('calendar.google')}</a>
+    <a className="button" href={state.webcalUrl}>{t('calendar.apple')}</a>
+    <a className="button" href={'https://outlook.live.com/calendar/0/addfromweb?url='+encodeURIComponent(state.url)+'&name=Pactaris'} target="_blank" rel="noopener noreferrer">{t('calendar.outlook')}</a>
+   </div>
+  </div>}
+  {state.active&&!state.url&&<p>{t('calendar.active')} <span className="muted">{lastUsed}</span></p>}
+  {message&&<p role="status">{t(message)}</p>}
+  <div className="calendar-actions">
+   {!state.active?<button type="button" disabled={busy} onClick={()=>{void send('POST');}}>{t('calendar.create')}</button>
+    :<><button type="button" className="secondary" disabled={busy} onClick={()=>{void send('POST');}}>{t('calendar.renew')}</button>
+     <button type="button" className="danger" disabled={busy} onClick={()=>{void send('DELETE');}}>{t('calendar.revoke')}</button></>}
+  </div>
+  {state.active&&<p className="muted">{t('calendar.renewHelp')}</p>}
  </section>;
 }

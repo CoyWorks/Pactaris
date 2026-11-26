@@ -41,6 +41,7 @@ import { AdminConsole } from '../apps/gateway/admin.js';
 import { GatewayMaintenance } from '../apps/gateway/maintenance.js';
 import {GatewayMembers} from '../apps/gateway/members.js';
 import {InvitationMail} from '../apps/gateway/invitation-mail.js';
+import { CalendarFeeds } from '../apps/gateway/calendar-feed.js';
 import { GatewayInvitations } from '../apps/gateway/invitations.js';
 import { hash } from '../apps/gateway/store.js';
 import { PgOnboardingStore,OnboardingService } from '../apps/gateway/onboarding.js';
@@ -397,7 +398,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const catalogService=new GatewayCatalog(store,client,new PrivateCatalogClient(signer));
   const partnerService=new GatewayPartner(store,client,new PrivatePartnerClient(signer));
   const proofService=new GatewayProof(store,client,new PrivateProofClient(signer));
-  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService,partnerService,undefined,undefined,undefined,undefined,undefined,undefined,undefined,exchangeService,authorityService,proofService);
+  const gateway=createGatewayApp(config,store,{start:async()=>'',finish:async()=>{throw Error('unused');}},client,undefined,onboarding,invites,memberService,relationshipService,consentService,workspaceService,libraryService,routineService,catalogService,partnerService,undefined,undefined,undefined,undefined,undefined,undefined,undefined,exchangeService,authorityService,proofService,undefined,undefined,undefined,new CalendarFeeds(gatewayDb.pool));
   // Real network requests throughout: injection adapters mutate Express prototypes and
   // must not run in the same process as independently listening backend applications.
   const gatewayServer=https.createServer({key:await readFile(keyFile),cert:await readFile(certificate)},gateway);servers.push(gatewayServer);
@@ -2071,6 +2072,25 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await planner(B,'&person='+D.member)).status,404);
      assert.equal((await api(base+'/planner?from='+plannerDay+'&days=60&timeZone=UTC','GET',undefined,D.session)).status,400);
      assert.equal((await api(base+'/planner?from=2026-02-30&days=7&timeZone=UTC','GET',undefined,D.session)).status,400);
+     // Calendar subscription: a private link per account and dynamic; hidden titles show as "Pactaris".
+     const habitId=habit.data.resourceId;
+     assert.equal((await api(base+'/calendar-mark','POST',{kind:'habit',resourceId:habitId,hidden:true},B.session)).status,404);
+     assert.equal((await api(base+'/calendar-mark','POST',{kind:'nope',resourceId:habitId,hidden:true},D.session)).status,400);
+     assert.equal((await api(base+'/calendar-feed','GET',undefined,D.session)).data.active,false);
+     const issued=await api(base+'/calendar-feed','POST',undefined,D.session);assert.equal(issued.status,200,issued.body);
+     assert.equal(issued.data.active,true);assert.match(issued.data.webcalUrl,/^webcal:\/\/pactaris\.app\/calendar\/[A-Za-z0-9_-]{43}\.ics$/);
+     const feedPath=new URL(issued.data.url).pathname;
+     const ics=await api(feedPath,'GET',undefined,'');assert.equal(ics.status,200,ics.body);assert.match(String(ics.headers['content-type']),/^text\/calendar/);
+     assert.ok(ics.body.startsWith('BEGIN:VCALENDAR\r\n'));assert.ok(ics.body.includes('SUMMARY:Morning check-in'));
+     assert.ok(!(await gatewayDb.owner.query('SELECT token_hash FROM pactaris.calendar_feeds')).rows.some((r:any)=>feedPath.includes(r.token_hash)));
+     assert.equal((await api(base+'/calendar-mark','POST',{kind:'habit',resourceId:habitId,hidden:true},D.session)).status,200);
+     assert.equal((await planner(D,'')).data.planner.items.find((x:any)=>x.id===habitId).hidden,true);
+     const hiddenIcs=await api(feedPath,'GET',undefined,'');assert.ok(hiddenIcs.body.includes('SUMMARY:Pactaris'));assert.ok(!hiddenIcs.body.includes('Morning check-in'));
+     assert.equal((await api(base+'/calendar-mark','POST',{kind:'habit',resourceId:habitId,hidden:false},A.session)).status,200);
+     const renewed=await api(base+'/calendar-feed','POST',undefined,D.session);assert.notEqual(renewed.data.url,issued.data.url);
+     assert.equal((await api(feedPath,'GET',undefined,'')).status,404);
+     assert.equal((await api(base+'/calendar-feed','DELETE',undefined,D.session)).data.active,false);
+     assert.equal((await api(new URL(renewed.data.url).pathname,'GET',undefined,'')).status,404);
      // Both parties can schedule a break; outsiders cannot. Weekly overlap skips the whole week.
      const weekly=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:{...habitFields,period:'weekly'}});
      assert.equal(weekly.status,200,JSON.stringify(weekly.data));

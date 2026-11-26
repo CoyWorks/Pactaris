@@ -680,6 +680,20 @@
       "path": "migrations/instance/0068_planner.sql",
       "sha256": "8c81ef9c52c3e90dd5299caca4e99e5a607c298093420e32e2530f425e37875a",
       "backwardCompatible": true
+    },
+    {
+      "component": "gateway",
+      "id": "0029_calendar_feeds",
+      "path": "migrations/gateway/0029_calendar_feeds.sql",
+      "sha256": "b1054d502c78670728d5851664852a18148356926289135494abea1de9a59ef9",
+      "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0069_calendar_privacy",
+      "path": "migrations/instance/0069_calendar_privacy.sql",
+      "sha256": "93ceb7589d1a326cc7f37cb9a3c7a61fb12af178c6ce95e6ab8084286675aff2",
+      "backwardCompatible": true
     }
   ]
 }

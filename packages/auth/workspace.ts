@@ -12,7 +12,11 @@ export type PersonalSeries={seriesId:string;version:string;state:'active'|'block
 export const plannerKinds=['task','taskSeries','partnerTask','partnerSeries','habit','routineHabit','ritual','checkin'] as const;
 export type PlannerKind=typeof plannerKinds[number];
 /** One dated entry. `projected`: a future occurrence that does not exist yet; `onBreak`: a planned habit break. */
-export type PlannerItem={kind:PlannerKind;id:string;day:string;at:string|null;title:string;state:string;overdue:boolean;projected:boolean;onBreak:boolean};
+export type PlannerItem={kind:PlannerKind;id:string;day:string;at:string|null;title:string;state:string;overdue:boolean;projected:boolean;onBreak:boolean;hidden:boolean};
+/** What `calendarMark` names: routines (habit, ritual, check-in) share one kind. */
+export const calendarMarkKinds=['task','taskSeries','partnerTask','partnerSeries','habit','routine'] as const;
+export type CalendarMarkKind=typeof calendarMarkKinds[number];
+export const calendarMarkKind=(kind:PlannerKind):CalendarMarkKind=>kind==='routineHabit'||kind==='ritual'||kind==='checkin'?'routine':kind;
 export type Planner={from:string;days:number;timeZone:string;personId:string;people:{id:string;name:string;self:boolean}[];items:PlannerItem[]};
 export const plannerMaxDays=42;
 const calendarDay=(v:unknown)=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
@@ -47,11 +51,13 @@ export function workspaceInput(action:WorkspaceAction,value:unknown):Record<stri
  if(action==='settingsUpdate')names.push('name','timeZone','version');
  if(action==='taskRead')names.push('taskId');
  if(action==='plannerRead')names.push('from','days','personId','timeZone');
+ if(action==='calendarMark')names.push('kind','resourceId','hidden');
  if(['taskUpdate','taskComplete','taskArchive','taskReopen'].includes(action))names.push('taskId','version');
  if(action==='taskCreate'||action==='taskUpdate')names.push('fields','epoch','memberEpoch');
  if(action==='taskComplete')names.push('epoch','memberEpoch');
  if(Object.keys(value).sort().join(',')!==names.sort().join(',')||['taskId','after','seriesId'].some(k=>k in value&&!uuid(value[k]))||['version','epoch','memberEpoch'].some(k=>k in value&&!version(value[k])))throw new WorkspaceError('invalid');
  if(action==='workspaceChanges'&&value.cursor!==null&&!uuid(value.cursor))throw new WorkspaceError('invalid');
+ if(action==='calendarMark'&&(!(calendarMarkKinds as readonly string[]).includes(String(value.kind))||!uuid(value.resourceId)||typeof value.hidden!=='boolean'))throw new WorkspaceError('invalid');
  if(action==='plannerRead'&&(!calendarDay(value.from)||!Number.isInteger(value.days)||Number(value.days)<1||Number(value.days)>plannerMaxDays||(value.personId!==null&&!uuid(value.personId))||!validTimeZone(value.timeZone)))throw new WorkspaceError('invalid');
  if(action==='workspaceRead'&&!['open','done','archived'].includes(String(value.filter)))throw new WorkspaceError('invalid');
  if(action==='personalSeriesSave'&&(!validTaskSchedule(value.schedule)||!record(value.fields)||
