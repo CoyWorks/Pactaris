@@ -699,7 +699,7 @@
       "component": "gateway",
       "id": "0030_household_plans",
       "path": "migrations/gateway/0030_household_plans.sql",
-      "sha256": "6b429e413bf1199c7f6bc559e218771e57338ba2487d63395d63e25fbdd03763",
+      "sha256": "6b0d3fd9ddab58904a84c8eae2164393e81ec3e8b6a6b525f82874b9ad0e348c",
       "backwardCompatible": true
     },
     {

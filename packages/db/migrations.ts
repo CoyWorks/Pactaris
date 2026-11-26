@@ -57,7 +57,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0017_task_push_queue'))await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.task_push_scopes TO ${role}`);
       if(entries.some(m=>m.id==='0015_web_push'))await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.push_devices TO ${role}`);
       if(entries.some(m=>m.id==='0030_household_plans'))await connection.query(`GRANT SELECT,INSERT,UPDATE ON pactaris.household_plans,pactaris.plan_subscriptions TO ${role}`);
-      if(entries.some(m=>m.id==='0030_household_plans'))await connection.query(`GRANT SELECT,INSERT ON pactaris.plan_credits TO ${role}`);
+      if(entries.some(m=>m.id==='0030_household_plans'))await connection.query(`GRANT SELECT,INSERT ON pactaris.plan_credits,pactaris.plan_level_changes TO ${role}`);
       if(entries.some(m=>m.id==='0029_calendar_feeds'))await connection.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON pactaris.calendar_feeds TO ${role}`);
       if(entries.some(m=>m.id==='0013_smtp_settings'))await connection.query(`GRANT SELECT,INSERT,UPDATE ON pactaris.smtp_settings TO ${role}`);
       if(entries.some(m=>m.id==='0010_account_presentation'))await connection.query(`GRANT INSERT ON pactaris.account_presentation_events TO ${role}`);

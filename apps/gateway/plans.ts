@@ -1,16 +1,21 @@
-// Household plans on the gateway (docs/HOUSEHOLD_PLANS.md). Credits add months; the level with time left
-// is the effective level. Changing level converts the remaining time at 1 month level 2 = 2 months level 1.
+// Household plans on the gateway (docs/HOUSEHOLD_PLANS.md). Credits add months at the current level; the
+// level with time left is the effective level. Only the household owner changes the level, after seeing a
+// quote with the new monthly price; the remaining time converts (internal rule, not shown in the app).
 // Every change bumps the plan version; the worker sends the resulting limits to the household's Instance.
 import {randomUUID} from 'node:crypto';
 import type pg from 'pg';
 import {journalPath,uuid,type DelegationSigner} from '../../packages/auth/delegation.js';
-import {capabilitiesFor,maxExtraMembers,paidTiers,PlanError,tierLimits,tierRate,type PaidTier,type PlanTier} from '../../packages/auth/plans.js';
+import {capabilitiesFor,maxExtraMembers,paidTiers,PlanError,priceOf,tierLimits,tierRate,type PaidTier,type PlanPrice,type PlanPrices,type PlanTier} from '../../packages/auth/plans.js';
 import {privateResponse} from '../../packages/routing/private-client.js';
 
-export type PlanHistoryEntry={name:string|null;months:number;tier:PaidTier;source:'prepaid'|'subscription'|'operator';at:string};
+export type PlanHistoryEntry={name:string|null;months:number;tier:PaidTier;source:'prepaid'|'subscription'|'operator'|'level';at:string};
 export type PlanView={tier:PlanTier;paidUntil:string|null;kind:'free'|'prepaid'|'subscription';
  subscription:{holderName:string|null;state:'active'|'paused';tier:PaidTier;mine:boolean}|null;
+ /** Monthly price of the current level only; null on Free or when no prices are configured. */
+ price:PlanPrice|null;canChangeLevel:boolean;version:string;
  extraMembers:number;limits:Record<string,number>;history:PlanHistoryEntry[];paymentsAvailable:boolean};
+/** What the owner sees before a level change goes through. `version` must come back with the confirmation. */
+export type PlanQuote={tier:PaidTier;price:PlanPrice|null;paidUntil:string|null;needsPayment:boolean;version:string};
 type Row={tier:PlanTier;paid_until:Date|null;extra_members:number;version:string};
 const iso=(d:Date|null)=>d?d.toISOString():null;
 const limitsOf=(c:ReturnType<typeof capabilitiesFor>)=>Object.fromEntries(Object.entries(c).filter(([,v])=>typeof v==='number')) as Record<string,number>;
@@ -28,7 +33,7 @@ export function applyCredit(current:{tier:PlanTier;paidUntil:Date|null},tier:Pai
 }
 
 export class HouseholdPlans{
- constructor(private pool:pg.Pool,private signer?:Pick<DelegationSigner,'signJournal'>,private paymentsAvailable=false){}
+ constructor(private pool:pg.Pool,private signer?:Pick<DelegationSigner,'signJournal'>,private paymentsAvailable=false,private prices?:PlanPrices){}
  private async row(db:pg.PoolClient|pg.Pool,householdId:string,lock=false):Promise<Row>{
   await db.query('INSERT INTO pactaris.household_plans(household_id) SELECT household_id FROM pactaris.placements WHERE household_id=$1 ON CONFLICT DO NOTHING',[householdId]);
   const r=await db.query(`SELECT tier,paid_until,extra_members,version::text FROM pactaris.household_plans WHERE household_id=$1${lock?' FOR UPDATE':''}`,[householdId]);
@@ -36,14 +41,18 @@ export class HouseholdPlans{
  }
  private effective(row:Row,now=new Date()):PlanTier{return row.tier!=='free'&&row.paid_until&&row.paid_until>now?row.tier:'free';}
  /** What every member of the dynamic sees. Names come from accounts; amounts are never stored. */
- async view(accountId:string,householdId:string):Promise<PlanView>{
+ async view(accountId:string,householdId:string,isOwner=false):Promise<PlanView>{
   const row=await this.row(this.pool,householdId),tier=this.effective(row);
   const sub=(await this.pool.query(`SELECT s.tier,s.state,s.holder_account_id,COALESCE(a.preferred_display_name,a.display_name) AS name FROM pactaris.plan_subscriptions s
    LEFT JOIN pactaris.accounts a ON a.id=s.holder_account_id WHERE s.household_id=$1 AND s.state IN ('active','paused')`,[householdId])).rows[0];
   const history=(await this.pool.query(`SELECT c.months,c.tier,c.source,c.created_at,CASE WHEN c.source='operator' THEN NULL ELSE COALESCE(a.preferred_display_name,a.display_name) END AS name
-   FROM pactaris.plan_credits c LEFT JOIN pactaris.accounts a ON a.id=c.account_id WHERE c.household_id=$1 ORDER BY c.created_at DESC LIMIT 100`,[householdId])).rows;
+   FROM pactaris.plan_credits c LEFT JOIN pactaris.accounts a ON a.id=c.account_id WHERE c.household_id=$1
+   UNION ALL SELECT 0,l.to_tier,'level',l.created_at,COALESCE(a.preferred_display_name,a.display_name)
+   FROM pactaris.plan_level_changes l LEFT JOIN pactaris.accounts a ON a.id=l.account_id WHERE l.household_id=$1
+   ORDER BY created_at DESC LIMIT 100`,[householdId])).rows;
   return {tier,paidUntil:tier==='free'?null:iso(row.paid_until),kind:sub?'subscription':tier==='free'?'free':'prepaid',
    subscription:sub?{holderName:sub.name??null,state:sub.state,tier:sub.tier,mine:sub.holder_account_id===accountId}:null,
+   price:priceOf(this.prices,tier),canChangeLevel:isOwner,version:row.version,
    extraMembers:row.extra_members,limits:limitsOf(capabilitiesFor(tier,iso(row.paid_until),row.extra_members)),
    history:history.map(h=>({name:h.name??null,months:h.months,tier:h.tier,source:h.source,at:h.created_at.toISOString()})),paymentsAvailable:this.paymentsAvailable};
  }
@@ -62,6 +71,35 @@ export class HouseholdPlans{
     await db.query('UPDATE pactaris.household_plans SET tier=$2,paid_until=$3,expired_at=NULL,version=version+1,updated_at=now() WHERE household_id=$1',[householdId,next.tier,next.paidUntil]);
     if(who.operatorId)await db.query("INSERT INTO pactaris.operator_events(operator_account_id,action,target_id) VALUES($1,'plan.granted',$2)",[who.operatorId,householdId]);
    }
+   await db.query('COMMIT');
+  }catch(error){await db.query('ROLLBACK');throw error;}finally{db.release();}
+  await this.syncQuietly(householdId);
+ }
+ /** The owner's preview of a level change: the new monthly price and the new end date. Changes nothing. */
+ async quote(householdId:string,tier:PaidTier):Promise<PlanQuote>{
+  if(!paidTiers.includes(tier))throw new PlanError('invalid');
+  const row=await this.row(this.pool,householdId),current=this.effective(row);
+  if(current===tier)throw new PlanError('invalid');
+  if(current==='free')return {tier,price:priceOf(this.prices,tier),paidUntil:null,needsPayment:true,version:row.version};
+  const next=applyCredit({tier:row.tier,paidUntil:row.paid_until},tier,0,new Date());
+  return {tier,price:priceOf(this.prices,tier),paidUntil:iso(next.paidUntil),needsPayment:false,version:row.version};
+ }
+ /** Owner only (checked by the caller): moves the remaining time to another level. `version` is the quote's,
+  *  so a change that happened after the owner saw the quote is refused instead of applied silently. Moving up
+  *  from Free needs a payment and is refused until a payment provider exists. */
+ async changeLevel(accountId:string,householdId:string,tier:PaidTier,version:string){
+  if(!paidTiers.includes(tier)||!/^[1-9][0-9]{0,17}$/.test(version))throw new PlanError('invalid');
+  const db=await this.pool.connect();
+  try{
+   await db.query('BEGIN');
+   const row=await this.row(db,householdId,true),current=this.effective(row);
+   if(row.version!==version)throw new PlanError('conflict');
+   if(current===tier)throw new PlanError('invalid');
+   if(current==='free')throw new PlanError('payments');
+   const next=applyCredit({tier:row.tier,paidUntil:row.paid_until},tier,0,new Date());
+   await db.query('UPDATE pactaris.household_plans SET tier=$2,paid_until=$3,version=version+1,updated_at=now() WHERE household_id=$1',[householdId,next.tier,next.paidUntil]);
+   await db.query("UPDATE pactaris.plan_subscriptions SET tier=$2,updated_at=now() WHERE household_id=$1 AND state IN ('active','paused')",[householdId,tier]);
+   await db.query('INSERT INTO pactaris.plan_level_changes(id,household_id,account_id,from_tier,to_tier) VALUES($1,$2,$3,$4,$5)',[randomUUID(),householdId,accountId,current,tier]);
    await db.query('COMMIT');
   }catch(error){await db.query('ROLLBACK');throw error;}finally{db.release();}
   await this.syncQuietly(householdId);

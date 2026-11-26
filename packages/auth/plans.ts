@@ -1,6 +1,6 @@
-// Household plans (docs/HOUSEHOLD_PLANS.md). A plan belongs to a dynamic, not to a person; any member can
-// add months. Owner decision, 26 November 2026: one month of level 2 is worth two months of level 1, so
-// remaining time converts when the level changes. Free is never a purchase and never expires.
+// Household plans (docs/HOUSEHOLD_PLANS.md). A plan belongs to a dynamic, not to a person. Any member can
+// add months at the current level; only the household owner changes the level. Remaining time converts
+// when the level changes (internal rule, not shown in the app). Free is never a purchase and never expires.
 import { uuid } from './delegation.js';
 
 export const planTiers=['free','level1','level2'] as const;
@@ -21,6 +21,10 @@ export const tierLimits:Record<PlanTier,Record<CapabilityKey,number>>={
  level2:{'members.active.max':16,'oneoff.open.max':150,'series.active.max':50,'habits.assigned.max':50,'routines.active.max':50,'plan.horizon.days':366,'catalog.rewards.max':100,'catalog.punishments.max':100,'shop.items.max':100,'history.days':0},
 };
 export const maxExtraMembers=984;
+/** Monthly prices from the gateway configuration, in minor units. */
+export type PlanPrices={currency:string;monthly:Record<PaidTier,number>};
+export type PlanPrice={amount:number;currency:string};
+export const priceOf=(prices:PlanPrices|undefined,tier:PlanTier):PlanPrice|null=>prices&&tier!=='free'?{amount:prices.monthly[tier],currency:prices.currency}:null;
 
 export type Capabilities=Record<CapabilityKey,number>&{'plan.key':PlanTier;'plan.until':string|null};
 export function capabilitiesFor(tier:PlanTier,until:string|null,extraMembers:number):Capabilities{

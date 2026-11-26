@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {applyCredit} from '../apps/gateway/plans.js';
-import {capabilitiesFor,entitlementsInput} from '../packages/auth/plans.js';
+import {capabilitiesFor,entitlementsInput,priceOf} from '../packages/auth/plans.js';
 
 const now=new Date('2026-01-01T00:00:00Z'),day=86400_000;
 test('months add up per level, and changing level converts what is left (1 month level 2 = 2 months level 1)',()=>{
@@ -12,6 +12,13 @@ test('months add up per level, and changing level converts what is left (1 month
  const down=applyCredit({tier:'level2',paidUntil:new Date(now.getTime()+10*day)},'level1',1,now);
  assert.equal(down.paidUntil.getTime(),new Date(now.getTime()+20*day).setUTCMonth(new Date(now.getTime()+20*day).getUTCMonth()+1));
  assert.deepEqual(applyCredit({tier:'level2',paidUntil:new Date(now.getTime()-day)},'level1',1,now),{tier:'level1',paidUntil:new Date('2026-02-01T00:00:00Z')});
+});
+test('a level change without months moves only the remaining time',()=>{
+ const up=applyCredit({tier:'level1',paidUntil:new Date(now.getTime()+60*day)},'level2',0,now);
+ assert.deepEqual(up,{tier:'level2',paidUntil:new Date(now.getTime()+30*day)});
+ assert.deepEqual(applyCredit({tier:'level2',paidUntil:new Date(now.getTime()+30*day)},'level1',0,now),{tier:'level1',paidUntil:new Date(now.getTime()+60*day)});
+ assert.deepEqual(priceOf({currency:'EUR',monthly:{level1:499,level2:899}},'level2'),{amount:899,currency:'EUR'});
+ assert.equal(priceOf({currency:'EUR',monthly:{level1:499,level2:899}},'free'),null);assert.equal(priceOf(undefined,'level1'),null);
 });
 test('entitlement updates are strict and carry extra member places',()=>{
  const capabilities=capabilitiesFor('level1','2026-02-01T00:00:00.000Z',3);

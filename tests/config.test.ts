@@ -35,3 +35,10 @@ test('English fallback catalog and locale formatting do not rewrite user content
   assert.equal(t('app.title'), 'Pactaris'); assert.match(t('errors.config', { field: 'listen.port' }), /listen.port/);
   assert.notEqual(formatTime(new Date('2026-11-16T08:00:00Z'), 'en-GB', 'UTC'), formatTime(new Date('2026-11-16T08:00:00Z'), 'en-GB', 'Europe/Amsterdam'));
 });
+test('plan prices are optional, in minor units, with a three-letter currency',()=>{
+  const c=JSON.parse(readFileSync('config/gateway.example.json','utf8'));
+  assert.equal(parseGatewayConfig(c).planPrices,undefined);
+  assert.deepEqual(parseGatewayConfig({...c,planPrices:{currency:'EUR',monthly:{level1:499,level2:899}}}).planPrices,{currency:'EUR',monthly:{level1:499,level2:899}});
+  for(const bad of [{currency:'eur',monthly:{level1:1,level2:2}},{currency:'EUR',monthly:{level1:1}},{currency:'EUR',monthly:{level1:1.5,level2:2}},{currency:'EUR',monthly:{level1:1,level2:2},extra:1}])
+    assert.throws(()=>parseGatewayConfig({...c,planPrices:bad}),ConfigError);
+});

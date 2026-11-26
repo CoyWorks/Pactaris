@@ -1,6 +1,7 @@
 -- Household plans (docs/HOUSEHOLD_PLANS.md, owner decisions 26 November 2026). A plan belongs to a dynamic.
 -- `plan_credits` is the list members see: who added how many months of which level, and when (no prices).
 -- At most one live subscription per dynamic; only its holder (or an operator) can stop it.
+-- Only the household owner changes the level; `plan_level_changes` keeps who did that and when.
 CREATE TABLE pactaris.household_plans (
  household_id uuid PRIMARY KEY REFERENCES pactaris.placements(household_id),
  tier text NOT NULL DEFAULT 'free' CHECK(tier IN ('free','level1','level2')),
@@ -34,6 +35,13 @@ CREATE TABLE pactaris.plan_credits (
  UNIQUE(source,provider_ref)
 );
 CREATE INDEX ON pactaris.plan_credits(household_id,created_at DESC);
+CREATE TABLE pactaris.plan_level_changes (
+ id uuid PRIMARY KEY,household_id uuid NOT NULL REFERENCES pactaris.household_plans(household_id),
+ account_id uuid REFERENCES pactaris.accounts(id) ON DELETE SET NULL,
+ from_tier text NOT NULL CHECK(from_tier IN ('level1','level2')),to_tier text NOT NULL CHECK(to_tier IN ('level1','level2')),
+ created_at timestamptz NOT NULL DEFAULT now(),CHECK(from_tier<>to_tier)
+);
+CREATE INDEX ON pactaris.plan_level_changes(household_id,created_at DESC);
 ALTER TABLE pactaris.operator_events DROP CONSTRAINT operator_events_action_check;
 ALTER TABLE pactaris.operator_events ADD CONSTRAINT operator_events_action_check CHECK(action IN ('report.closed','report.reopened','report.noted','report.deleted',
  'account.suspended','account.restored','settings.updated','operator.granted','operator.revoked','maintenance.run',

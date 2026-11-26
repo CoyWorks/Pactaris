@@ -1,14 +1,19 @@
 # Household plans (#53, #61)
 
-Owner decisions, 26 November 2026.
+Owner decisions, 26 November 2026 (level change and prices updated the same day).
 
 ## Model
 
-- **Per dynamic.** A plan belongs to a dynamic, not to a person. Any member can add months.
-- **Levels:** Free, Level 1 and Level 2. One month of Level 2 equals two months of Level 1.
-  - Adding months of the current level extends it.
-  - Adding months of the other level first converts the time left at that rate, then adds the purchase.
-  - When the time runs out, the dynamic is on Free. Free never expires.
+- **Per dynamic.** A plan belongs to a dynamic, not to a person.
+- **Levels:** Free, Level 1 and Level 2. When the time runs out, the dynamic is on Free. Free never expires.
+- **Adding months:** any member can add months at the current level. On Free there is nothing to extend; the owner chooses a level first.
+- **Changing level: household owner only.**
+  - The owner first asks for a quote. It shows the new level's monthly price and the new end date. Nothing changes yet.
+  - The owner then confirms. The confirmation carries the quote's plan version; if the plan changed in between, it is refused and the owner sees a fresh quote.
+  - The remaining time converts. Internal rule, **not shown in the app**: one month of Level 2 equals two months of Level 1.
+  - Moving up from Free needs a payment and waits for the payment provider.
+  - A live subscription moves to the new level with the plan (telling the provider is part of the payment integration).
+  - Each change is listed under *Time added* as "{name} changed the level to …" (`plan_level_changes`).
 - **Two ways to pay:**
   - *Prepaid*: months paid once.
   - *Subscription*: each paid cycle adds one month.
@@ -16,11 +21,18 @@ Owner decisions, 26 November 2026.
 - **Stopping a subscription:** only the holder can stop it. An operator can pause, resume or stop it when the holder cannot.
 - **What every member sees** under Dynamic → Settings → Plan:
   - the level and until when;
+  - the **monthly price of the current level only** (never a price list, never the conversion rule);
   - prepaid or subscription, with the holder's name;
   - the current limits;
   - **Time added**: who added how many months of which level, and when.
   
-  Prices are never stored or shown. Operator grants show as "Pactaris added…".
+  Amounts paid are never stored. Operator grants show as "Pactaris added…".
+- **Prices** come from the gateway configuration, in minor units (cents). Without `planPrices` no price is shown.
+
+  ```json
+  "planPrices": { "currency": "EUR", "monthly": { "level1": 0, "level2": 0 } }
+  ```
+  The amounts are placeholders until the owner sets them.
 - **No payment provider yet.** Extend answers `payments_unavailable`. PayPal is the likely first provider; check its acceptable use policy for adult-oriented services first (see docs/PLANS.md). The provider integration adds `prepaid` and `subscription` credits with its own payment reference, so a payment counts once.
 
 ## Limits (placeholders)
@@ -48,6 +60,7 @@ The values live in `packages/auth/plans.ts`.
 - **Gateway** (migration `0030_household_plans`):
   - `household_plans`: level, `paid_until`, extra places, `version` and `synced_version`.
   - `plan_credits`: the list of added time.
+  - `plan_level_changes`: who changed the level, from what to what, and when.
   - `plan_subscriptions`: at most one live subscription per dynamic.
 - **When the gateway sends:**
   - Every change bumps `version`.
@@ -61,7 +74,9 @@ The values live in `packages/auth/plans.ts`.
 
 - **Members:**
   - `GET /api/households/:id/plan`
-  - `POST /api/households/:id/plan/extend {tier,months}`: payments not yet available
+  - `POST /api/households/:id/plan/extend {months}`: at the current level; payments not yet available
+  - `POST /api/households/:id/plan/quote {tier}`: owner only; new monthly price, new end date, `needsPayment`, `version`
+  - `POST /api/households/:id/plan/level {tier,version}`: owner only; `plan_changed` when the plan moved since the quote
   - `POST /api/households/:id/plan/cancel`: holder only
 - **Operators:**
   - `GET /api/operator/households/:id/plan`
