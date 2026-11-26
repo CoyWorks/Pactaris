@@ -274,7 +274,7 @@ export class PrivateWorkspaceClient{
    if(response.status===403||response.status===404)throw new WorkspaceError('denied');if(response.status===400)throw new WorkspaceError('invalid');
    if(response.status===409){const code=(response.data as {code?:string})?.code;throw new WorkspaceError(code==='workspace_capacity'?'capacity':code==='workspace_paused'?'paused':'conflict');}
    const r=response.data as import('../auth/workspace.js').WorkspaceResult;
-   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['workspaceRead','workspaceUnread','workspaceChanges','personalSeriesList','taskRead'].includes(action)?'listed':'applied'))throw Error('routing.response');
+   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['workspaceRead','workspaceUnread','workspaceChanges','personalSeriesList','taskRead','plannerRead'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/workspace.js').WorkspaceResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
    const ver=(v:unknown)=>typeof v==='string'&&/^[1-9][0-9]{0,14}$/.test(v);
    const task=(v:import('../auth/workspace.js').TaskSummary)=>{
@@ -295,6 +295,20 @@ export class PrivateWorkspaceClient{
    if(action==='workspaceChanges'){
     if(!uuid(r.changeCursor)||!Array.isArray(r.changed)||r.changed.length>7||new Set(r.changed).size!==r.changed.length||!r.changed.every(v=>['workspace','tasks','notices','routines','library','dynamic','catalog'].includes(v)))throw Error('routing.response');
     return {...out,changeCursor:r.changeCursor,changed:r.changed};
+   }
+   if(action==='plannerRead'){
+    const {plannerKinds,validCalendarDay,validTimeZone,plannerMaxDays}=await import('../auth/workspace.js');
+    const p=r.planner;
+    if(!p||!validCalendarDay(p.from)||!Number.isInteger(p.days)||p.days<1||p.days>plannerMaxDays||!validTimeZone(p.timeZone)||!uuid(p.personId)
+     ||!Array.isArray(p.people)||p.people.length>200||!Array.isArray(p.items)||p.items.length>600)throw Error('routing.response');
+    const people=p.people.map(o=>{if(!o||!uuid(o.id)||typeof o.name!=='string'||[...o.name].length>80||typeof o.self!=='boolean')throw Error('routing.response');return {id:o.id,name:o.name,self:o.self};});
+    const items=p.items.map(i=>{
+     if(!i||!(plannerKinds as readonly string[]).includes(i.kind)||!uuid(i.id)||!validCalendarDay(i.day)||(i.at!==null&&(typeof i.at!=='string'||!Number.isFinite(Date.parse(i.at))))
+      ||typeof i.title!=='string'||!i.title||[...i.title].length>200||typeof i.state!=='string'||!/^[a-z_]{1,32}$/.test(i.state)
+      ||typeof i.overdue!=='boolean'||typeof i.projected!=='boolean'||typeof i.onBreak!=='boolean')throw Error('routing.response');
+     return {kind:i.kind,id:i.id,day:i.day,at:i.at===null?null:new Date(i.at).toISOString(),title:i.title,state:i.state,overdue:i.overdue,projected:i.projected,onBreak:i.onBreak};
+    });
+    return {...out,planner:{from:p.from,days:p.days,timeZone:p.timeZone,personId:p.personId,people,items}};
    }
    if(action==='workspaceUnread'){
     if(typeof r.hasUnreadTaskInbox!=='boolean')throw Error('routing.response');

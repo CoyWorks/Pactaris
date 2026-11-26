@@ -30,6 +30,10 @@ export class InstanceWorkspace{
     const row=result.rows[0];if(!row)throw new WorkspaceError('unavailable');await db.query('COMMIT');
     return {householdId,operationId:verified.operationId,actorMembershipId:input.membershipId,status:'listed',changeCursor:row.changes.cursor,changed:row.changes.changed};
    }
+   if(action==='plannerRead'){
+    const result=await db.query('SELECT pactaris.planner_read($1,$2,$3,$4) AS result',[householdId,this.config.instanceId,verified.accountId,input]);
+    await db.query('COMMIT');return result.rows[0].result as WorkspaceResult;
+   }
    if(action==='workspaceUnread'){
     const result=await db.query<{unread:boolean}>(
      'SELECT pactaris.workspace_has_unread($1,$2,$3,$4) AS unread',

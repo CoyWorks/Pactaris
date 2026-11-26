@@ -673,6 +673,13 @@
       "path": "migrations/instance/0067_habit_extra_points.sql",
       "sha256": "cafb6c5d69961a34c93cd604ce75380c3b778a3d9bf3e8fc16b723372fb8538e",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0068_planner",
+      "path": "migrations/instance/0068_planner.sql",
+      "sha256": "8c81ef9c52c3e90dd5299caca4e99e5a607c298093420e32e2530f425e37875a",
+      "backwardCompatible": true
     }
   ]
 }

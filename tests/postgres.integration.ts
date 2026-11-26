@@ -2058,6 +2058,19 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      await db.owner.query("DELETE FROM pactaris.point_adjustments WHERE household_id=$1 AND recipient_id=$2 AND points=6",[home.householdId,D.member]);
      await db.owner.query("UPDATE pactaris.authority_habits SET state='archived' WHERE id=$1",[extra.data.resourceId]);
      assert.equal((await view(D)).myPoints,'3');
+     // Planner: one dated view per person, limited to what the viewer can already see.
+     const plannerDay=(await db.owner.query("SELECT to_char((now() AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS d")).rows[0].d;
+     const planner=(p:Person,query:string)=>api(base+'/planner?from='+plannerDay+'&days=7&timeZone=UTC'+query,'GET',undefined,p.session);
+     const own=await planner(D,'');assert.equal(own.status,200,JSON.stringify(own.data));
+     assert.equal(own.data.planner.personId,D.member);assert.deepEqual(own.data.planner.people.map((x:any)=>x.id),[D.member]);
+     assert.ok(own.data.planner.items.some((x:any)=>x.kind==='habit'&&x.id===habit.data.resourceId));
+     const asDom=await planner(A,'&person='+D.member);assert.equal(asDom.status,200,JSON.stringify(asDom.data));
+     assert.ok(asDom.data.planner.people.some((x:any)=>x.id===D.member));
+     assert.deepEqual(asDom.data.planner.items.filter((x:any)=>x.kind==='habit').map((x:any)=>x.id).sort(),own.data.planner.items.filter((x:any)=>x.kind==='habit').map((x:any)=>x.id).sort());
+     assert.ok(!asDom.data.planner.items.some((x:any)=>['task','taskSeries','routineHabit','ritual','checkin'].includes(x.kind)));
+     assert.equal((await planner(B,'&person='+D.member)).status,404);
+     assert.equal((await api(base+'/planner?from='+plannerDay+'&days=60&timeZone=UTC','GET',undefined,D.session)).status,400);
+     assert.equal((await api(base+'/planner?from=2026-02-30&days=7&timeZone=UTC','GET',undefined,D.session)).status,400);
      // Both parties can schedule a break; outsiders cannot. Weekly overlap skips the whole week.
      const weekly=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:{...habitFields,period:'weekly'}});
      assert.equal(weekly.status,200,JSON.stringify(weekly.data));
