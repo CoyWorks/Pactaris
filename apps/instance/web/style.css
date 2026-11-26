@@ -267,3 +267,8 @@ main.operator{max-width:64rem}
 .glance-days button.today{border-color:var(--accent)}.glance-days .muted{font-size:.72rem}
 .glance-count{font-size:.78rem;min-width:1.4rem;border-radius:10px;background:var(--chip-strong);padding:0 .3rem}
 .glance-count.empty{background:none;color:var(--subtle)}.glance-count.overdue{background:var(--danger-bg);color:var(--danger)}
+.planner-row{display:flex;align-items:center;gap:.25rem}.planner-row .planner-item{flex:1;min-width:0}
+.planner-eye{flex:none;color:var(--muted)}.planner-eye[aria-pressed=true]{color:var(--accent)}
+.planner-hidden{margin-left:.5rem;font-size:.75rem;border-radius:8px;padding:0 .4rem;background:var(--chip)}
+.calendar-subscription{margin-top:1.5rem}.calendar-subscription input{margin:.5rem 0}
+.calendar-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin:.5rem 0}

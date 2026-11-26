@@ -305,8 +305,8 @@ export class PrivateWorkspaceClient{
     const items=p.items.map(i=>{
      if(!i||!(plannerKinds as readonly string[]).includes(i.kind)||!uuid(i.id)||!validCalendarDay(i.day)||(i.at!==null&&(typeof i.at!=='string'||!Number.isFinite(Date.parse(i.at))))
       ||typeof i.title!=='string'||!i.title||[...i.title].length>200||typeof i.state!=='string'||!/^[a-z_]{1,32}$/.test(i.state)
-      ||typeof i.overdue!=='boolean'||typeof i.projected!=='boolean'||typeof i.onBreak!=='boolean')throw Error('routing.response');
-     return {kind:i.kind,id:i.id,day:i.day,at:i.at===null?null:new Date(i.at).toISOString(),title:i.title,state:i.state,overdue:i.overdue,projected:i.projected,onBreak:i.onBreak};
+      ||typeof i.overdue!=='boolean'||typeof i.projected!=='boolean'||typeof i.onBreak!=='boolean'||typeof i.hidden!=='boolean')throw Error('routing.response');
+     return {kind:i.kind,id:i.id,day:i.day,at:i.at===null?null:new Date(i.at).toISOString(),title:i.title,state:i.state,overdue:i.overdue,projected:i.projected,onBreak:i.onBreak,hidden:i.hidden};
     });
     return {...out,planner:{from:p.from,days:p.days,timeZone:p.timeZone,personId:p.personId,people,items}};
    }

@@ -1,3 +1,4 @@
+import {CalendarPrivacyField,markCalendar} from './planner.js';
 import type {PointsSettings} from '../../../packages/auth/workspace.js';
 import {Hint,Layer,navigate,useLocation,useFleetingNotice} from './navigation.js';
 import {TaskRewardPicker} from './task-reward-picker.js';
@@ -14,7 +15,7 @@ type Pending={action:PartnerAction;body:Record<string,unknown>};
 export function PartnerPanel({householdId,session,language,format,timeZone,pointsSettings}:{householdId:string;session:{csrfToken:string};language:string;format:string;timeZone:string;pointsSettings?:PointsSettings}){
  const t=createTranslator(language),base='/api/households/'+householdId+'/participant-tasks/',[listing,setListing]=useState<PartnerResult>(),[filter,setFilter]=useState('active'),[cursor,setCursor]=useState<string>(),[refresh,setRefresh]=useState(0),[detail,setDetail]=useState<PartnerDetail>(),[choices,setChoices]=useState<PartnerChoice[]>([]),[choiceCursor,setChoiceCursor]=useState<string|null>(),[choice,setChoice]=useState(''),[assignee,setAssignee]=useState(''),[fields,setFields]=useState<PartnerFields>(),[due,setDue]=useState(''),[confirmed,setConfirmed]=useState(false),[note,setNote]=useState(''),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[busy,setBusy]=useState(false),[draft,setDraft]=useState<Pending>(),[confirmAction,setConfirmAction]=useState<PartnerAction>(),[policyMode,setPolicyMode]=useState<'direct'|'explicit'>('direct'),[policyId,setPolicyId]=useState('');
  useFleetingNotice(notice,()=>setNotice(undefined));
- const [schedule,setSchedule]=useState<TaskSchedule>(),[editingSeries,setEditingSeries]=useState<TaskSeries>(),[mode,setMode]=useState<'give'|'offer'>('give'),{search}=useLocation();
+ const [schedule,setSchedule]=useState<TaskSchedule>(),[editingSeries,setEditingSeries]=useState<TaskSeries>(),[mode,setMode]=useState<'give'|'offer'>('give'),[hideTitle,setHideTitle]=useState(false),{search}=useLocation();
  const writing=useRef(false),blocked=busy||!!draft;
  async function request(action:PartnerAction,input:Record<string,unknown>,signal:AbortSignal){const r=await fetch(base+action,{method:'POST',signal,cache:'no-store',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify(input)}),data=await r.json();if(!r.ok)throw {...data,status:r.status};return data as PartnerResult;}
  useEffect(()=>{
@@ -29,7 +30,7 @@ export function PartnerPanel({householdId,session,language,format,timeZone,point
  const givers=(listing?.policies??[]).filter(p=>p.state==='active'&&p.mode==='direct'&&p.creatorId===listing?.actorMembershipId).filter((p,i,all)=>all.findIndex(q=>q.assigneeId===p.assigneeId)===i);
  const chosen=listing?.policies?.find(p=>p.policyId===policyId);
  function give(person?:string,series?:TaskSeries){
-  setMode('give');setDetail(undefined);setConfirmed(true);setDue('');setEditingSeries(series);setSchedule(series?.schedule);setFields(series?series.fields:blank());
+  setMode('give');setHideTitle(false);setDetail(undefined);setConfirmed(true);setDue('');setEditingSeries(series);setSchedule(series?.schedule);setFields(series?series.fields:blank());
   const policy=series?listing?.policies?.find(p=>p.policyId===series.policyId):givers.find(p=>p.assigneeId===person)??(givers.length===1?givers[0]:undefined);
   setAssignee(policy?.assigneeId??'');setPolicyId(policy?.policyId??'');
  }
@@ -39,8 +40,8 @@ export function PartnerPanel({householdId,session,language,format,timeZone,point
   params.delete('give');params.delete('task');navigate(window.location.pathname+'?'+params.toString(),true);
   if(task)void inspect(task);else give(person==='any'?undefined:person!);
  },[listing,search]);
- async function change(action:PartnerAction,input:Record<string,unknown>,retry?:Pending){if(writing.current||(!retry&&draft))return;writing.current=true;setBusy(true);setError(undefined);setNotice(undefined);const pending=retry??{action,body:{operationId:crypto.randomUUID(),...input}},c=new AbortController(),deadline=setTimeout(()=>c.abort(),15000);setDraft(pending);
-  try{await request(pending.action,pending.body,c.signal);setDraft(undefined);setFields(undefined);setDetail(undefined);setConfirmAction(undefined);setRefresh(v=>v+1);setNotice('partner.saved');}catch(e){setError(failure(e));const status=(e as {status?:number})?.status;if(status&&status<500)setDraft(undefined);else setNotice('partner.unknown');}finally{clearTimeout(deadline);writing.current=false;setBusy(false);}}
+ async function change(action:PartnerAction,input:Record<string,unknown>,retry?:Pending,after?:(result:Record<string,unknown>)=>Promise<boolean>){if(writing.current||(!retry&&draft))return;writing.current=true;setBusy(true);setError(undefined);setNotice(undefined);const pending=retry??{action,body:{operationId:crypto.randomUUID(),...input}},c=new AbortController(),deadline=setTimeout(()=>c.abort(),15000);setDraft(pending);
+  try{const result=await request(pending.action,pending.body,c.signal) as Record<string,unknown>;const followed=!after||await after(result);setDraft(undefined);setFields(undefined);setDetail(undefined);setConfirmAction(undefined);setRefresh(v=>v+1);setNotice(followed?'partner.saved':'calendar.markFailed');}catch(e){setError(failure(e));const status=(e as {status?:number})?.status;if(status&&status<500)setDraft(undefined);else setNotice('partner.unknown');}finally{clearTimeout(deadline);writing.current=false;setBusy(false);}}
  const selected=choices.find(c=>c.agreementId===choice);
  const availablePolicies=listing?.policies?.filter(p=>p.state==='active'&&p.creatorId===listing.actorMembershipId&&p.assigneeId===assignee&&p.agreementId===choice&&p.agreementVersion===selected?.agreementVersion)??[];
  const preferredPolicy=availablePolicies.find(p=>p.mode==='direct')??availablePolicies[0];
@@ -56,8 +57,10 @@ export function PartnerPanel({householdId,session,language,format,timeZone,point
    <button type="button" className="secondary" onClick={()=>setFields(undefined)}>{t('onboarding.cancel')}</button></div></Layer>}
   {fields&&mode==='give'&&(!!givers.length||!!editingSeries)&&<Layer title={t('partner.give')} backLabel={t('nav.back')} onClose={()=>setFields(undefined)} status={status}><form className="document-editor" onSubmit={e=>{e.preventDefault();const policy=chosen;if(!policy)return;
    void change(schedule?(editingSeries?'partnerSeriesUpdate':'partnerSeriesCreate'):'partnerAssign',{...(schedule?{schedule,...(editingSeries?{seriesId:editingSeries.seriesId,version:editingSeries.version}:{})}:{agreementId:policy.agreementId,agreementVersion:policy.agreementVersion,assigneeId:policy.assigneeId}),
-    policyId:policy.policyId,policyVersion:policy.version,fields:{...fields,title:fields.title.trim(),description:fields.description.trim(),dueAt:due?new Date(due).toISOString():null},epoch:policy.epoch,safetyVersion:policy.safetyVersion});}}>
+    policyId:policy.policyId,policyVersion:policy.version,fields:{...fields,title:fields.title.trim(),description:fields.description.trim(),dueAt:due?new Date(due).toISOString():null},epoch:policy.epoch,safetyVersion:policy.safetyVersion},undefined,
+    hideTitle&&!editingSeries?result=>markCalendar(householdId,session.csrfToken,schedule?'partnerSeries':'partnerTask',String(result.seriesId??result.taskId),true):undefined);}}>
    <Hint label={t('hint.more')}>{t('partner.giveHelp')}</Hint>
+   {!editingSeries&&<CalendarPrivacyField language={language} checked={hideTitle} disabled={blocked} onChange={setHideTitle}/>}
    {!givers.length&&!editingSeries?<p>{t('partner.giveNone')}</p>:<label>{t('partner.giveTo')}<select required disabled={blocked||!!editingSeries} value={assignee} onChange={e=>{const p=givers.find(g=>g.assigneeId===e.target.value);setAssignee(e.target.value);setPolicyId(p?.policyId??'');}}>
     <option value="">{t('partner.choosePerson')}</option>{(editingSeries&&chosen&&!givers.includes(chosen)?[...givers,chosen]:givers).map(p=><option key={p.policyId} value={p.assigneeId}>{p.assigneeName||t('partner.unnamed')}</option>)}</select></label>}
    <label>{t('library.title')}<input required maxLength={120} disabled={blocked} value={fields.title} onChange={e=>setFields({...fields,title:e.target.value})}/></label><label>{t('catalog.body')}<textarea maxLength={500} disabled={blocked} value={fields.description} onChange={e=>setFields({...fields,description:e.target.value})}/></label>

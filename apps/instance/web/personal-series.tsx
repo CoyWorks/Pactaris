@@ -1,16 +1,17 @@
+import {CalendarPrivacyField} from './planner.js';
 import React,{useEffect,useState} from 'react';
 import type {TaskSchedule} from '../../../packages/auth/partner.js';
 import type {PersonalSeries,TaskFields,WorkspaceResult} from '../../../packages/auth/workspace.js';
 import {createTranslator} from '../../../packages/i18n/index.js';
 import {ScheduleEditor,SeriesScheduleSummary} from './partner.js';
 
-type Editor={series?:PersonalSeries;fields:TaskFields;schedule?:TaskSchedule};
+type Editor={series?:PersonalSeries;fields:TaskFields;schedule?:TaskSchedule;hide?:boolean};
 const blank:TaskFields={title:'',description:'',priority:'normal',dueAt:null,assignment:'self'};
 const labels={active:'partner.seriesActive',blocked:'partner.seriesBlocked',finished:'partner.seriesFinished',stopped:'partner.cancelled'} as const;
 
 export function PersonalSeriesPanel({base,csrfToken,language,format,timeZone,refresh,blocked,onSave,onStop}:{
  base:string;csrfToken:string;language:string;format:string;timeZone:string;refresh:number;blocked:boolean;
- onSave:(fields:TaskFields,schedule:TaskSchedule,series?:PersonalSeries)=>void;
+ onSave:(fields:TaskFields,schedule:TaskSchedule,series:PersonalSeries|undefined,hide:boolean)=>void;
  onStop:(series:PersonalSeries)=>void;
 }){
  const t=createTranslator(language);
@@ -43,7 +44,7 @@ export function PersonalSeriesPanel({base,csrfToken,language,format,timeZone,ref
    schedule:{period:'daily',startDate:'',endDate:null,timeZone,availableTime:'09:00',dueMinutes:60,weekdays:[]}})}>{t('workspace.newSeries')}</button>
   {editor&&<form onSubmit={event=>{
    event.preventDefault();
-   if(editor.schedule)onSave({...editor.fields,title:editor.fields.title.trim(),description:editor.fields.description.trim()},editor.schedule,editor.series);
+   if(editor.schedule)onSave({...editor.fields,title:editor.fields.title.trim(),description:editor.fields.description.trim()},editor.schedule,editor.series,!!editor.hide);
   }}>
    <fieldset disabled={blocked}>
     <legend>{t('workspace.personalSeries')}</legend>
@@ -58,6 +59,7 @@ export function PersonalSeriesPanel({base,csrfToken,language,format,timeZone,ref
     </select></label>
     <ScheduleEditor schedule={editor.schedule} timeZone={timeZone} language={language} disabled={blocked}
      personal onChange={schedule=>setEditor({...editor,schedule})}/>
+    {!editor.series&&<CalendarPrivacyField language={language} checked={!!editor.hide} onChange={hide=>setEditor({...editor,hide})}/>}
     <button type="submit" disabled={!editor.schedule}>{t('workspace.saveTask')}</button>
     <button type="button" onClick={()=>setEditor(undefined)}>{t('onboarding.cancel')}</button>
    </fieldset>

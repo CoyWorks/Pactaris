@@ -25,7 +25,7 @@ import {BoardView,useProgress} from './progress.js';
 import {ShopView} from './shop.js';
 import {GettingStarted} from './start.js';
 import {TodaySharedTasks} from './today-shared-tasks.js';
-import {PlannerView,WeekGlance} from './planner.js';
+import {CalendarPrivacyField,PlannerView,WeekGlance,markCalendar} from './planner.js';
 type View='calendar'|'home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews'|'authority'|'notices'|'board'|'shop';
 type Tab='home'|'tasks'|'routines'|'library'|'dynamic';
 type Draft={action:string;body:Record<string,unknown>};
@@ -160,12 +160,13 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
   try{const r=await fetch(base+'/taskRead',{method:'POST',cache:'no-store',signal:controller.signal,headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({operationId:crypto.randomUUID(),taskId:id})}),result=await r.json();if(!r.ok)throw result;const task=result.task as TaskDetail;setEditor({taskId:task.taskId,version:task.version,fields:{title:task.title,description:task.description,priority:task.priority,dueAt:task.dueAt,assignment:task.assignment}});}
   catch(e){setError(errorKey((e as {messageKey?:string})?.messageKey));}finally{clearTimeout(deadline);setBusy(false);}
  }
- async function change(action:string,input:Record<string,unknown>,retry?:Draft){
+ async function change(action:string,input:Record<string,unknown>,retry?:Draft,after?:(result:Record<string,unknown>,body:Record<string,unknown>)=>Promise<boolean>){
   if(activeWrite.current||(!retry&&draft))return;activeWrite.current=true;setBusy(true);setError(undefined);setNotice(undefined);
   const request=retry??{action,body:{operationId:crypto.randomUUID(),...input}},controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),15000);setDraft(request);
   try{const r=await fetch(base+'/'+request.action,{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify(request.body)}),result=await r.json();
    if(!r.ok){setError(errorKey(result.messageKey));if(r.status<500)setDraft(undefined);else setNotice('workspace.unknown');return;}
-   setDraft(undefined);setEditor(undefined);setSettings(undefined);setPointsDraft(undefined);setNotice('workspace.confirmed');setRefresh(v=>v+1);
+   const followed=!after||await after(result,request.body);
+   setDraft(undefined);setEditor(undefined);setSettings(undefined);setPointsDraft(undefined);setNotice(followed?'workspace.confirmed':'calendar.markFailed');setRefresh(v=>v+1);
   }catch{setNotice('workspace.unknown');}finally{clearTimeout(deadline);activeWrite.current=false;setBusy(false);}
  }
  const h=data?.household,blocked=busy||!!draft,safety=h?{epoch:h.epoch,memberEpoch:h.memberEpoch}:{};
@@ -251,12 +252,13 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
     {data.nextCursor&&<button type="button" disabled={busy} onClick={()=>setCursor(data.nextCursor!)}>{t('portal.more')}</button>}{cursor&&<button type="button" onClick={()=>setCursor(undefined)}>{t('workspace.firstPage')}</button>}
     {h&&<PersonalSeriesPanel base={base} csrfToken={session.csrfToken} language={language} format={format}
      timeZone={h.timeZone} refresh={refresh} blocked={blocked}
-     onSave={(fields,schedule,series)=>void change('personalSeriesSave',{...safety,fields,schedule,
-      ...(series?{seriesId:series.seriesId,version:series.version}:{})})}
+     onSave={(fields,schedule,series,hide)=>void change('personalSeriesSave',{...safety,fields,schedule,
+      ...(series?{seriesId:series.seriesId,version:series.version}:{})},undefined,
+      hide&&!series?(_result,body)=>markCalendar(householdId,session.csrfToken,'taskSeries',String(body.operationId),true):undefined)}
      onStop={series=>void change('personalSeriesStop',{seriesId:series.seriesId,version:series.version})}/>}
 
    </section>}
-   {view==='calendar'&&h&&<PlannerView householdId={householdId} language={language} format={format} timeZone={h.timeZone} reload={refresh+':'+authorityReload} onOpen={go}/>}
+   {view==='calendar'&&h&&<PlannerView householdId={householdId} csrfToken={session.csrfToken} language={language} format={format} timeZone={h.timeZone} reload={refresh+':'+authorityReload} onOpen={go}/>}
    {view==='participantTasks'&&h&&<PartnerPanel householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} pointsSettings={data?.pointsSettings}/>}
    {view==='rewards'&&h&&<CatalogPanel householdId={householdId} session={session} language={language} format={format}/>}
    {view==='checkins'&&h&&<SharedCheckins householdId={householdId} csrfToken={session.csrfToken} language={language}/>}
@@ -284,7 +286,8 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
    <button type="button" className="danger" onClick={onLeave}>{t('onboarding.leave')}</button>{children}</section>}
   </SafetyProvider>
   {editor&&<Layer title={t(editor.taskId?'workspace.taskDetails':'workspace.addPrivateTask')} backLabel={t('nav.back')} onClose={()=>setEditor(undefined)} status={<>{error&&<p role="alert">{t(error)}</p>}{notice&&<p role="status">{t(notice)}</p>}</>}>
-   <TaskEditor key={editor.taskId??'new'} fields={editor.fields} language={language} disabled={blocked} onCancel={()=>setEditor(undefined)} onSave={fields=>{void change(editor.taskId?'taskUpdate':'taskCreate',{...safety,fields,...(editor.taskId?{taskId:editor.taskId,version:editor.version}:{})});}}
+   <TaskEditor key={editor.taskId??'new'} isNew={!editor.taskId} fields={editor.fields} language={language} disabled={blocked} onCancel={()=>setEditor(undefined)} onSave={(fields,hide)=>{void change(editor.taskId?'taskUpdate':'taskCreate',{...safety,fields,...(editor.taskId?{taskId:editor.taskId,version:editor.version}:{})},undefined,
+     hide&&!editor.taskId?result=>markCalendar(householdId,session.csrfToken,'task',String(result.taskId),true):undefined);}}
     onArchive={editor.taskId?()=>{const taskId=editor.taskId!,version=editor.version!;setEditor(undefined);pendingKind.current='taskArchive';schedule({id:taskId,message:t('tasks.archived'),run:()=>{void change('taskArchive',{taskId,version});}});}:undefined}/>
   </Layer>}
   {pending&&<UndoToast message={pending.message} undoLabel={t('tasks.undo')} onUndo={undo}/>}
@@ -298,15 +301,16 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
   </Sheet>}
  </div>;
 }
-function TaskEditor({fields,language,disabled,onCancel,onSave,onArchive}:{fields:TaskFields;language:string;disabled:boolean;onCancel:()=>void;onSave:(fields:TaskFields)=>void;onArchive?:()=>void}){
- const t=createTranslator(language),[value,setValue]=useState(fields);
+function TaskEditor({fields,language,disabled,onCancel,onSave,onArchive,isNew=false}:{fields:TaskFields;language:string;disabled:boolean;onCancel:()=>void;onSave:(fields:TaskFields,hide:boolean)=>void;onArchive?:()=>void;isNew?:boolean}){
+ const t=createTranslator(language),[value,setValue]=useState(fields),[hide,setHide]=useState(false);
  const dateInput=(date:string|null)=>{if(!date)return '';const d=new Date(date),local=new Date(d.getTime()-d.getTimezoneOffset()*60000);return local.toISOString().slice(0,16);};
- return <form className="task-editor" onSubmit={e=>{e.preventDefault();onSave({...value,title:value.title.trim(),description:value.description.trim()});}}><h3>{t('workspace.taskDetails')}</h3>
+ return <form className="task-editor" onSubmit={e=>{e.preventDefault();onSave({...value,title:value.title.trim(),description:value.description.trim()},hide);}}><h3>{t('workspace.taskDetails')}</h3>
   <label>{t('workspace.taskTitle')}<input required maxLength={120} disabled={disabled} value={value.title} onChange={e=>setValue(v=>({...v,title:e.target.value}))}/></label>
   <label>{t('workspace.description')}<textarea maxLength={1000} disabled={disabled} value={value.description} onChange={e=>setValue(v=>({...v,description:e.target.value}))}/></label>
   <label>{t('workspace.priority')}<select disabled={disabled} value={value.priority} onChange={e=>setValue(v=>({...v,priority:e.target.value as TaskFields['priority']}))}>{Object.keys(priorities).map(p=><option key={p} value={p}>{t(priorities[p as TaskFields['priority']])}</option>)}</select></label>
   <label>{t('workspace.dueAt')}<input type="datetime-local" disabled={disabled} value={dateInput(value.dueAt)} onChange={e=>{const date=e.target.value?new Date(e.target.value):null;if(!date||Number.isFinite(date.getTime()))setValue(v=>({...v,dueAt:date?.toISOString()??null}));}}/></label>
   <label>{t('workspace.assignment')}<select disabled={disabled} value={value.assignment} onChange={e=>setValue(v=>({...v,assignment:e.target.value as TaskFields['assignment']}))}><option value="unassigned">{t('workspace.unassigned')}</option><option value="self">{t('workspace.self')}</option></select></label>
+  {isNew&&<CalendarPrivacyField language={language} checked={hide} disabled={disabled} onChange={setHide}/>}
   <button type="submit" disabled={disabled}>{t('workspace.saveTask')}</button><button type="button" disabled={disabled} onClick={onCancel}>{t('onboarding.cancel')}</button>{onArchive&&<button type="button" className="danger" disabled={disabled} onClick={onArchive}>{t('workspace.archive')}</button>}
  </form>;
 }

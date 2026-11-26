@@ -37,6 +37,7 @@ import { join } from 'node:path';
 import type { GatewayConfig } from '../../packages/config/index.js';
 import type { OidcLogin } from '../../packages/auth/oidc.js';
 import { siteRoutes } from './site-routes.js';
+import { icsCalendar, type CalendarFeeds } from './calendar-feed.js';
 import { hash, type GatewayStore, type Session } from './store.js';
 import type { HouseholdClient } from '../../packages/routing/private-client.js';
 import { uuid } from '../../packages/auth/delegation.js';
@@ -71,7 +72,7 @@ type OperatorInventory={
   instances:(after:string|null)=>ReturnType<typeof listRegistryInstances>;
   placements:(instanceId:string,after:string|null)=>ReturnType<typeof listRegistryPlacements>;
 };
-export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'|'shop'>,proof?:Pick<GatewayProof,'upload'|'view'|'remove'>,admin?:AdminConsole,maintenance?:Pick<GatewayMaintenance,'gateway'|'status'|'instances'|'runInstance'>,accountSecurity?:Pick<AccountSecurity,'overview'|'remove'|'links'>) {
+export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:OidcLogin,households:HouseholdClient,webRoot=join(process.cwd(),'dist/web'),onboarding?:Pick<OnboardingService,'create'|'leave'|'pending'>,invitations?:Pick<GatewayInvitations,'create'|'list'|'revoke'|'respond'>,members?:Pick<GatewayMembers,'list'|'change'|'operations'>,relationships?:Pick<GatewayRelationships,'execute'|'list'>,consent?:Pick<GatewayConsent,'execute'|'state'|'grant'|'restrict'|'revokeSession'|'revokeSessionHash'>,workspace?:Pick<GatewayWorkspace,'read'|'execute'>,library?:Pick<GatewayLibrary,'list'|'execute'>,routines?:Pick<GatewayRoutines,'list'|'execute'>,catalog?:Pick<GatewayCatalog,'execute'>,partner?:Pick<GatewayPartner,'execute'>,smtp?:Pick<SmtpSettings,'status'|'save'|'verify'|'testMail'>,inventory?:OperatorInventory,exportPersonal?:(session:Session)=>ReturnType<typeof personalExport>,webPush?:WebPushDevices,accountDeletion?:Pick<AccountDeletion,'request'>,streamExport?:(session:Session,write:(chunk:string)=>Promise<void>)=>Promise<void>,moderation?:Pick<Moderation,'report'|'reports'|'close'|'setSuspended'>,exchange?:Pick<GatewayExchange,'execute'|'read'>,authority?:Pick<GatewayAuthority,'execute'|'list'|'habits'|'progress'|'shop'>,proof?:Pick<GatewayProof,'upload'|'view'|'remove'>,admin?:AdminConsole,maintenance?:Pick<GatewayMaintenance,'gateway'|'status'|'instances'|'runInstance'>,accountSecurity?:Pick<AccountSecurity,'overview'|'remove'|'links'>,calendarFeeds?:Pick<CalendarFeeds,'status'|'issue'|'revoke'|'resolve'>) {
   const app=express();headers(app,new URL(config.publicOrigin).protocol==='https:');app.set('trust proxy',config.trustedProxyAddresses);
   function loginFailure(req:express.Request,res:express.Response,status:number,code:string,key:MessageKey) {
     if(req.get('accept')?.includes('text/html')) {
@@ -685,6 +686,54 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     try{const session=await authenticate(req,res);if(!session)return;
       if(!uuid(req.params.householdId)||(req.query.after!==undefined&&!uuid(req.query.after))||!['open','done','archived'].includes(String(req.query.filter??'open')))throw new WorkspaceError('invalid');
       if(!workspace)throw new WorkspaceError('unavailable');res.json(await workspace.read(session.account.id,req.params.householdId,String(req.query.filter??'open'),req.query.after as string|undefined));
+    }catch(error){workspaceFailure(res,error);}
+  });
+  // Private calendar subscription (docs/CALENDAR_FEED.md). The secret is in the path because calendar
+  // apps cannot send headers; it is long, random, stored as a hash, and renewing or revoking stops it.
+  app.get('/calendar/:file',async(req,res)=>{
+    res.set({'Cache-Control':'private, max-age=300','Referrer-Policy':'no-referrer'});
+    const match=/^([A-Za-z0-9_-]{43})\.ics$/.exec(req.params.file);
+    if(!match||!calendarFeeds||!workspace){res.status(404).type('text/plain').send('');return;}
+    if(!await store.throttle('calendar:'+hash(match[1]!),60)){res.status(429).type('text/plain').send('');return;}
+    try{
+      const feed=await calendarFeeds.resolve(match[1]!);
+      if(!feed){res.status(404).type('text/plain').send('');return;}
+      const zone=feed.timeZone,today=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+      const shift=(n:number)=>{const d=new Date(today+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};
+      const items=[];
+      for(const from of [shift(-7),shift(35)]){
+        const result=await workspace.execute(feed.accountId,feed.householdId,'plannerRead',{operationId:randomUUID(),from,days:42,personId:null,timeZone:zone});
+        items.push(...(result.planner?.items??[]));
+      }
+      res.type('text/calendar; charset=utf-8').send(icsCalendar(items,feed.householdId,config.publicOrigin,createTranslator(config.locale.language)('calendar.hiddenTitle')));
+    }catch(error){res.status(error instanceof WorkspaceError&&['denied','invalid'].includes(error.kind)?404:503).type('text/plain').send('');}
+  });
+  app.get('/api/households/:householdId/calendar-feed',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!uuid(req.params.householdId)||!calendarFeeds||!await store.placement(session.account.id,req.params.householdId)){res.status(404).json({code:'not_found',messageKey:'errors.notFound'});return;}
+    res.json(await calendarFeeds.status(session.account.id,req.params.householdId));
+  });
+  app.post('/api/households/:householdId/calendar-feed',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    if(!uuid(req.params.householdId)||!calendarFeeds||!await store.placement(session.account.id,req.params.householdId)){res.status(404).json({code:'not_found',messageKey:'errors.notFound'});return;}
+    if(!await store.throttle('calendar.issue:'+session.account.id,10)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+    const token=await calendarFeeds.issue(session.account.id,req.params.householdId),url=new URL('/calendar/'+token+'.ics',config.publicOrigin);
+    res.json({...await calendarFeeds.status(session.account.id,req.params.householdId),url:url.href,webcalUrl:'webcal://'+url.host+url.pathname});
+  });
+  app.delete('/api/households/:householdId/calendar-feed',async(req,res)=>{
+    const session=await authenticate(req,res);if(!session)return;
+    if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+    if(!uuid(req.params.householdId)||!calendarFeeds){res.status(404).json({code:'not_found',messageKey:'errors.notFound'});return;}
+    await calendarFeeds.revoke(session.account.id,req.params.householdId);res.json({active:false,createdAt:null,lastUsedAt:null});
+  });
+  app.post('/api/households/:householdId/calendar-mark',express.json({limit:512,strict:true,inflate:false}),async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+      const b=req.body as Record<string,unknown>|undefined;
+      if(!uuid(req.params.householdId)||!b||Object.keys(b).sort().join(',')!=='hidden,kind,resourceId')throw new WorkspaceError('invalid');
+      if(!workspace)throw new WorkspaceError('unavailable');
+      res.json(await workspace.execute(session.account.id,req.params.householdId,'calendarMark',{operationId:randomUUID(),kind:b.kind,resourceId:b.resourceId,hidden:b.hidden}));
     }catch(error){workspaceFailure(res,error);}
   });
   app.get('/api/households/:householdId/planner',async(req,res)=>{
