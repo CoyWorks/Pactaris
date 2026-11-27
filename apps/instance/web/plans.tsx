@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import {WholeNumber} from './whole-number.js';
 import {createTranslator,formatTime,type MessageKey} from '../../../packages/i18n/index.js';
 
 // Household plans (docs/HOUSEHOLD_PLANS.md). Every member sees the level, until when, its monthly price,
@@ -66,7 +67,7 @@ export function PlanPanel({householdId,csrfToken,language,format,timeZone}:{hous
   {plan.tier!=='free'?<form className="plan-extend" onSubmit={e=>{e.preventDefault();void post('extend',{months},'plan.extended');}}>
    <h4>{t('plan.extendTitle')}</h4>
    <p className="muted">{t('plan.extendHint',{tier:t(tierLabel[plan.tier])})}</p>
-   <label>{t('plan.months')}<input type="number" inputMode="numeric" min={1} max={60} required disabled={busy} value={months} onChange={e=>setMonths(Math.max(1,Math.min(60,Math.round(Number(e.target.value))||1)))}/></label>
+   <label>{t('plan.months')}<WholeNumber min={1} max={60} disabled={busy} value={months} onChange={setMonths}/></label>
    <button type="submit" disabled={busy}>{t('plan.extend')}</button>
    {!plan.paymentsAvailable&&<p className="muted">{t('plan.paymentsSoon')}</p>}
   </form>:!plan.canChangeLevel&&<p className="muted">{t('plan.freeMember')}</p>}
@@ -118,12 +119,12 @@ export function OperatorPlan({householdId,csrf,language,format,timeZone,onChange
   <form onSubmit={e=>{e.preventDefault();void change({action:'grant',tier,months});}}>
    <h4>{t('plan.grantTitle')}</h4>
    <label>{t('plan.level')}<select value={tier} disabled={busy} onChange={e=>setTier(e.target.value as PaidTier)}><option value="level1">{t('plan.level1')}</option><option value="level2">{t('plan.level2')}</option></select></label>
-   <label>{t('plan.months')}<input type="number" min={1} max={60} required disabled={busy} value={months} onChange={e=>setMonths(Math.max(1,Math.min(60,Math.round(Number(e.target.value))||1)))}/></label>
+   <label>{t('plan.months')}<WholeNumber min={1} max={60} disabled={busy} value={months} onChange={setMonths}/></label>
    <button type="submit" disabled={busy}>{t('plan.grant')}</button>
   </form>
   <form onSubmit={e=>{e.preventDefault();void change({action:'members',extra});}}>
    <h4>{t('plan.extraTitle')}</h4>
-   <label>{t('plan.extraLabel')}<input type="number" min={0} max={984} required disabled={busy} value={extra} onChange={e=>setExtra(Math.max(0,Math.min(984,Math.round(Number(e.target.value))||0)))}/></label>
+   <label>{t('plan.extraLabel')}<WholeNumber min={0} max={984} disabled={busy} value={extra} onChange={setExtra}/></label>
    <button type="submit" disabled={busy}>{t('plan.saveExtra')}</button>
   </form>
   {message&&<p role={message==='plan.saved'?'status':'alert'}>{t(message)}</p>}

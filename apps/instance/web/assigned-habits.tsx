@@ -1,4 +1,5 @@
 import {CalendarPrivacyField,markCalendar} from './planner.js';
+import {WholeNumber} from './whole-number.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {PunishmentPicker} from './shop.js';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
@@ -119,12 +120,12 @@ function HabitForm({habit,subjectId,householdId,session,language,timeZone,canOut
     <PunishmentPicker householdId={householdId} language={language} onPick={item=>set('punishment',item.title)}/>
     <label className="check"><input type="checkbox" disabled={busy} checked={fields.milestoneEvery!==null} onChange={e=>{if(e.target.checked){set('milestoneEvery',7);set('milestonePoints',10);}else{set('milestoneEvery',null);set('milestonePoints',null);}}}/>{t('habits.milestoneEnable')}</label>
     {fields.milestoneEvery!==null&&<><Hint label={t('hint.more')}>{t('habits.milestoneHelp')}</Hint>
-     <label>{t('habits.milestoneEvery')}<input type="number" inputMode="numeric" min={2} max={365} required disabled={busy} value={fields.milestoneEvery} onChange={e=>set('milestoneEvery',Math.max(2,Math.min(365,Math.round(Number(e.target.value))||2)))}/></label>
+     <label>{t('habits.milestoneEvery')}<WholeNumber min={2} max={365} disabled={busy} value={fields.milestoneEvery} onChange={n=>set('milestoneEvery',n)}/></label>
      <label>{t('habits.milestonePoints')}<input type="number" inputMode="numeric" min={1} max={10000} required disabled={busy} value={fields.milestonePoints??''} onChange={e=>set('milestonePoints',number(e.target.value))}/></label></>}
     {fields.mode==='minimum'&&<><label className="check"><input type="checkbox" disabled={busy} checked={fields.extraPoints!=null} onChange={e=>{if(e.target.checked){set('extraPoints',1);set('extraLimit',5);}else{set('extraPoints',null);set('extraLimit',null);}}}/>{t('habits.extraEnable')}</label>
     {fields.extraPoints!=null&&<><Hint label={t('hint.more')}>{t('habits.extraHelp')}</Hint>
-     <label>{t('habits.extraPoints')}<input type="number" inputMode="numeric" min={1} max={10000} required disabled={busy} value={fields.extraPoints??''} onChange={e=>set('extraPoints',number(e.target.value)??1)}/></label>
-     <label>{t('habits.extraLimit')}<input type="number" inputMode="numeric" min={1} max={1000} required disabled={busy} value={fields.extraLimit??''} onChange={e=>set('extraLimit',Math.max(1,Math.min(1000,Math.round(Number(e.target.value))||1)))}/></label></>}</>}</>}
+     <label>{t('habits.extraPoints')}<WholeNumber min={1} max={10000} disabled={busy} value={fields.extraPoints} onChange={n=>set('extraPoints',n)}/></label>
+     <label>{t('habits.extraLimit')}<WholeNumber min={1} max={1000} disabled={busy} value={fields.extraLimit??5} onChange={n=>set('extraLimit',n)}/></label></>}</>}</>}
    {!habit&&<CalendarPrivacyField language={language} checked={hide} disabled={busy} onChange={setHide}/>}
    {error&&<p role="alert">{t(error)}</p>}
    <button type="submit" disabled={busy||!fields.title.trim()||(fields.period==='daily'&&!(fields.weekdays?.length))}>{t(busy?'onboarding.saving':'habits.save')}</button>
