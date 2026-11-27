@@ -101,7 +101,16 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     if(!await store.throttle(req.ip??'unknown')){loginFailure(req,res,429,'rate_limited','errors.rateLimited');return;}
     const binding=token(),attempt={state:token(),nonce:token(),verifier:token()};
     try {
-      const url=await oidc.start(attempt,req.path!=='/auth/login');
+      // Operator sign-in with a configured operator flow (docs/OPERATOR_ACCESS.md): Identity runs that flow
+      // first, which always asks for a second factor and signs in again, then continues to the normal
+      // authorization request. `prompt=login` is left out there, because it would run the default sign-in
+      // flow once more, where a remembered second factor is skipped.
+      const operatorFlow=req.path==='/auth/operator'?config.oidc.operatorFlow:undefined;
+      let url=await oidc.start(attempt,req.path!=='/auth/login'&&!operatorFlow);
+      if(operatorFlow){
+        const authorize=new URL(url),flow=new URL('/if/flow/'+operatorFlow+'/',authorize.origin);
+        flow.searchParams.set('next',authorize.pathname+authorize.search);url=flow.href;
+      }
       // The installed app asks for its longer session; operator sign-in always gets a browser session and
       // returns to the operator console instead of the dynamic.
       const client=req.path==='/auth/operator'?'operator':req.query.client==='app'?'app':'browser';
@@ -157,6 +166,12 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     return session;
   }
   app.get('/api/operator/session',async(req,res)=>{
+    const id=cookie(req,SESSION);
+    if(id&&store.operatorDenial&&!await store.operatorAuthorized?.(id,config.oidc.issuer,config.operatorSubjects)){
+      // Say why, so the console does not show the same sign-in screen without explanation.
+      const reason=await store.operatorDenial(id,config.oidc.issuer,config.operatorSubjects);
+      if(reason){res.status(reason==='signedOut'?401:403).json({code:'operator_authentication_required',reason,messageKey:'operator.authenticationRequired'});return;}
+    }
     if(await authorizeOperator(req,res))res.json({authorized:true});
   });
   app.get(['/api/operator/instances','/api/operator/instances/:id/placements'],async(req,res)=>{

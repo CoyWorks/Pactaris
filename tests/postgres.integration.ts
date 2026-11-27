@@ -196,8 +196,16 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
     const token='mfa-session-fixture',stale='stale-mfa-fixture';
     await store.createSession(token,account,'csrf',60,120,undefined,fresh);
     await store.createSession(stale,account,'csrf',60,120,undefined,fresh-301);
+    await store.createSession('no-mfa-fixture',account,'csrf',60,120);
     try{
       assert.ok(await store.operatorAuthorized(token,issuer,['subject-a']));
+      assert.equal(await store.operatorDenial(token,issuer,['subject-a']),undefined);
+      assert.equal(await store.operatorDenial(token,issuer,['subject-b']),'notOperator');
+      assert.equal(await store.operatorDenial(token,issuer,[]),'notOperator');
+      assert.equal(await store.operatorDenial(stale,issuer,['subject-a']),'expired');
+      assert.equal(await store.operatorDenial('no-mfa-fixture',issuer,['subject-a']),'noSecondFactor');
+      assert.equal(await store.operatorDenial('unknown-fixture',issuer,['subject-a']),'signedOut');
+      await store.logout('no-mfa-fixture');
       assert.equal(await store.operatorAuthorized(token,issuer,['subject-b']),false);
       assert.equal(await store.operatorAuthorized(token,'https://other-idp.fixture.invalid/',['subject-a']),false);
       assert.equal(await store.operatorAuthorized(stale,issuer,['subject-a']),false);

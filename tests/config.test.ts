@@ -42,3 +42,9 @@ test('plan prices are optional, in minor units, with a three-letter currency',()
   for(const bad of [{currency:'eur',monthly:{level1:1,level2:2}},{currency:'EUR',monthly:{level1:1}},{currency:'EUR',monthly:{level1:1.5,level2:2}},{currency:'EUR',monthly:{level1:1,level2:2},extra:1}])
     assert.throws(()=>parseGatewayConfig({...c,planPrices:bad}),ConfigError);
 });
+test('the operator flow is an optional Identity flow slug',()=>{
+  const c=JSON.parse(readFileSync('config/gateway.example.json','utf8'));
+  assert.equal(parseGatewayConfig(c).oidc.operatorFlow,undefined);
+  assert.equal(parseGatewayConfig({...c,oidc:{...c.oidc,operatorFlow:'pactaris-operator'}}).oidc.operatorFlow,'pactaris-operator');
+  for(const bad of ['','Pactaris','../x','a/b',1])assert.throws(()=>parseGatewayConfig({...c,oidc:{...c.oidc,operatorFlow:bad}}),ConfigError);
+});

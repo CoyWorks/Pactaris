@@ -6,6 +6,35 @@ Configure Authentik to require an authenticator for the designated accounts. Tes
 
 Sign in at `/auth/operator` to request a fresh Authentik login. After that login the gateway returns to `/operator` (migration `0031_operator_login_return`); before, it always went to `/`, which opened the dynamic instead. `GET /api/operator/session` checks the current session and the allowlist and requires provider authentication within the last five minutes. Authenticate again before operating after that window. Session revocation invalidates this access, and editing the allowlist takes effect when the gateway reloads its configuration.
 
+### Operator sign-in flow (owner decision, 27 November 2026)
+
+**Problem.** `/auth/operator` sent `prompt=login` and `max_age=0`.
+- authentik 2026.8 treats `max_age=0` as "no limit".
+- `prompt=login` runs the default sign-in flow again. Its second-factor stage is skipped while its *last validation threshold* applies (the "remember this device" window), so the new token has no `mfa` in `amr`. The console then refused access, and the operator only got in after signing out of Identity completely.
+
+**Fix.** The owner chose a separate flow, so ordinary people keep their remembered second factor and their sessions.
+- Blueprint `apps/identity/blueprints/pactaris-operator.yaml` creates the flow `pactaris-operator`. It runs these steps in order:
+  1. identification with password;
+  2. a second-factor stage with no threshold (`seconds=0`), which refuses accounts without a second factor;
+  3. sign-in.
+- With `"operatorFlow": "pactaris-operator"` in the gateway's `oidc` configuration, `/auth/operator` sends the browser to `/if/flow/pactaris-operator/?next=<authorization request>` on the Identity origin. `prompt=login` is left out there, because it would run the default flow again.
+- When the flow finishes, Identity continues to the normal authorization request. The token then carries `mfa` from this sign-in.
+- Without `operatorFlow`, the previous behaviour (`prompt=login`) stays.
+
+**Why access is refused.** `GET /api/operator/session` answers with a `reason`, and the console shows a matching message:
+
+| `reason` | Meaning |
+|---|---|
+| `signedOut` | No valid session |
+| `notOperator` | The account is not an operator |
+| `noSecondFactor` | The last sign-in had no second factor |
+| `expired` | More than five minutes since the sign-in with a second factor |
+
+**Setup.**
+1. Import the blueprint in authentik (**Customization > Blueprints**, or upload the file).
+2. Add `"operatorFlow": "pactaris-operator"` inside `"oidc"` in `/opt/pactaris/gateway/config.json`.
+3. Restart the gateway.
+
 Acceptance on the deployed provider must cover fresh MFA, stale MFA, an ordinary account with MFA, a recovery-code sign-in, session revocation and operator removal. The repository tests exercise the claim and authorization checks. Live Authentik enforcement and recovery need the deployment configuration and test accounts.
 
 [Authentik credentials and recovery codes](https://docs.goauthentik.io/users-sources/user/user-interface/#credentials)

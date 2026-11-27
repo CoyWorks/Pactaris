@@ -11,6 +11,8 @@ type Tab=typeof tabs[number];
 const tabLabels:Record<Tab,MessageKey>={overview:'operator.tabOverview',reports:'operator.tabReports',accounts:'operator.tabAccounts',households:'operator.tabHouseholds',
  instances:'operator.tabInstances',maintenance:'operator.tabMaintenance',settings:'operator.tabSettings',audit:'operator.tabAudit'};
 const queueLabels:Record<string,MessageKey>={queued:'operator.mailQueued',sent:'operator.mailSent',failed:'operator.mailFailed',inactive:'operator.mailInactive'};
+type Denial='signedOut'|'notOperator'|'noSecondFactor'|'expired';
+const denials:Record<Denial,MessageKey>={signedOut:'operator.denialSignedOut',notOperator:'operator.denialNotOperator',noSecondFactor:'operator.denialNoSecondFactor',expired:'operator.denialExpired'};
 const errors:Record<number,MessageKey>={400:'operator.smtpInvalid',401:'operator.authenticationRequired',403:'operator.authenticationRequired',429:'errors.rateLimited'};
 
 /** Operator console: overview, reports, accounts, households, instances, settings and the audit log.
@@ -18,10 +20,14 @@ const errors:Record<number,MessageKey>={400:'operator.smtpInvalid',401:'operator
 export function OperatorPage({language,format,timeZone}:{language:string;format:string;timeZone:string}){
  const t=createTranslator(language),{search}=useLocation(),params=new URLSearchParams(search);
  const tab:Tab=(tabs as readonly string[]).includes(params.get('tab')??'')?params.get('tab') as Tab:'overview',account=params.get('account')??undefined;
- const [state,setState]=useState<'loading'|'signedOut'|'ready'|'failed'>('loading'),[csrf,setCsrf]=useState(''),[refresh,setRefresh]=useState(0);
+ const [state,setState]=useState<'loading'|'signedOut'|'ready'|'failed'>('loading'),[denial,setDenial]=useState<Denial>(),[csrf,setCsrf]=useState(''),[refresh,setRefresh]=useState(0);
  useEffect(()=>{
   const controller=new AbortController(),signal=AbortSignal.any([controller.signal,AbortSignal.timeout(12000)]);
-  void Promise.all([readJson('/api/operator/session',signal),readJson<{csrfToken:string}>('/api/session',signal)])
+  // The session check says why access is refused; the console shows that instead of a bare sign-in.
+  const check=fetch('/api/operator/session',{cache:'no-store',signal}).then(async r=>{
+   if(r.ok)return;const body=await r.json().catch(()=>({})) as {reason?:string};
+   setDenial(body.reason&&body.reason in denials?body.reason as Denial:undefined);throw r.status;});
+  void Promise.all([check,readJson<{csrfToken:string}>('/api/session',signal)])
    .then(([,session])=>{if(!controller.signal.aborted){setCsrf(session.csrfToken);setState('ready');}})
    .catch(status=>{if(!controller.signal.aborted)setState(status===401||status===403?'signedOut':'failed');});
   return()=>controller.abort();
@@ -32,7 +38,7 @@ export function OperatorPage({language,format,timeZone}:{language:string;format:
   <header className="app-bar"><h1>{t('operator.title')}</h1><a className="button secondary" href="/">{t('portal.return')}</a></header>
   {state==='loading'&&<p role="status">{t('workspace.loading')}</p>}
   {state==='failed'&&<section><p role="alert">{t('errors.unavailable')}</p><button type="button" onClick={()=>{setState('loading');setRefresh(v=>v+1);}}>{t('common.refresh')}</button></section>}
-  {state==='signedOut'&&<section><h2>{t('operator.signInTitle')}</h2><p>{t('operator.authenticationRequired')}</p>
+  {state==='signedOut'&&<section><h2>{t('operator.signInTitle')}</h2><p role={denial?'alert':undefined}>{t(denial?denials[denial]:'operator.authenticationRequired')}</p>
    <div className="workspace-actions"><a className="button" href="/auth/operator">{t('operator.signIn')}</a>
     <button type="button" className="secondary" onClick={()=>{setState('loading');setRefresh(v=>v+1);}}>{t('common.refresh')}</button></div></section>}
   {state==='ready'&&<>
