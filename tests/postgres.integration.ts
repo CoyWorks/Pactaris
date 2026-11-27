@@ -2140,13 +2140,27 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal(changed.data.history[0].source,'level');assert.equal(changed.data.history[0].tier,'level2');
      assert.equal((await caps()).capabilities['plan.key'],'level2');
      assert.equal((await api(base+'/plan/cancel','POST',{},D.session)).status,404);
-     await gatewayDb.owner.query("UPDATE pactaris.household_plans SET paid_until=now()-interval '1 minute' WHERE household_id=$1",[home.householdId]);
+     // A renewing subscription gets no warning; the quiet grace period keeps the paid limits for 7 days.
+     const setPaidUntil=(interval:string)=>gatewayDb.owner.query(`UPDATE pactaris.household_plans SET paid_until=now()+interval '${interval}' WHERE household_id=$1`,[home.householdId]);
+     await setPaidUntil('3 days');assert.equal((await api(base+'/plan?brief=1','GET',undefined,D.session)).data.endingSoon,false);
+     assert.equal((await api(base+'/plan?other=1','GET',undefined,D.session)).status,400);
+     await setPaidUntil('-1 minute');await plans.reconcile();
+     assert.equal((await caps()).capabilities['plan.key'],'level2');
+     const graceView=(await api(base+'/plan','GET',undefined,D.session)).data;assert.equal(graceView.tier,'free');assert.equal(graceView.endingSoon,false);
+     assert.equal('graceUntil' in graceView,false);
+     const operatorGrace=await plans.operatorView(home.householdId);assert.equal(operatorGrace.graceTier,'level2');assert.ok(Date.parse(operatorGrace.graceUntil!)>Date.now()+6*86400_000);
+     await setPaidUntil('-8 days');
      await plans.reconcile();assert.equal((await caps()).capabilities['plan.key'],'free');assert.equal((await caps()).capabilities['members.active.max'],6);
+     assert.equal((await plans.operatorView(home.householdId)).graceTier,null);
      const stale=(await caps()).plan_version;
      await assert.rejects(plans.operatorSubscription(A.account.id,home.householdId,'resume'));
      await plans.operatorSubscription(A.account.id,home.householdId,'pause');await plans.operatorSubscription(A.account.id,home.householdId,'stop');
      assert.equal((await api(base+'/plan','GET',undefined,B.session)).data.subscription,null);
      assert.equal(Number((await caps()).plan_version),Number(stale));
+     // Without a renewing subscription, members are warned in the last 7 days.
+     await setPaidUntil('3 days');assert.equal((await api(base+'/plan?brief=1','GET',undefined,D.session)).data.endingSoon,true);
+     await setPaidUntil('10 days');assert.equal((await api(base+'/plan?brief=1','GET',undefined,D.session)).data.endingSoon,false);
+     await setPaidUntil('-8 days');
      // Both parties can schedule a break; outsiders cannot. Weekly overlap skips the whole week.
      const weekly=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:{...habitFields,period:'weekly'}});
      assert.equal(weekly.status,200,JSON.stringify(weekly.data));

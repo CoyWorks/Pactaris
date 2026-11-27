@@ -5,7 +5,7 @@
 import {randomUUID} from 'node:crypto';
 import type pg from 'pg';
 import {journalPath,uuid,type DelegationSigner} from '../../packages/auth/delegation.js';
-import {capabilitiesFor,maxExtraMembers,paidTiers,PlanError,priceOf,tierLimits,tierRate,type PaidTier,type PlanPrice,type PlanPrices,type PlanTier} from '../../packages/auth/plans.js';
+import {capabilitiesFor,endingSoon,enforcedTier,maxExtraMembers,planGraceDays,paidTiers,PlanError,priceOf,tierLimits,tierRate,type PaidTier,type PlanPrice,type PlanPrices,type PlanTier} from '../../packages/auth/plans.js';
 import {privateResponse} from '../../packages/routing/private-client.js';
 
 export type PlanHistoryEntry={name:string|null;months:number;tier:PaidTier;source:'prepaid'|'subscription'|'operator'|'level';at:string};
@@ -13,6 +13,8 @@ export type PlanView={tier:PlanTier;paidUntil:string|null;kind:'free'|'prepaid'|
  subscription:{holderName:string|null;state:'active'|'paused';tier:PaidTier;mine:boolean}|null;
  /** Monthly price of the current level only; null on Free or when no prices are configured. */
  price:PlanPrice|null;canChangeLevel:boolean;version:string;
+ /** The plan ends within the warning window and does not renew (an active subscription renews). */
+ endingSoon:boolean;
  extraMembers:number;limits:Record<string,number>;history:PlanHistoryEntry[];paymentsAvailable:boolean};
 /** What the owner sees before a level change goes through. `version` must come back with the confirmation. */
 export type PlanQuote={tier:PaidTier;price:PlanPrice|null;paidUntil:string|null;needsPayment:boolean;version:string};
@@ -53,6 +55,7 @@ export class HouseholdPlans{
   return {tier,paidUntil:tier==='free'?null:iso(row.paid_until),kind:sub?'subscription':tier==='free'?'free':'prepaid',
    subscription:sub?{holderName:sub.name??null,state:sub.state,tier:sub.tier,mine:sub.holder_account_id===accountId}:null,
    price:priceOf(this.prices,tier),canChangeLevel:isOwner,version:row.version,
+   endingSoon:endingSoon(tier,row.paid_until,sub?.state==='active'),
    extraMembers:row.extra_members,limits:limitsOf(capabilitiesFor(tier,iso(row.paid_until),row.extra_members)),
    history:history.map(h=>({name:h.name??null,months:h.months,tier:h.tier,source:h.source,at:h.created_at.toISOString()})),paymentsAvailable:this.paymentsAvailable};
  }
@@ -138,7 +141,10 @@ export class HouseholdPlans{
   if(!uuid(householdId))throw new PlanError('invalid');
   const view=await this.view('00000000-0000-0000-0000-000000000000',householdId);
   const sub=(await this.pool.query("SELECT id,provider,provider_ref,created_at FROM pactaris.plan_subscriptions WHERE household_id=$1 AND state IN ('active','paused')",[householdId])).rows[0];
-  return {...view,subscriptionId:sub?.id??null,provider:sub?.provider??null,providerRef:sub?.provider_ref??null};
+  // Operators (only) see the quiet grace period: paid time is over, the paid limits still apply.
+  const row=await this.row(this.pool,householdId),now=new Date(),enforced=enforcedTier(row.tier,row.paid_until,now);
+  const grace=enforced!=='free'&&row.paid_until!<=now?{graceTier:enforced,graceUntil:new Date(row.paid_until!.getTime()+planGraceDays*86_400_000).toISOString(),paidUntil:iso(row.paid_until)}:{graceTier:null,graceUntil:null};
+  return {...view,...grace,subscriptionId:sub?.id??null,provider:sub?.provider??null,providerRef:sub?.provider_ref??null};
  }
  private async syncQuietly(householdId:string){try{await this.sync(householdId);}catch{/* the worker retries */}}
  /** Sends the current limits to the household's Instance; marks them synced only when the Instance confirms. */
@@ -148,7 +154,8 @@ export class HouseholdPlans{
    FROM pactaris.household_plans p JOIN pactaris.placements pl ON pl.household_id=p.household_id AND pl.status='active' JOIN pactaris.instances i ON i.id=pl.instance_id AND i.status='active'
    WHERE p.household_id=$1`,[householdId])).rows[0];
   if(!target)return;
-  const tier=target.tier!=='free'&&target.paid_until>new Date()?target.tier as PlanTier:'free';
+  // Limits follow the enforced level, which includes the quiet grace period after paid time ends.
+  const tier=enforcedTier(target.tier as PlanTier,target.paid_until);
   const operationId=randomUUID(),version=Number(target.version);
   const body=JSON.stringify({operationId,householdId,planVersion:version,capabilities:capabilitiesFor(tier,iso(target.paid_until),target.extra_members)});
   const token=await this.signer.signJournal(target.instanceId,'entitlementsApply',operationId,body);
@@ -157,10 +164,10 @@ export class HouseholdPlans{
   if(response.status!==200||data?.operationId!==operationId)throw new PlanError('unavailable');
   if(data.known!==false)await this.pool.query('UPDATE pactaris.household_plans SET synced_version=greatest(synced_version,$2) WHERE household_id=$1',[householdId,version]);
  }
- /** Worker: expire plans whose time ran out (a new version), then deliver every unsynced version. */
+ /** Worker: expire plans whose time and grace period ran out (a new version), then deliver every unsynced version. */
  async reconcile(limit=50){
   await this.pool.query(`UPDATE pactaris.household_plans SET version=version+1,expired_at=now(),updated_at=now()
-   WHERE tier<>'free' AND paid_until<=now() AND expired_at IS NULL`);
+   WHERE tier<>'free' AND paid_until+make_interval(days=>$1)<=now() AND expired_at IS NULL`,[planGraceDays]);
   const pending=(await this.pool.query('SELECT household_id FROM pactaris.household_plans WHERE synced_version<version ORDER BY updated_at LIMIT $1',[limit])).rows;
   let failed=0;for(const p of pending){try{await this.sync(p.household_id);}catch{failed++;}}
   return {pending:pending.length,failed};

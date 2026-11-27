@@ -35,6 +35,25 @@ Owner decisions, 26 November 2026 (level change and prices updated the same day)
   After a change, restart the gateway service (the worker does not use prices). Keep Level 2 at twice Level 1: the time conversion between levels assumes that ratio.
 - **No payment provider yet.** Extend answers `payments_unavailable`. PayPal is the likely first provider; check its acceptable use policy for adult-oriented services first (see docs/PLANS.md). The provider integration adds `prepaid` and `subscription` credits with its own payment reference, so a payment counts once.
 
+## Ending, grace and downgrade (owner decisions, 27 November 2026)
+
+- **Warning.** When a plan does not renew by itself, every member sees a notice in the last 7 days before it ends (`planWarningDays`): on Today and in the Plan panel.
+  - A plan does not renew when it is prepaid or its subscription is paused or stopped.
+  - An active subscription renews, so it gets no notice.
+- **Quiet grace period.** After paid time ends, the paid limits still apply for 7 more days (`planGraceDays`, `enforcedTier`).
+  - **Not advertised.** Members see the plan as Free as soon as the paid time is over. The site and the app never mention the grace period.
+  - Only the operator console shows it, for support.
+  - The worker expires the plan, and sends the Free limits to the Instance, when the grace period ends.
+  - Adding months during the grace period starts from the moment of payment.
+- **Downgrade.** Nothing is deleted, nobody is removed, and these always work:
+  - every basic function of a relationship: pause and resume, stop, consent, limits and safewords, ending a link, leaving;
+  - viewing, export, check-ins, submitting and reviewing, and shop redemptions.
+- **Only the excess is frozen** (enforcement on the Instance, next step).
+  - New items above a limit are refused.
+  - Items above a limit are paused. The Dom or owner chooses which stay active.
+  - Paused items cannot be edited until there is room again or after an upgrade. Completing, archiving, deleting and pausing always work.
+  - A paused habit or routine records no missed periods and gives no punishment. After resuming it does not catch up on the paused time.
+
 ## Limits (placeholders)
 
 | Capability key | Free | Level 1 | Level 2 |

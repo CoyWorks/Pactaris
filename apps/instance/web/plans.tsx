@@ -10,9 +10,9 @@ type PaidTier=Exclude<Tier,'free'>;
 type Price={amount:number;currency:string};
 export type PlanView={tier:Tier;paidUntil:string|null;kind:'free'|'prepaid'|'subscription';
  subscription:{holderName:string|null;state:'active'|'paused';tier:PaidTier;mine:boolean}|null;
- price:Price|null;canChangeLevel:boolean;version:string;
+ price:Price|null;canChangeLevel:boolean;version:string;endingSoon:boolean;
  extraMembers:number;limits:Record<string,number>;history:{name:string|null;months:number;tier:PaidTier;source:'prepaid'|'subscription'|'operator'|'level';at:string}[];paymentsAvailable:boolean;
- subscriptionId?:string|null;provider?:string|null;providerRef?:string|null};
+ subscriptionId?:string|null;provider?:string|null;providerRef?:string|null;graceTier?:Tier|null;graceUntil?:string|null};
 type Quote={tier:PaidTier;price:Price|null;paidUntil:string|null;needsPayment:boolean;version:string};
 const money=(p:Price,language:string)=>new Intl.NumberFormat(language,{style:'currency',currency:p.currency}).format(p.amount/100);
 const tierLabel:Record<Tier,MessageKey>={free:'plan.free',level1:'plan.level1',level2:'plan.level2'};
@@ -24,6 +24,7 @@ function Summary({plan,language,format,timeZone}:{plan:PlanView;language:string;
  return <>
   <p><strong>{t(tierLabel[plan.tier])}</strong>{plan.paidUntil&&<span className="muted"> {t('plan.until',{date:formatTime(new Date(plan.paidUntil),format,timeZone)})}</span>}</p>
   {plan.price&&<p>{t('plan.perMonth',{price:money(plan.price,language)})}</p>}
+  {plan.endingSoon&&plan.paidUntil&&plan.tier!=='free'&&<p className="notice" role="status">{t('plan.endingSoon',{tier:t(tierLabel[plan.tier]),date:formatTime(new Date(plan.paidUntil),format,timeZone)})}</p>}
   {plan.kind==='subscription'&&plan.subscription&&<p className="muted">{t(plan.subscription.state==='paused'?'plan.subscriptionPaused':'plan.subscriptionBy',{name:plan.subscription.holderName??t('plan.formerMember')})}</p>}
   {plan.kind==='prepaid'&&<p className="muted">{t('plan.prepaid')}</p>}
   <dl className="plan-limits">{limitRows.map(([key,label])=><React.Fragment key={key}><dt>{t(label)}</dt><dd>{plan.limits[key]}</dd></React.Fragment>)}</dl>
@@ -97,6 +98,15 @@ export function PlanPanel({householdId,csrfToken,language,format,timeZone}:{hous
  </section>;
 }
 
+/** Today: a short notice when the dynamic's plan ends within a week and does not renew. */
+export function PlanNotice({householdId,language,format,timeZone,onOpen}:{householdId:string;language:string;format:string;timeZone:string;onOpen:()=>void}){
+ const t=createTranslator(language),[plan,setPlan]=useState<PlanView>();
+ useEffect(()=>{let live=true;void fetch('/api/households/'+householdId+'/plan?brief=1',{cache:'no-store'}).then(r=>r.ok?r.json() as Promise<PlanView>:undefined).then(v=>{if(live)setPlan(v);}).catch(()=>undefined);return()=>{live=false;};},[householdId]);
+ if(!plan?.endingSoon||!plan.paidUntil||plan.tier==='free')return null;
+ return <button type="button" className="row-button" onClick={onOpen}><span className="dot" aria-hidden="true"/>
+  <span className="grow">{t('plan.endingSoon',{tier:t(tierLabel[plan.tier]),date:formatTime(new Date(plan.paidUntil),format,timeZone)})}</span></button>;
+}
+
 /** Operator console: one dynamic's plan, granting months, extra member places and subscription control. */
 export function OperatorPlan({householdId,csrf,language,format,timeZone,onChanged}:{householdId:string;csrf:string;language:string;format:string;timeZone:string;onChanged?:()=>void}){
  const t=createTranslator(language),[plan,setPlan]=useState<PlanView>(),[tier,setTier]=useState<PaidTier>('level1'),[months,setMonths]=useState(1),[extra,setExtra]=useState(0),[busy,setBusy]=useState(false),[message,setMessage]=useState<MessageKey>();
@@ -110,6 +120,7 @@ export function OperatorPlan({householdId,csrf,language,format,timeZone,onChange
  if(!plan)return message?<p role="alert">{t(message)}</p>:null;
  return <section className="plan-panel">
   <Summary plan={plan} language={language} format={format} timeZone={timeZone}/>
+  {plan.graceTier&&plan.graceUntil&&<p className="notice">{t('plan.operatorGrace',{tier:t(tierLabel[plan.graceTier]),date:formatTime(new Date(plan.graceUntil),format,timeZone)})}</p>}
   {plan.subscription&&<div className="notice"><p>{t('plan.operatorSubscription',{state:t(plan.subscription.state==='paused'?'plan.statePaused':'plan.stateActive'),provider:plan.provider??'—'})}</p>
    <div className="calendar-actions">
     {plan.subscription.state==='active'?<button type="button" disabled={busy} onClick={()=>{void change({action:'pause'});}}>{t('plan.pause')}</button>

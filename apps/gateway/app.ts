@@ -794,7 +794,10 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
   app.get('/api/households/:householdId/plan',async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;
     if(!plans||!uuid(req.params.householdId)||!await store.placement(session.account.id,req.params.householdId)){res.status(404).json({code:'not_found',messageKey:'errors.notFound'});return;}
-    try{res.json(await plans.view(session.account.id,req.params.householdId,await ownsHousehold(session.account.id,req.params.householdId)));}catch{res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});}
+    // `?brief=1` (the Today notice) skips the ownership lookup on the Instance; it never changes the level.
+    const brief=req.query.brief==='1';
+    if(Object.keys(req.query).some(k=>k!=='brief')||(req.query.brief!==undefined&&!brief)){res.status(400).json({code:'invalid_request',messageKey:'errors.request'});return;}
+    try{res.json(await plans.view(session.account.id,req.params.householdId,brief?false:await ownsHousehold(session.account.id,req.params.householdId)));}catch{res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});}
   });
   app.post('/api/households/:householdId/plan/:action',express.json({limit:256,strict:true,inflate:false}),async(req,res)=>{
     const session=await authenticate(req,res);if(!session)return;
