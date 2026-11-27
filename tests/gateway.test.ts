@@ -392,6 +392,31 @@ test('installed app sign-in gets the app session bounds; operator sign-in never 
   assert.equal(bounds.app.idleSeconds,604800);
 });
 
+test('a configured operator flow runs before the authorization request, without prompt=login',async()=>{
+  const starts:boolean[]=[];
+  const oidc:OidcLogin={start:async(a,re)=>{starts.push(!!re);return 'https://identity.example.invalid/application/o/authorize/?client_id=c&state='+a.state;},finish:async()=>{throw Error('unused');}};
+  const withFlow=createGatewayApp({...config(),operatorSubjects:['subject'],oidc:{...config().oidc,operatorFlow:'pactaris-operator'}},new FixtureStore(),oidc,{summary:async()=>undefined});
+  const first=await inject(withFlow,{url:'/auth/operator',headers});assert.equal(first.statusCode,302);
+  const location=new URL(String(first.headers.location));
+  assert.equal(location.origin+location.pathname,'https://identity.example.invalid/if/flow/pactaris-operator/');
+  const next=location.searchParams.get('next')!;assert.match(next,/^\/application\/o\/authorize\/\?client_id=c&state=/);
+  assert.deepEqual(starts,[false]);
+  // Normal sign-in and an operator sign-in without the flow are unchanged.
+  assert.equal(new URL(String((await inject(withFlow,{url:'/auth/login',headers})).headers.location)).pathname,'/application/o/authorize/');
+  const without=createGatewayApp({...config(),operatorSubjects:['subject']},new FixtureStore(),oidc,{summary:async()=>undefined});
+  assert.equal(new URL(String((await inject(without,{url:'/auth/operator',headers})).headers.location)).pathname,'/application/o/authorize/');
+  assert.deepEqual(starts,[false,false,true]);
+});
+
+test('the operator session check says why access is refused',async()=>{
+  for(const [reason,status] of [['noSecondFactor',403],['expired',403],['notOperator',403],['signedOut',401]] as const){
+    const store=Object.assign(new FixtureStore(),{operatorAuthorized:async()=>false,operatorDenial:async()=>reason});
+    const app=createGatewayApp({...config(),operatorSubjects:['subject']},store,{start:async()=>'',finish:async()=>{throw Error('unused');}},{summary:async()=>undefined});
+    const r=await inject(app,{url:'/api/operator/session',headers:{...headers,cookie:'__Host-pactaris-session='+'a'.repeat(43)}});
+    assert.equal(r.statusCode,status);assert.equal(r.json().reason,reason);assert.equal(r.json().code,'operator_authentication_required');
+  }
+});
+
 test('operator sign-in returns to the operator console with a browser session',async()=>{
   const store=new FixtureStore(),gatewayConfig={...config(),operatorSubjects:['subject']},bounds=gatewayConfig.session;
   const oidc:OidcLogin={start:async a=>'https://identity.example.invalid/authorize?state='+a.state,finish:async()=>({issuer:'https://identity.example.invalid/',subject:'subject',name:'Operator',identityUser:42,verifiedEmail:'private-fixture@example.invalid'})};

@@ -4,6 +4,7 @@ import { normalizeEmail } from '../../packages/auth/email.js';
 export const hash = (token: string) => createHash('sha256').update(token).digest('hex');
 export type LoginAttempt = {state:string;nonce:string;verifier:string};
 /** `operator` is a browser sign-in that returns to the operator console. */
+export type OperatorDenial='signedOut'|'notOperator'|'noSecondFactor'|'expired';
 export type LoginClient = 'browser'|'app'|'operator';
 export type Account = {id:string;displayName:string};
 export type AccountPresentation = {format:string;timeZone:string};
@@ -24,6 +25,8 @@ export interface GatewayStore {
   session(token:string,idle:number,requireVerifiedEmail?:boolean):Promise<Session|undefined>;
   recentlyAuthenticated?(token:string):Promise<boolean>;
   operatorAuthorized?(token:string,issuer:string,subjects:string[]):Promise<boolean>;
+  /** Why operator access is refused; undefined when it is not. */
+  operatorDenial?(token:string,issuer:string,subjects:string[]):Promise<OperatorDenial|undefined>;
   logout(token:string):Promise<void>;
   sessionsForAccount(accountId:string,token:string,requireVerifiedEmail?:boolean):Promise<{sessions:SessionView[];truncated:boolean}>;
   revokeSessionById(accountId:string,token:string,id:string):Promise<string|undefined>;
@@ -103,6 +106,19 @@ export class PgGatewayStore implements GatewayStore {
       AND s.mfa_at BETWEEN now()-interval '5 minutes' AND now()
       AND LEAST(s.expires_at,s.idle_expires_at)>now()`,[hash(token),issuer,subjects]);
     return result.rowCount===1;
+  }
+  async operatorDenial(token:string,issuer:string,subjects:string[]):Promise<OperatorDenial|undefined>{
+    const r=await this.pool.query(
+      `SELECT a.issuer=$2 AND a.status='active' AND (a.subject=ANY($3::text[]) OR EXISTS(SELECT 1 FROM pactaris.operator_grants g WHERE g.account_id=a.id)) AS operator,
+        s.mfa_at, s.mfa_at BETWEEN now()-interval '5 minutes' AND now() AS fresh
+      FROM pactaris.sessions s JOIN pactaris.accounts a ON a.id=s.account_id
+      WHERE s.token_hash=$1 AND LEAST(s.expires_at,s.idle_expires_at)>now()`,[hash(token),issuer,subjects]);
+    const row=r.rows[0] as {operator:boolean;mfa_at:Date|null;fresh:boolean|null}|undefined;
+    if(!row)return 'signedOut';
+    if(!subjects.length||!row.operator)return 'notOperator';
+    if(!row.mfa_at)return 'noSecondFactor';
+    if(!row.fresh)return 'expired';
+    return undefined;
   }
   async updateAccountPresentation(accountId:string,value:AccountPresentation|null){
     await this.pool.query(`WITH changed AS (

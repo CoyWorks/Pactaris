@@ -83,7 +83,8 @@ export type GatewayConfig = Omit<InstanceConfig, 'instanceId' | 'oidc' | 'delega
   invitationMailFile?: string;
   webPushFile?: string;
   operatorSubjects: string[];
-  oidc: { issuer: string; clientId: string; clientSecretFile: string };
+  /** `operatorFlow`: Identity flow that always asks for a second factor, run before operator sign-in. */
+  oidc: { issuer: string; clientId: string; clientSecretFile: string; operatorFlow?: string };
   delegation: { issuer: string; keyId: string; privateKeyFile: string };
   trustedProxyAddresses: string[];
   session: { idleSeconds: number; absoluteSeconds: number; requireVerifiedEmail: boolean; passkeyIsMfa: boolean; app: { idleSeconds: number; absoluteSeconds: number } };
@@ -166,10 +167,11 @@ export function parseGatewayConfig(value: unknown, development = false): Gateway
     if(typeof v.currency!=='string'||!/^[A-Z]{3}$/.test(v.currency)||Object.keys(v).sort().join(',')!=='currency,monthly'||Object.keys(m).sort().join(',')!=='level1,level2')invalid('planPrices');
     planPrices={currency:v.currency,monthly:{level1:integer(m.level1,'planPrices.monthly.level1',0,100000),level2:integer(m.level2,'planPrices.monthly.level2',0,100000)}};
   }
+  if(o.operatorFlow!==undefined&&(typeof o.operatorFlow!=='string'||!/^[a-z0-9][a-z0-9_-]{0,99}$/.test(o.operatorFlow)))invalid('oidc.operatorFlow');
   const issuer=d.issuer===undefined?base.publicOrigin:origin(d.issuer,'delegation.issuer',development);
   return { ...shared, gatewayId: instanceId,operatorSubjects,
     webPushFile: c.webPushFile===undefined?undefined:file(c.webPushFile,'webPushFile'),
-    invitationMailFile: c.invitationMailFile===undefined ? undefined : file(c.invitationMailFile,'invitationMailFile'), oidc: { ...oidc, clientSecretFile: file(o.clientSecretFile,'oidc.clientSecretFile') },
+    invitationMailFile: c.invitationMailFile===undefined ? undefined : file(c.invitationMailFile,'invitationMailFile'), oidc: { ...oidc, clientSecretFile: file(o.clientSecretFile,'oidc.clientSecretFile'), ...(o.operatorFlow===undefined?{}:{operatorFlow:o.operatorFlow as string}) },
     delegation: { issuer, keyId, privateKeyFile: file(d.privateKeyFile,'delegation.privateKeyFile') },
     trustedProxyAddresses: proxies, ...(accountSecurity?{accountSecurity}:{}), session: {idleSeconds,absoluteSeconds,requireVerifiedEmail,passkeyIsMfa,app:{idleSeconds:appIdle,absoluteSeconds:appAbsolute}},onboarding:{maxOwnedHouseholds:integer(onboarding.maxOwnedHouseholds,'onboarding.maxOwnedHouseholds',1,20)},...(site?{site}:{}),...(planPrices?{planPrices}:{}) };
 }
