@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {applyCredit} from '../apps/gateway/plans.js';
-import {capabilitiesFor,entitlementsInput,priceOf} from '../packages/auth/plans.js';
+import {capabilitiesFor,endingSoon,enforcedTier,entitlementsInput,priceOf} from '../packages/auth/plans.js';
 
 const now=new Date('2026-01-01T00:00:00Z'),day=86400_000;
 test('months add up per level, and changing level converts what is left (1 month level 2 = 2 months level 1)',()=>{
@@ -28,4 +28,14 @@ test('entitlement updates are strict and carry extra member places',()=>{
  assert.equal(capabilitiesFor('free','2026-02-01T00:00:00.000Z',0)['plan.until'],null);
  for(const bad of [{...input,planVersion:0},{...input,extra:1},{...input,capabilities:{...capabilities,'members.active.max':0}},{...input,capabilities:{...capabilities,'plan.key':'gold'}},{...input,capabilities:{...capabilities,unknown:1}}])
   assert.throws(()=>entitlementsInput(bad));
+});
+test('the paid limits stay for a quiet 7-day grace period; a plan that does not renew warns 7 days ahead',()=>{
+ assert.equal(enforcedTier('level1',new Date(now.getTime()-6*day),now),'level1');
+ assert.equal(enforcedTier('level1',new Date(now.getTime()-7*day),now),'free');
+ assert.equal(enforcedTier('free',null,now),'free');
+ assert.equal(endingSoon('level1',new Date(now.getTime()+7*day),false,now),true);
+ assert.equal(endingSoon('level1',new Date(now.getTime()+8*day),false,now),false);
+ assert.equal(endingSoon('level1',new Date(now.getTime()+3*day),true,now),false);
+ assert.equal(endingSoon('level1',new Date(now.getTime()-day),false,now),false);
+ assert.equal(endingSoon('free',null,false,now),false);
 });

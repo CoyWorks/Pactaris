@@ -21,6 +21,20 @@ export const tierLimits:Record<PlanTier,Record<CapabilityKey,number>>={
  level2:{'members.active.max':16,'oneoff.open.max':150,'series.active.max':50,'habits.assigned.max':50,'routines.active.max':50,'plan.horizon.days':366,'catalog.rewards.max':100,'catalog.punishments.max':100,'shop.items.max':100,'history.days':0},
 };
 export const maxExtraMembers=984;
+/** Owner decision, 27 November 2026: after paid time ends, the paid limits still apply for this many days
+ *  (a quiet grace period for a failed or late payment). It is not shown or advertised anywhere. */
+export const planGraceDays=7;
+/** Owner decision, 27 November 2026: members are warned this many days before a plan that does not renew ends. */
+export const planWarningDays=7;
+const DAY=86_400_000;
+/** The level whose limits apply: the paid level until the end of the grace period, then Free. */
+export function enforcedTier(tier:PlanTier,paidUntil:Date|null,now=new Date()):PlanTier{
+ return tier!=='free'&&paidUntil&&paidUntil.getTime()+planGraceDays*DAY>now.getTime()?tier:'free';
+}
+/** True when a plan that does not renew by itself ends within the warning window. */
+export function endingSoon(tier:PlanTier,paidUntil:Date|null,renews:boolean,now=new Date()):boolean{
+ return tier!=='free'&&!!paidUntil&&!renews&&paidUntil.getTime()>now.getTime()&&paidUntil.getTime()-now.getTime()<=planWarningDays*DAY;
+}
 /** Monthly prices from the gateway configuration, in minor units. */
 export type PlanPrices={currency:string;monthly:Record<PaidTier,number>};
 export type PlanPrice={amount:number;currency:string};

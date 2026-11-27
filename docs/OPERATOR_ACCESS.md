@@ -35,6 +35,8 @@ Sign in at `/auth/operator` to request a fresh Authentik login. After that login
 2. Add `"operatorFlow": "pactaris-operator"` inside `"oidc"` in `/opt/pactaris/gateway/config.json`.
 3. Restart the gateway.
 
+Live since 27 November 2026: imported, configured, and confirmed by the owner.
+
 Acceptance on the deployed provider must cover fresh MFA, stale MFA, an ordinary account with MFA, a recovery-code sign-in, session revocation and operator removal. The repository tests exercise the claim and authorization checks. Live Authentik enforcement and recovery need the deployment configuration and test accounts.
 
 [Authentik credentials and recovery codes](https://docs.goauthentik.io/users-sources/user/user-interface/#credentials)

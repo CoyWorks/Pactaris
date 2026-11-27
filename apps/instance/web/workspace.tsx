@@ -26,7 +26,7 @@ import {ShopView} from './shop.js';
 import {GettingStarted} from './start.js';
 import {TodaySharedTasks} from './today-shared-tasks.js';
 import {CalendarPrivacyField,PlannerView,WeekGlance,markCalendar} from './planner.js';
-import {PlanPanel} from './plans.js';
+import {PlanNotice,PlanPanel} from './plans.js';
 type View='calendar'|'home'|'habits'|'checkins'|'rewards'|'participantTasks'|'rules'|'notes'|'tasks'|'dynamic'|'members'|'settings'|'relationships'|'safety'|'exchange'|'overview'|'reviews'|'authority'|'notices'|'board'|'shop';
 type Tab='home'|'tasks'|'routines'|'library'|'dynamic';
 type Draft={action:string;body:Record<string,unknown>};
@@ -224,6 +224,7 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
     {h.status==='paused'&&<p className="notice" role="status">{t('consent.householdPaused')}</p>}
     {h.canEdit&&authority.data&&<GettingStarted householdId={householdId} language={language} invited={h.memberCount>1} linked={(authority.data.links??[]).some(l=>l.state==='active')}
      onInvite={()=>go('members')} onLink={()=>go('authority')} onTask={()=>navigate('/households/'+householdId+'?view=participantTasks&give=any')}/>}
+    <PlanNotice householdId={householdId} language={language} format={format} timeZone={h.timeZone} onOpen={()=>go('settings')}/>
     {data?.hasUnreadTaskInbox&&<button type="button" className="row-button" onClick={()=>go('notices')}><span className="dot" aria-hidden="true"/><span className="grow">{t('workspace.unreadShared')}</span><Icon name="chevron"/></button>}
     <Attention householdId={householdId} session={session} language={language} format={format} timeZone={h.timeZone} data={exchange.data} authority={authority.data} reload={exchangeReload} onChanged={message=>{setNotice(message);refreshAll();}} onReviews={()=>go('reviews')}/>
     <WeekGlance householdId={householdId} language={language} format={format} timeZone={h.timeZone} reload={exchangeReload+':'+refresh+':'+habitsReload} onOpen={()=>go('calendar')}/>
