@@ -27,7 +27,7 @@ export class InstanceAuthority{
    await db.query('ROLLBACK');
    if(error&&typeof error==='object'&&'code'in error&&error.code==='P0001'&&'message'in error&&typeof error.message==='string'){
     // A punishment task can hit the shared task capacity.
-    if(['workspace.capacity','partner.capacity'].includes(error.message))throw new AuthorityError('capacity');
+    if(['workspace.capacity','partner.capacity','plan.limit'].includes(error.message))throw new AuthorityError('capacity');
     const kind=error.message.replace('authority.','');
     if(['invalid','denied','conflict','paused','capacity'].includes(kind))throw new AuthorityError(kind as 'invalid'|'denied'|'conflict'|'paused'|'capacity');
    }throw error;

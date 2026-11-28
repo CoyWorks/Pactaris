@@ -10,7 +10,7 @@ export type CatalogDetail=CatalogSummary&{historical:boolean};
 export type RewardOption={agreementId:string;version:string;label:string;memberId:string;memberName:string};
 export type Redemption={redemptionId:string;version:string;role:'issuer'|'recipient';state:'offered'|'requested'|'fulfilled'|'declined'|'cancelled'|'reversed'|'expired';title:string;description:string;points:number;kind:CatalogKind;habitRequired?:boolean};
 export type CatalogResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';itemId?:string;rewardOptions?:RewardOption[];redemptions?:Redemption[];items?:CatalogSummary[];item?:CatalogDetail;nextCursor?:string|null};
-export class CatalogError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'habitGoalPending'|'unavailable'){super('catalog.'+kind);}}
+export class CatalogError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'habitGoalPending'|'capacity'|'unavailable'){super('catalog.'+kind);}}
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 export function catalogInput(action:CatalogAction,value:unknown):Record<string,unknown>&{operationId:string}{
  if(containsDisguisedText(value))throw new CatalogError('invalid');

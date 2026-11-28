@@ -25,7 +25,9 @@ export function validTimeZone(v:unknown):v is string{
  try{new Intl.DateTimeFormat('en',{timeZone:v});return true;}catch{return false;}
 }
 export {calendarDay as validCalendarDay};
-export type WorkspaceResult={planner?:Planner;householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';taskId?:string;task?:TaskDetail;
+/** The Plan panel: the caller's own use (per-person limits) or the dynamic's use, with the limit. */
+export type PlanUsage=Record<string,{used:number;limit:number}>;
+export type WorkspaceResult={planner?:Planner;usage?:PlanUsage;householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';taskId?:string;task?:TaskDetail;
  household?:{name:string;timeZone:string;version:string;canEdit:boolean;status:'active'|'paused';epoch:string;memberEpoch:string;selfPaused:boolean;memberCount:number};
  series?:PersonalSeries[];pointsSettings?:PointsSettings;hasUnreadTaskInbox?:boolean;changeCursor?:string;changed?:('workspace'|'tasks'|'notices'|'routines'|'library'|'dynamic'|'catalog')[];counts?:{open:number;done:number;overdue:number;unassigned:number};tasks?:TaskSummary[];nextCursor?:string|null};
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);

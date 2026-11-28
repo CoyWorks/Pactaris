@@ -90,6 +90,7 @@ export async function migrate(pool: pg.Pool, root: string, component: Component,
       if(entries.some(m=>m.id==='0061_workspace_changes'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.workspace_change_check(uuid,uuid,uuid,uuid,uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0069_calendar_privacy'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.calendar_mark(uuid,uuid,uuid,jsonb) TO ${role}`);
       if(entries.some(m=>m.id==='0070_plan_entitlements'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.entitlements_apply(uuid,uuid,bigint,jsonb) TO ${role}`);
+      if(entries.some(m=>m.id==='0071_plan_limits'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.plan_usage(uuid,uuid,uuid,jsonb) TO ${role}`);
       if(entries.some(m=>m.id==='0068_planner'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.planner_read(uuid,uuid,uuid,jsonb) TO ${role}`);
       if(entries.some(m=>m.id==='0019_workspace_unread_inbox'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.workspace_has_unread(uuid,uuid,uuid,uuid) TO ${role}`);
       if(entries.some(m=>m.id==='0018_task_inbox_preferences'))await connection.query(`GRANT EXECUTE ON FUNCTION pactaris.task_inbox_preference_command(uuid,uuid,uuid,uuid,text,jsonb) TO ${role}`);

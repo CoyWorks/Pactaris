@@ -839,6 +839,14 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       res.json(await workspace.execute(session.account.id,req.params.householdId,'plannerRead',{operationId:randomUUID(),from:q.from,days:Number(q.days),personId:q.person??null,timeZone:q.timeZone}));
     }catch(error){workspaceFailure(res,error);}
   });
+  // The Plan panel's usage: the caller's own use for per-person limits, the dynamic's for the others.
+  app.get('/api/households/:householdId/plan/usage',async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      if(!uuid(req.params.householdId)||Object.keys(req.query).length)throw new WorkspaceError('invalid');
+      if(!workspace)throw new WorkspaceError('unavailable');
+      res.json((await workspace.execute(session.account.id,req.params.householdId,'planUsage',{operationId:randomUUID()})).usage??{});
+    }catch(error){workspaceFailure(res,error);}
+  });
   app.get('/api/households/:householdId/workspace/changes',async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;
       if(!uuid(req.params.householdId)||Object.keys(req.query).some(k=>k!=='cursor')||(req.query.cursor!==undefined&&!uuid(req.query.cursor)))throw new WorkspaceError('invalid');
@@ -938,7 +946,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     }catch(error){exchangeFailure(res,error);}
   });
   function routineFailure(res:express.Response,error:unknown){
-    const kind=error instanceof RoutineError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,paused:409,unavailable:503}[kind]).json({code:'routines_'+kind,messageKey:('routines.'+kind) as MessageKey});
+    const kind=error instanceof RoutineError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,unavailable:503}[kind]).json({code:'routines_'+kind,messageKey:('routines.'+kind) as MessageKey});
   }
   app.get('/api/households/:householdId/routines',async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;if(!uuid(req.params.householdId)||Object.keys(req.query).some(k=>!['kind','filter','after'].includes(k)))throw new RoutineError('invalid');
@@ -960,7 +968,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       const action=req.params.action;if(!uuid(req.params.householdId)||!isCatalogAction(action))throw new CatalogError('invalid');const input=catalogInput(action,req.body);
       if(!catalog)throw new CatalogError('unavailable');if(!['catalogRead','catalogList','catalogArchive','redemptionOptions','redemptionList','redemptionDecline','redemptionCancel','redemptionReverse'].includes(action)&&!await store.throttle('catalog:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
       res.json(await catalog.execute(session.account.id,req.params.householdId,action,input));
-    }catch(error){const kind=error instanceof CatalogError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,habitGoalPending:422,unavailable:503}[kind]).json({code:'catalog_'+kind,messageKey:('catalog.'+kind) as MessageKey});}
+    }catch(error){const kind=error instanceof CatalogError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,habitGoalPending:422,capacity:409,unavailable:503}[kind]).json({code:'catalog_'+kind,messageKey:('catalog.'+kind) as MessageKey});}
   });
   function proofFailure(res:express.Response,error:unknown){
     const kind=error instanceof ProofCommandError?error.kind:'unavailable';

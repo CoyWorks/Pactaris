@@ -17,9 +17,11 @@ type Quote={tier:PaidTier;price:Price|null;paidUntil:string|null;needsPayment:bo
 const money=(p:Price,language:string)=>new Intl.NumberFormat(language,{style:'currency',currency:p.currency}).format(p.amount/100);
 const tierLabel:Record<Tier,MessageKey>={free:'plan.free',level1:'plan.level1',level2:'plan.level2'};
 const limitRows:[string,MessageKey][]=[['members.active.max','plan.limitMembers'],['oneoff.open.max','plan.limitOneOff'],['series.active.max','plan.limitSeries'],
- ['habits.assigned.max','plan.limitHabits'],['plan.horizon.days','plan.limitHorizon'],['shop.items.max','plan.limitShop']];
+ ['habits.assigned.max','plan.limitHabits'],['routines.active.max','plan.limitRoutines'],['plan.horizon.days','plan.limitHorizon'],['catalog.rewards.max','plan.limitRewards'],
+ ['catalog.punishments.max','plan.limitPunishments'],['shop.items.max','plan.limitShop']];
+type Usage=Record<string,{used:number;limit:number}>;
 
-function Summary({plan,language,format,timeZone}:{plan:PlanView;language:string;format:string;timeZone:string}){
+function Summary({plan,usage,language,format,timeZone}:{plan:PlanView;usage?:Usage;language:string;format:string;timeZone:string}){
  const t=createTranslator(language);
  return <>
   <p><strong>{t(tierLabel[plan.tier])}</strong>{plan.paidUntil&&<span className="muted"> {t('plan.until',{date:formatTime(new Date(plan.paidUntil),format,timeZone)})}</span>}</p>
@@ -27,7 +29,9 @@ function Summary({plan,language,format,timeZone}:{plan:PlanView;language:string;
   {plan.endingSoon&&plan.paidUntil&&plan.tier!=='free'&&<p className="notice" role="status">{t('plan.endingSoon',{tier:t(tierLabel[plan.tier]),date:formatTime(new Date(plan.paidUntil),format,timeZone)})}</p>}
   {plan.kind==='subscription'&&plan.subscription&&<p className="muted">{t(plan.subscription.state==='paused'?'plan.subscriptionPaused':'plan.subscriptionBy',{name:plan.subscription.holderName??t('plan.formerMember')})}</p>}
   {plan.kind==='prepaid'&&<p className="muted">{t('plan.prepaid')}</p>}
-  <dl className="plan-limits">{limitRows.map(([key,label])=><React.Fragment key={key}><dt>{t(label)}</dt><dd>{plan.limits[key]}</dd></React.Fragment>)}</dl>
+  <dl className="plan-limits">{limitRows.filter(([key])=>key in plan.limits).map(([key,label])=><React.Fragment key={key}><dt>{t(label)}</dt>
+   <dd className={usage?.[key]&&usage[key]!.used>=usage[key]!.limit?'over':undefined}>{usage?.[key]?t('plan.usage',{used:String(usage[key]!.used),limit:String(usage[key]!.limit)}):plan.limits[key]}</dd></React.Fragment>)}</dl>
+  {usage&&<p className="muted">{t('plan.usageHint')}</p>}
   {plan.extraMembers>0&&<p className="muted">{t('plan.extraMembers',{count:String(plan.extraMembers)})}</p>}
  </>;
 }
@@ -45,7 +49,8 @@ function History({plan,language,format,timeZone}:{plan:PlanView;language:string;
 
 /** Dynamic → Settings: the plan, adding months, the owner's level change and the list of who added time. */
 export function PlanPanel({householdId,csrfToken,language,format,timeZone}:{householdId:string;csrfToken:string;language:string;format:string;timeZone:string}){
- const t=createTranslator(language),[plan,setPlan]=useState<PlanView>(),[months,setMonths]=useState(1),[target,setTarget]=useState<PaidTier>('level1'),[quote,setQuote]=useState<Quote>(),[busy,setBusy]=useState(false),[message,setMessage]=useState<MessageKey>();
+ const t=createTranslator(language),[plan,setPlan]=useState<PlanView>(),[months,setMonths]=useState(1),[target,setTarget]=useState<PaidTier>('level1'),[quote,setQuote]=useState<Quote>(),[usage,setUsage]=useState<Usage>(),[busy,setBusy]=useState(false),[message,setMessage]=useState<MessageKey>();
+ useEffect(()=>{let live=true;void fetch('/api/households/'+householdId+'/plan/usage',{cache:'no-store'}).then(r=>r.ok?r.json() as Promise<Usage>:undefined).then(v=>{if(live&&v)setUsage(v);}).catch(()=>undefined);return()=>{live=false;};},[householdId,plan?.version]);
  function load(){return fetch('/api/households/'+householdId+'/plan',{cache:'no-store'}).then(r=>r.ok?r.json() as Promise<PlanView>:undefined);}
  function show(v:PlanView){setPlan(v);setTarget(v.tier==='level1'?'level2':'level1');}
  useEffect(()=>{let live=true;void load().then(v=>{if(live&&v)show(v);}).catch(()=>undefined);return()=>{live=false;};},[householdId]);
@@ -64,7 +69,7 @@ export function PlanPanel({householdId,csrfToken,language,format,timeZone}:{hous
  const alert=message==='plan.failed'||message==='plan.notHolder'||message==='plan.ownerOnly'||message==='plan.quoteChanged';
  return <section className="plan-panel">
   <h3>{t('plan.title')}</h3>
-  <Summary plan={plan} language={language} format={format} timeZone={timeZone}/>
+  <Summary plan={plan} usage={usage} language={language} format={format} timeZone={timeZone}/>
   {plan.tier!=='free'?<form className="plan-extend" onSubmit={e=>{e.preventDefault();void post('extend',{months},'plan.extended');}}>
    <h4>{t('plan.extendTitle')}</h4>
    <p className="muted">{t('plan.extendHint',{tier:t(tierLabel[plan.tier])})}</p>
