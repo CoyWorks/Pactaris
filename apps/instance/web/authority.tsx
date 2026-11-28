@@ -5,7 +5,7 @@ import type {AuthorityLink,AuthorityPower,AuthorityResult,AuthorityTransfer} fro
 import {Hint,Icon,Layer} from './navigation.js';
 import {Skeleton} from './today-habits.js';
 type Session={csrfToken:string};
-const errors:MessageKey[]=['authority.invalid','authority.denied','authority.conflict','authority.paused','authority.capacity','authority.unavailable','errors.rateLimited','errors.request'];
+const errors:MessageKey[]=['authority.invalid','authority.denied','authority.conflict','authority.paused','authority.capacity','authority.horizon','authority.unavailable','errors.rateLimited','errors.request'];
 const errorKey=(value:unknown):MessageKey=>errors.includes(value as MessageKey)?value as MessageKey:'authority.unavailable';
 type Outcome={ok:true;data:AuthorityResult}|{ok:false;key:MessageKey;unknown:boolean};
 /** One authority command; an unconfirmed outcome keeps its operation ID for an exact retry. */

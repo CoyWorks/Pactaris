@@ -10,7 +10,7 @@ export type ProgressEntry={eventId:string;occurredAt:string;count:number;text:st
 export type RoutineDetail=RoutineSummary&{description:string;date:string|null;responseType:RoutineFields['responseType'];historical:boolean;epoch:string;memberEpoch:string;periodDate:string;periodStart:string;periodEnd:string;periodTotal:number;result:'pending'|'reached'|'within'|'over';periodClosed:boolean;trend?:{date:string;count:number}[];entries:ProgressEntry[];nextCursor:string|null};
 export type SharedCheckin={id:string;title:string;text:string;version:string;state:'submitted'|'reviewed';mine:boolean;shared:boolean};
 export type RoutineResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';routineId?:string;eventId?:string;routines?:RoutineSummary[];checkins?:SharedCheckin[];nextCursor?:string|null;routine?:RoutineDetail};
-export class RoutineError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'unavailable'){super('routines.'+kind);}}
+export class RoutineError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'horizon'|'unavailable'){super('routines.'+kind);}}
 export const calendarDate=(v:unknown):v is string=>typeof v==='string'&&/^(?:19|20|21)\d{2}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
 export const utcInstant=(v:unknown):v is string=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v)&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString()===v;
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);

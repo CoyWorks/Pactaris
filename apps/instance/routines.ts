@@ -36,6 +36,7 @@ export class InstanceRoutines{
    await db.query('ROLLBACK');
    if(error&&typeof error==='object'&&'code'in error&&error.code==='P0001'&&'message'in error&&typeof error.message==='string'){
     if(error.message==='plan.limit')throw new RoutineError('capacity');
+    if(error.message==='plan.horizon')throw new RoutineError('horizon');
     const kind=error.message.replace('routines.','');if(['invalid','denied','conflict','paused'].includes(kind))throw new RoutineError(kind as 'invalid'|'denied'|'conflict'|'paused');
    }throw error;
   }finally{db.release();}

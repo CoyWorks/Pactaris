@@ -694,7 +694,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     try{if(req.get('origin')!==config.publicOrigin||!uuid(req.params.ticketId))throw new ConsentError('denied');if(!consent)throw new ConsentError('unavailable');res.json(await consent.restrict(req.params.ticketId,req.body));}catch(error){consentFailure(res,error);}
   });
   function workspaceFailure(res:express.Response,error:unknown){
-    const kind=error instanceof WorkspaceError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,capacity:409,paused:409,unavailable:503}[kind]).json({code:'workspace_'+kind,messageKey:('workspace.'+kind) as MessageKey});
+    const kind=error instanceof WorkspaceError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,capacity:409,horizon:409,paused:409,unavailable:503}[kind]).json({code:'workspace_'+kind,messageKey:('workspace.'+kind) as MessageKey});
   }
   app.get('/api/account/task-inbox',async(req,res)=>{
     try{
@@ -903,7 +903,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
   });
   function authorityFailure(res:express.Response,error:unknown){
     const kind=error instanceof AuthorityError?error.kind:'unavailable';
-    res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,unavailable:503}[kind]).json({code:'authority_'+kind,messageKey:('authority.'+kind) as MessageKey});
+    res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,horizon:409,unavailable:503}[kind]).json({code:'authority_'+kind,messageKey:('authority.'+kind) as MessageKey});
   }
   app.get(['/api/households/:householdId/authority','/api/households/:householdId/authority/habits','/api/households/:householdId/authority/progress','/api/households/:householdId/authority/shop'],async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;
@@ -923,7 +923,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
   });
   function exchangeFailure(res:express.Response,error:unknown){
     const kind=error instanceof ExchangeError?error.kind:'unavailable';
-    res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,unavailable:503}[kind]).json({code:'exchange_'+kind,messageKey:('exchange.'+kind) as MessageKey});
+    res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,horizon:409,unavailable:503}[kind]).json({code:'exchange_'+kind,messageKey:('exchange.'+kind) as MessageKey});
   }
   app.get(['/api/households/:householdId/exchange','/api/households/:householdId/exchange/reviews','/api/households/:householdId/exchange/terms','/api/households/:householdId/exchange/notices','/api/households/:householdId/exchange/notice-preferences'],async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;
@@ -946,7 +946,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
     }catch(error){exchangeFailure(res,error);}
   });
   function routineFailure(res:express.Response,error:unknown){
-    const kind=error instanceof RoutineError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,unavailable:503}[kind]).json({code:'routines_'+kind,messageKey:('routines.'+kind) as MessageKey});
+    const kind=error instanceof RoutineError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,horizon:409,unavailable:503}[kind]).json({code:'routines_'+kind,messageKey:('routines.'+kind) as MessageKey});
   }
   app.get('/api/households/:householdId/routines',async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;if(!uuid(req.params.householdId)||Object.keys(req.query).some(k=>!['kind','filter','after'].includes(k)))throw new RoutineError('invalid');
@@ -1013,7 +1013,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       const action=req.params.action;if(!uuid(req.params.householdId)||!isPartnerAction(action)||action==='partnerPushStatus')throw new PartnerError('invalid');const input=partnerInput(action,req.body);
       if(!partner)throw new PartnerError('unavailable');if(!['partnerInbox','partnerInboxPreferences','partnerDeliveryPreferences','partnerPoints','partnerInboxRead','partnerSeriesList','partnerSeriesCancel','partnerPolicyList','partnerPolicyRevoke','partnerOptions','partnerRead','partnerList','partnerCancel','partnerDecline','approvalList','approvalRead'].includes(action)&&!await store.throttle('partner:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
       res.json(await partner.execute(session.account.id,req.params.householdId,action,input));
-    }catch(error){const kind=error instanceof PartnerError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,proofRequired:409,unavailable:503}[kind]).json({code:'partner_'+kind,messageKey:('partner.'+kind) as MessageKey});}
+    }catch(error){const kind=error instanceof PartnerError?error.kind:'unavailable';res.status({invalid:400,denied:404,conflict:409,paused:409,capacity:409,horizon:409,proofRequired:409,unavailable:503}[kind]).json({code:'partner_'+kind,messageKey:('partner.'+kind) as MessageKey});}
   });
   app.use('/api',(_req,res)=>{res.status(404).json({code:'not_found',messageKey:'errors.notFound'});});
   const pwaHead=publicPwa(app,webRoot,config.locale.language,!!webPush);

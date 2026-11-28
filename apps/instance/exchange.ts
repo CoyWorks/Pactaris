@@ -26,6 +26,7 @@ export class InstanceExchange{
   }catch(error){
    await db.query('ROLLBACK');
    if(error&&typeof error==='object'&&'code'in error&&error.code==='P0001'&&'message'in error&&typeof error.message==='string'){
+    if(error.message==='plan.horizon')throw new ExchangeError('horizon');
     const kind=error.message.replace('exchange.','');
     if(['invalid','denied','conflict','paused','capacity'].includes(kind))throw new ExchangeError(kind as 'invalid'|'denied'|'conflict'|'paused'|'capacity');
    }throw error;

@@ -272,7 +272,7 @@ export class PrivateWorkspaceClient{
    if(!uuid(input.operationId))throw new WorkspaceError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new WorkspaceError('invalid');
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body);
    if(response.status===403||response.status===404)throw new WorkspaceError('denied');if(response.status===400)throw new WorkspaceError('invalid');
-   if(response.status===409){const code=(response.data as {code?:string})?.code;throw new WorkspaceError(code==='workspace_capacity'?'capacity':code==='workspace_paused'?'paused':'conflict');}
+   if(response.status===409){const code=(response.data as {code?:string})?.code;throw new WorkspaceError(code==='workspace_capacity'?'capacity':code==='workspace_paused'?'paused':code==='workspace_horizon'?'horizon':'conflict');}
    const r=response.data as import('../auth/workspace.js').WorkspaceResult;
    if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['workspaceRead','workspaceUnread','workspaceChanges','personalSeriesList','taskRead','plannerRead','planUsage'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/workspace.js').WorkspaceResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
@@ -380,7 +380,7 @@ export class PrivateRoutineClient{
   try{
    if(!uuid(input.operationId))throw new RoutineError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new RoutineError('invalid');
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,action==='checkinList'?65536:16384);
-   if(response.status===403||response.status===404)throw new RoutineError('denied');if(response.status===400)throw new RoutineError('invalid');if(response.status===409){const code=(response.data as {code?:string})?.code;throw new RoutineError(code==='routines_paused'?'paused':code==='routines_capacity'?'capacity':'conflict');}
+   if(response.status===403||response.status===404)throw new RoutineError('denied');if(response.status===400)throw new RoutineError('invalid');if(response.status===409){const code=(response.data as {code?:string})?.code;throw new RoutineError(code==='routines_paused'?'paused':code==='routines_capacity'?'capacity':code==='routines_horizon'?'horizon':'conflict');}
    const r=response.data as import('../auth/routines.js').RoutineResult;
    if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['routineRead','routineList','checkinList'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/routines.js').RoutineResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
@@ -466,7 +466,7 @@ export class PrivatePartnerClient{
   try{
    if(!uuid(input.operationId))throw new PartnerError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new PartnerError('invalid');
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
-   if(response.status===403||response.status===404)throw new PartnerError('denied');if(response.status===400)throw new PartnerError('invalid');if(response.status===409){const code=(response.data as {code?:string})?.code;throw new PartnerError(code==='partner_paused'?'paused':code==='partner_capacity'?'capacity':code==='partner_proofRequired'?'proofRequired':'conflict');}
+   if(response.status===403||response.status===404)throw new PartnerError('denied');if(response.status===400)throw new PartnerError('invalid');if(response.status===409){const code=(response.data as {code?:string})?.code;throw new PartnerError(code==='partner_paused'?'paused':code==='partner_capacity'?'capacity':code==='partner_horizon'?'horizon':code==='partner_proofRequired'?'proofRequired':'conflict');}
    const r=response.data as import('../auth/partner.js').PartnerResult;
    if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['partnerInbox','partnerInboxPreferences','partnerDeliveryPreferences','partnerPushStatus','partnerPoints','partnerSeriesList','partnerPolicyList','partnerOptions','partnerRead','partnerList','approvalList','approvalRead'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/partner.js').PartnerResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
@@ -561,7 +561,7 @@ export class PrivateExchangeClient{
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body);
    const response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
    if(response.status===403||response.status===404)throw new ExchangeError('denied');if(response.status===400)throw new ExchangeError('invalid');
-   if(response.status===409){const key=(response.data as {code?:string})?.code;throw new ExchangeError(key==='exchange_paused'?'paused':key==='exchange_capacity'?'capacity':'conflict');}
+   if(response.status===409){const key=(response.data as {code?:string})?.code;throw new ExchangeError(key==='exchange_paused'?'paused':key==='exchange_capacity'?'capacity':key==='exchange_horizon'?'horizon':'conflict');}
    return exchangeOutput(action,input,placement.householdId,response.data);
   }catch(error){if(error instanceof ExchangeError)throw error;throw new ExchangeError('unavailable');}
  }
@@ -576,7 +576,7 @@ export class PrivateAuthorityClient{
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body);
    const response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
    if(response.status===403||response.status===404)throw new AuthorityError('denied');if(response.status===400)throw new AuthorityError('invalid');
-   if(response.status===409){const key=(response.data as {code?:string})?.code;throw new AuthorityError(key==='authority_paused'?'paused':key==='authority_capacity'?'capacity':'conflict');}
+   if(response.status===409){const key=(response.data as {code?:string})?.code;throw new AuthorityError(key==='authority_paused'?'paused':key==='authority_capacity'?'capacity':key==='authority_horizon'?'horizon':'conflict');}
    return authorityOutput(action,input,placement.householdId,response.data);
   }catch(error){if(error instanceof AuthorityError)throw error;throw new AuthorityError('unavailable');}
  }

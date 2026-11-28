@@ -1417,6 +1417,19 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    assert.equal((await wsDb.owner.query("SELECT state FROM pactaris.personal_task_series WHERE household_id=$1 AND state<>'superseded'",[wsHome.householdId])).rows[0].state,'active');
    await wsDb.owner.query("UPDATE pactaris.personal_task_series SET state='stopped' WHERE household_id=$1",[wsHome.householdId]);
    await wsDb.owner.query("UPDATE pactaris.household_entitlements SET capabilities=capabilities||'{\"oneoff.open.max\":100,\"series.active.max\":100}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
+   // Plan horizon: a due date or start date may be set at most this many days ahead; keeping a date is fine.
+   const inDays=(n:number)=>new Date(Date.now()+n*86400_000).toISOString().replace(/\.\d{3}Z$/,'.000Z');
+   const setHorizon=(n:number)=>wsDb.owner.query(`UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{plan.horizon.days}',$2::jsonb) WHERE household_id=$1`,[wsHome.householdId,String(n)]);
+   await setHorizon(14);
+   assert.equal((await wsPost('taskCreate',{fields:{...wsFields,dueAt:inDays(20)},...await wsEpoch()})).data.code,'workspace_horizon');
+   const planned=await wsPost('taskCreate',{fields:{...wsFields,dueAt:inDays(10)},...await wsEpoch()});assert.equal(planned.status,200,JSON.stringify(planned.data));
+   assert.equal((await wsPost('taskUpdate',{taskId:planned.data.taskId,version:'1',fields:{...wsFields,dueAt:inDays(20)},...await wsEpoch()})).data.code,'workspace_horizon');
+   await setHorizon(5);
+   const keptDate=(await wsDb.owner.query('SELECT due_at FROM pactaris.tasks WHERE household_id=$1 AND id=$2',[wsHome.householdId,planned.data.taskId])).rows[0].due_at.toISOString();
+   assert.equal((await wsPost('taskUpdate',{taskId:planned.data.taskId,version:'1',fields:{...wsFields,title:'Renamed, same date',dueAt:keptDate},...await wsEpoch()})).status,200);
+   const later=(await wsDb.owner.query("SELECT to_char((now() AT TIME ZONE 'UTC')::date+20,'YYYY-MM-DD') AS d")).rows[0].d;
+   assert.equal((await wsPost('personalSeriesSave',{fields:seriesFields,schedule:{...schedule,startDate:later},...await wsEpoch()})).data.code,'workspace_horizon');
+   await setHorizon(366);
   }
   for(let i=0;i<11;i++)assert.equal((await wsPost('taskCreate',{fields:{...wsFields,title:'Paged task '+i},...await wsEpoch()})).status,200);
   ws=await wsRead();assert.equal(ws.data.tasks.length,10);assert.ok(ws.data.nextCursor);
@@ -1662,6 +1675,9 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.routines WHERE household_id=$1',[home.householdId])).rows[0].n,1);
    await db.owner.query("UPDATE pactaris.routines SET state='archived' WHERE household_id=$1 AND id=$2",[home.householdId,limitedRoutine]);
    await roomyPlan(db,home.householdId);
+   const farDay=(await db.owner.query("SELECT to_char((now() AT TIME ZONE 'Europe/Amsterdam')::date+30,'YYYY-MM-DD') AS d")).rows[0].d;
+   const farRoutine=await post('routineCreate',{operationId:randomUUID(),kind:'checkin',fields:{...fields,target:1,period:'once',date:farDay,responseType:'rating'}});
+   assert.equal(farRoutine.status,409,JSON.stringify(farRoutine.data));assert.equal(farRoutine.data.code,'routines_horizon');
    const activate=async(id:string)=>{const d=await detail(id);assert.equal((await post('routineActivate',{routineId:id,version:d.version,epoch:d.epoch,memberEpoch:d.memberEpoch})).status,200);return detail(id);};
    const record=(d:any,input:Record<string,unknown>={})=>post('progressRecord',{routineId:d.routineId,version:d.version,revision:d.revision,epoch:d.epoch,memberEpoch:d.memberEpoch,occurredAt:null,entry,...input});
    const nowDay=Number((await db.owner.query("SELECT extract(isodow from now() AT TIME ZONE 'Europe/Amsterdam')::integer AS day")).rows[0].day);
@@ -2597,6 +2613,8 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    await setOneOff(1);
    const concurrentOffers=await Promise.all([post(A,'partnerOffer',await offerBody(A,B)),post(A,'partnerOffer',await offerBody(A,B))]);assert.deepEqual(concurrentOffers.map(r=>r.status).sort(),[200,409]);const atomicTask=concurrentOffers.find(r=>r.status===200)!.data.taskId;
    await setOneOff(100);
+   const farOffer=await offerBody(A,B);
+   assert.equal((await post(A,'partnerOffer',{...farOffer,fields:{...farOffer.fields,dueAt:new Date(Date.now()+40*86400_000).toISOString()}})).data.code,'partner_horizon');
    assert.equal((await move(B,'partnerAccept',atomicTask)).status,200);assert.equal((await move(B,'partnerStart',atomicTask)).status,200);
    const current=await read(B,atomicTask),op=randomUUID(),payload=Buffer.from(JSON.stringify({...transitionBody(current,'partnerSubmit',{note:'Atomic submission'}),operationId:op,membershipId:B.member})),handler=services[place.instanceId===ids[0]?0:1]!;
    const packet=await signer.signCommand(B.account.id,home.householdId,place.instanceId,'partnerSubmit',op,payload.toString());
