@@ -96,11 +96,44 @@ export function PlanPanel({householdId,csrfToken,language,format,timeZone}:{hous
      <button type="submit" disabled={busy}>{t('plan.seePrice')}</button>
     </form>}
   </div>}
+  <FrozenItems householdId={householdId} csrfToken={csrfToken} language={language}/>
   {plan.subscription?.mine&&<button type="button" className="danger" disabled={busy} onClick={()=>{void post('cancel',{},'plan.cancelled');}}>{t('plan.cancelSubscription')}</button>}
   {message&&<p role={alert?'alert':'status'}>{t(message)}</p>}
   <h4>{t('plan.historyTitle')}</h4>
   <History plan={plan} language={language} format={format} timeZone={timeZone}/>
  </section>;
+}
+
+type FrozenGroup={kind:'series'|'habit'|'routine'|'shop';personId:string|null;personName:string|null;limit:number;items:{id:string;title:string;frozen:boolean}[]};
+const kindLabel:Record<FrozenGroup['kind'],MessageKey>={series:'plan.kindSeries',habit:'plan.kindHabit',routine:'plan.kindRoutine',shop:'plan.kindShop'};
+/** Items paused by the plan after a downgrade, and choosing which ones stay active. Only the person
+ *  responsible sees a group: the Dom for Dom-given items, the person for their own. */
+function FrozenItems({householdId,csrfToken,language}:{householdId:string;csrfToken:string;language:string}){
+ const t=createTranslator(language),[groups,setGroups]=useState<FrozenGroup[]>(),[choosing,setChoosing]=useState<string>(),[instead,setInstead]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState<MessageKey>();
+ useEffect(()=>{let live=true;void fetch('/api/households/'+householdId+'/plan/frozen',{cache:'no-store'}).then(r=>r.ok?r.json() as Promise<FrozenGroup[]>:undefined).then(v=>{if(live&&v)setGroups(v);}).catch(()=>undefined);return()=>{live=false;};},[householdId]);
+ async function swap(kind:FrozenGroup['kind'],activateId:string,freezeId:string){
+  if(busy)return;setBusy(true);setMessage(undefined);
+  try{const r=await fetch('/api/households/'+householdId+'/plan/swap',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({kind,activateId,freezeId})});
+   if(r.ok){setGroups(await r.json() as FrozenGroup[]);setChoosing(undefined);setMessage('plan.swapped');}else setMessage('plan.failed');}
+  catch{setMessage('plan.failed');}finally{setBusy(false);}
+ }
+ if(!groups?.length)return message?<p role="status">{t(message)}</p>:null;
+ return <div className="plan-frozen">
+  <h4>{t('plan.frozenTitle')}</h4>
+  <p className="muted">{t('plan.frozenHint')}</p>
+  {groups.map(g=>{const active=g.items.filter(i=>!i.frozen);return <section key={g.kind+':'+(g.personId??'')} className="plain">
+   <p><strong>{g.personName?t('plan.frozenGroup',{kind:t(kindLabel[g.kind]),name:g.personName,limit:String(g.limit)}):t('plan.frozenGroupDynamic',{kind:t(kindLabel[g.kind]),limit:String(g.limit)})}</strong></p>
+   <ul className="card-list plan-frozen-list">{g.items.map(i=><li key={i.id}>
+    <div className="row"><span className="grow">{i.title}{i.frozen&&<span className="muted"> {t('plan.frozenItem')}</span>}</span>
+     {i.frozen&&active.length>0&&choosing!==i.id&&<button type="button" className="secondary" disabled={busy} onClick={()=>{setChoosing(i.id);setInstead(active[active.length-1]!.id);}}>{t('plan.activate')}</button>}</div>
+    {choosing===i.id&&<form className="plan-swap" onSubmit={e=>{e.preventDefault();void swap(g.kind,i.id,instead);}}>
+     <label>{t('plan.activateInstead')}<select value={instead} disabled={busy} onChange={e=>setInstead(e.target.value)}>{active.map(a=><option key={a.id} value={a.id}>{a.title}</option>)}</select></label>
+     <div className="calendar-actions"><button type="submit" disabled={busy||!instead}>{t('plan.activate')}</button>
+      <button type="button" className="secondary" disabled={busy} onClick={()=>setChoosing(undefined)}>{t('plan.swapCancel')}</button></div>
+    </form>}</li>)}</ul>
+  </section>;})}
+  {message&&<p role={message==='plan.failed'?'alert':'status'}>{t(message)}</p>}
+ </div>;
 }
 
 /** Today: a short notice when the dynamic's plan ends within a week and does not renew. */

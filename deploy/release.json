@@ -729,6 +729,13 @@
       "path": "migrations/instance/0072_plan_horizon.sql",
       "sha256": "3789e1ee41b0ea3f6e40c3f5fedbfd23b972513352213d69f9923cd84c429626",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0073_plan_freeze",
+      "path": "migrations/instance/0073_plan_freeze.sql",
+      "sha256": "89137e048e3d25e8bc53141113e887be759aea3dee8ff6683270f0bb6e97f216",
+      "backwardCompatible": true
     }
   ]
 }

@@ -2272,6 +2272,42 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const subUsage=(await api(base+'/plan/usage','GET',undefined,D.session)).data;assert.ok(subUsage['habits.assigned.max'].used>=1);
      assert.equal((await api(base+'/plan/usage?x=1','GET',undefined,D.session)).status,400);
      await db.owner.query(`UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{shop.items.max}','100') WHERE household_id=$1`,[home.householdId]);
+     // Downgrade: the newest habits and shop listings above the new limits pause; the oldest stay. Only the Dom
+     // who set them chooses; a frozenOne habit cannot be resumed or edited; room brings items back by themselves.
+     const applyCaps=(caps:Record<string,number>)=>db.owner.query(`SELECT pactaris.entitlements_apply($1,$2,(SELECT plan_version+1 FROM pactaris.household_entitlements WHERE household_id=$2),$3::jsonb)`,[place.instanceId,home.householdId,JSON.stringify(caps)]);
+     const habitsOf=async()=>(await db.owner.query("SELECT id,state,version::text,plan_frozen,plan_frozen_state,next_period FROM pactaris.authority_habits WHERE household_id=$1 AND subject_id=$2 AND state<>'archived' ORDER BY created_at,id",[home.householdId,D.member])).rows;
+     await db.owner.query("UPDATE pactaris.authority_habits SET state='active' WHERE household_id=$1 AND subject_id=$2 AND state='paused'",[home.householdId,D.member]);
+     await db.owner.query(`UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{habits.assigned.max}','100') WHERE household_id=$1`,[home.householdId]);
+     for(const title of ['Plan fixture one','Plan fixture two'])assert.equal((await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:{...habitFields,title}})).status,200);
+     const habitsBefore=await habitsOf();assert.ok(habitsBefore.length>=2,'fixture has several habits for the sub');
+     await applyCaps({'habits.assigned.max':1,'shop.items.max':1});
+     const frozenHabits=await habitsOf();
+     assert.equal(frozenHabits[0].plan_frozen,false);assert.equal(frozenHabits[0].state,'active');
+     for(const x of frozenHabits.slice(1)){assert.equal(x.plan_frozen,true);assert.equal(x.state,'paused');assert.equal(x.plan_frozen_state,'active');}
+     assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.shop_listings WHERE household_id=$1',[home.householdId])).rows[0].n,1);
+     const frozenListing=(await db.owner.query('SELECT item_id FROM pactaris.shop_listings_frozen WHERE household_id=$1',[home.householdId])).rows[0].item_id;
+     assert.ok(!(await shop(D)).offers.some((o:any)=>o.itemId===frozenListing),'a frozenOne shop item is not offered');
+     assert.notEqual((await au(D,'shopBuy',{itemId:frozenListing,version:'1'})).status,200);
+     const frozenOne=frozenHabits[1]!;
+     assert.equal((await au(A,'habitState',{habitId:frozenOne.id,version:frozenOne.version,state:'active'})).data.code,'authority_capacity');
+     const domView=await api(base+'/plan/frozen','GET',undefined,A.session);assert.equal(domView.status,200,domView.body);
+     const habitGroup=domView.data.find((g:any)=>g.kind==='habit');assert.ok(habitGroup);assert.equal(habitGroup.personId,D.member);assert.equal(habitGroup.limit,1);
+     assert.ok(!(await api(base+'/plan/frozen','GET',undefined,D.session)).data.some((g:any)=>g.kind==='habit'),'the sub does not choose for Dom-set habits');
+     assert.equal((await api(base+'/plan/swap','POST',{kind:'habit',activateId:frozenOne.id,freezeId:frozenHabits[0].id},D.session)).status,404);
+     const swapped=await api(base+'/plan/swap','POST',{kind:'habit',activateId:frozenOne.id,freezeId:frozenHabits[0].id},A.session);assert.equal(swapped.status,200,swapped.body);
+     const afterSwap=await habitsOf();
+     assert.equal(afterSwap.find((x:any)=>x.id===frozenOne.id).plan_frozen,false);assert.equal(afterSwap.find((x:any)=>x.id===frozenOne.id).state,'active');
+     assert.equal(afterSwap.find((x:any)=>x.id===frozenHabits[0].id).plan_frozen,true);
+     assert.equal((await api(base+'/plan/swap','POST',{kind:'habit',activateId:frozenHabits[0].id,freezeId:frozenHabits[0].id},A.session)).status,400);
+     // Archiving the active habit makes room: the oldest frozenOne habit comes back by itself.
+     const activeNow=afterSwap.find((x:any)=>!x.plan_frozen);
+     assert.equal((await au(A,'habitState',{habitId:activeNow.id,version:activeNow.version,state:'archived'})).status,200);
+     const afterRoom=await habitsOf();assert.equal(afterRoom.filter((x:any)=>!x.plan_frozen).length,1);assert.equal(afterRoom.find((x:any)=>!x.plan_frozen).id,frozenHabits[0].id);
+     // An upgrade brings everything back.
+     await applyCaps({'habits.assigned.max':100,'shop.items.max':100});
+     assert.ok((await habitsOf()).every((x:any)=>!x.plan_frozen));
+     assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.shop_listings_frozen WHERE household_id=$1',[home.householdId])).rows[0].n,0);
+     assert.ok((await shop(D)).offers.some((o:any)=>o.itemId===frozenListing),'the shop item is offered again');
      assert.equal((await au(A,'shopSave',{itemId:null,version:null,fields:{kind:'consequence',title:'Lines',description:'',points:0},listed:true,autoGrant:false,weeklyLimit:null})).status,400);
      assert.equal((await au(A,'shopSave',{itemId:null,version:null,fields:{kind:'consequence',title:'Lines',description:'Fifty',points:0},listed:false,autoGrant:false,weeklyLimit:null})).status,200);
      assert.ok((await shop(A)).items.some((i:any)=>i.kind==='consequence'&&i.title==='Lines'));
