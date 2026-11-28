@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
 import {calendarMarkKind,type CalendarMarkKind,type Planner,type PlannerItem,type PlannerKind} from '../../../packages/auth/workspace.js';
 import {Icon} from './navigation.js';
+import {SessionDetail,SessionEditor} from './play-sessions.js';
 
 // Planner (docs/PLANNER.md): everything with a date for one person, read-only. Dates are local
 // calendar days in the dynamic's time zone; the server limits a request to 42 days.
@@ -26,9 +27,9 @@ const monthStart=(day:string)=>day.slice(0,8)+'01';
 const asDate=(day:string)=>new Date(day+'T12:00:00Z');
 
 const kindLabel:Record<PlannerKind,MessageKey>={task:'planner.kindTask',taskSeries:'planner.kindTask',partnerTask:'planner.kindShared',partnerSeries:'planner.kindShared',
- habit:'planner.kindHabit',routineHabit:'planner.kindHabit',ritual:'planner.kindRitual',checkin:'planner.kindCheckin'};
+ habit:'planner.kindHabit',routineHabit:'planner.kindHabit',ritual:'planner.kindRitual',checkin:'planner.kindCheckin',session:'planner.kindSession'};
 export function plannerTarget(item:PlannerItem,self:boolean):PlannerTarget{
- if(item.kind==='task'||item.kind==='taskSeries')return 'tasks';
+ if(item.kind==='task'||item.kind==='taskSeries'||item.kind==='session')return 'tasks';
  if(item.kind==='partnerTask'||item.kind==='partnerSeries')return 'participantTasks';
  if(item.kind==='habit')return self?'home':'authority';
  return item.kind==='routineHabit'?'habits':'checkins';
@@ -106,10 +107,12 @@ export function PlannerView({householdId,csrfToken,language,format,timeZone,relo
  const days=Array.from({length:range.days-lookBack},(_,i)=>addDays(range.from,i+lookBack));
  const overdue=lookBack?(data?.items??[]).filter(i=>i.day<days[0]!&&i.overdue):[];
  const self=!person||data?.people.find(p=>p.id===person)?.self===true;
- const open=(item:PlannerItem)=>onOpen(plannerTarget(item,self));
+ const [sessionOpen,setSessionOpen]=useState<string>();
+ // Play sessions open here, in the calendar; everything else goes to its own section.
+ const open=(item:PlannerItem)=>{if(item.kind==='session')setSessionOpen(item.id);else onOpen(plannerTarget(item,self));};
  // Own one-off tasks in your own calendar, and tasks you gave in the calendar of the person who has them.
  const mover:Mover={today,dragging,drag:setDragging,
-  can:item=>!item.projected&&!!item.at&&!['done','declined','cancelled','archived'].includes(item.state)&&(item.kind==='task'?self:item.kind==='partnerTask'&&!self),
+  can:item=>!item.projected&&!!item.at&&!['done','declined','cancelled','archived'].includes(item.state)&&(item.kind==='task'?self:item.kind==='session'?self&&item.state==='planned':item.kind==='partnerTask'&&!self),
   to:(item,day)=>{if(day===item.day)return;setMoveMessage(undefined);
    void fetch('/api/households/'+householdId+'/planner/move',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({kind:item.kind,itemId:item.id,day,timeZone})})
     .then(async r=>{if(r.ok){setMoveMessage('planner.moved');setTick(v=>v+1);return;}
@@ -141,7 +144,11 @@ export function PlannerView({householdId,csrfToken,language,format,timeZone,relo
    <strong aria-live="polite">{title}</strong>
    <button type="button" className="icon-button" aria-label={t('planner.next')} onClick={()=>move(1)}><Icon name="chevron"/></button>
    <button type="button" className="link-button" disabled={anchor===today} onClick={()=>{setAnchor(today);setSelected(undefined);}}>{t('planner.today')}</button>
+   {self&&<button type="button" className="secondary planner-add-session" onClick={()=>setSessionOpen('new')}><Icon name="plus"/>{t('sessions.add')}</button>}
   </div>
+  {sessionOpen==='new'&&<SessionEditor householdId={householdId} csrfToken={csrfToken} language={language} onClose={()=>setSessionOpen(undefined)} onSaved={id=>{setTick(v=>v+1);setSessionOpen(id);}}/>}
+  {sessionOpen&&sessionOpen!=='new'&&<SessionDetail householdId={householdId} csrfToken={csrfToken} language={language} format={format} timeZone={timeZone} sessionId={sessionOpen}
+   onClose={()=>setSessionOpen(undefined)} onChanged={()=>setTick(v=>v+1)}/>}
   {failed&&<p role="alert">{t('planner.failed')}</p>}
   {markError&&<p role="alert">{t('calendar.failed')}</p>}
   {moveMessage&&<p role={moveMessage==='planner.moved'?'status':'alert'}>{t(moveMessage)}</p>}

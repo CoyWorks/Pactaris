@@ -279,3 +279,4 @@ main.operator{max-width:64rem}
 .planner-row.movable{cursor:grab}.planner-row.dragging{opacity:.5}
 .planner-day.drop-target,.planner-cell.drop-target{outline:2px dashed var(--accent,#6b4fd1);outline-offset:2px;border-radius:12px}
 .planner-row.movable{flex-wrap:wrap}.planner-move-date{display:grid;gap:.25rem;flex:1 0 100%;margin:.25rem 0 .5rem}
+.note-text{white-space:pre-wrap;color:var(--text)}.planner-add-session{display:inline-flex;align-items:center;gap:.25rem;margin-left:auto}

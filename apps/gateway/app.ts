@@ -901,7 +901,7 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
       const action=req.params.action;if(!uuid(req.params.householdId)||!isWorkspaceAction(action)||action==='workspaceRead'||action==='workspaceUnread'||action==='workspaceChanges')throw new WorkspaceError('invalid');
       const input=workspaceInput(action,req.body);if(!workspace)throw new WorkspaceError('unavailable');
-      if(action!=='taskRead'&&action!=='personalSeriesList'&&!await store.throttle('workspace:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
+      if(action!=='taskRead'&&action!=='personalSeriesList'&&action!=='sessionRead'&&!await store.throttle('workspace:'+session.account.id)){res.status(429).json({code:'rate_limited',messageKey:'errors.rateLimited'});return;}
       res.json(await workspace.execute(session.account.id,req.params.householdId,action,input));
     }catch(error){workspaceFailure(res,error);}
   });

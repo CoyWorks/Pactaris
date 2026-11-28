@@ -43,3 +43,5 @@ The gateway records an acknowledgement per Instance. Unavailable Instances are r
 - The operator console does not yet show pending deletions; use the `account.deletion_deferred` log and `pactaris.account_deletions` table.
 
 Migrations `instance/0034_account_erasure` and `gateway/0019_account_deletion` are additive. No new configuration is needed.
+
+- Play sessions (0075): see [PLAY_SESSIONS.md](PLAY_SESSIONS.md#export-and-deletion).

@@ -568,7 +568,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const exported:string[]=[];await streamAccountExport((await store.session('doomed-export',60))!,gatewayDb.pool,signer,async chunk=>{exported.push(chunk);});
   const exportData=JSON.parse(exported.join(''));
   assert.equal(exportData.version,2);assert.equal(exportData.complete,true);assert.equal(exportData.unavailableSources,0);
-  assert.deepEqual(Object.keys(exportData.sections),['memberships','limits','tasks','documents','acknowledgements','routines','catalog','partnerTasks','series','personalSeries','checkins','relationships','agreements','redemptions','inbox','exchanges','authority']);
+  assert.deepEqual(Object.keys(exportData.sections),['memberships','limits','tasks','documents','acknowledgements','routines','catalog','partnerTasks','series','personalSeries','checkins','relationships','agreements','redemptions','inbox','exchanges','authority','playSessions']);
   assert.ok(exportData.sections.memberships.some((m:{householdId:string;household?:{name:string}})=>m.householdId===doomedHousehold&&m.household?.name==='Deletion fixture'));
   assert.ok(exportData.sections.tasks.some((t:{title:string})=>t.title==='Private deletion fixture'));
   assert.ok(!exported.join('').includes('Partner private fixture'));
@@ -2159,6 +2159,46 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await moveItem(A,{kind:'task',itemId:ownTask,day:dayPlus(2),timeZone:'UTC'})).status,404);
      await db.owner.query("UPDATE pactaris.partner_tasks SET state='cancelled' WHERE household_id=$1 AND id=$2",[home.householdId,given.data.taskId]);
      await db.owner.query("UPDATE pactaris.tasks SET state='archived' WHERE household_id=$1 AND id=$2",[home.householdId,ownTask]);
+     // Play sessions: private to the writer; linked members may view, or view and write their own part.
+     const ws=(p:Person,action:string,body:Record<string,unknown>)=>api(base+'/workspace/'+action,'POST',{operationId:randomUUID(),...body},p.session);
+     const sessionFields={title:'Rope evening',startsAt:dayPlus(2)+'T19:00:00.000Z',durationMinutes:90,location:'Home',withWhom:'Sam (not in the app)'};
+     const sessionOp=randomUUID();
+     const created=await api(base+'/workspace/sessionSave','POST',{operationId:sessionOp,sessionId:null,version:null,fields:sessionFields,members:[{membershipId:D.member,canEdit:true}]},A.session);
+     assert.equal(created.status,200,created.body);assert.equal(created.data.sessionId,sessionOp);
+     assert.equal((await api(base+'/workspace/sessionSave','POST',{operationId:sessionOp,sessionId:null,version:null,fields:sessionFields,members:[]},A.session)).data.sessionId,sessionOp);
+     assert.equal((await ws(A,'sessionNote',{sessionId:sessionOp,section:'preparation',text:'Safeword red. Check in halfway.'})).status,200);
+     const inPlanner=async(p:Person)=>(await planner(p,'')).data.planner.items.find((x:any)=>x.kind==='session'&&x.id===sessionOp);
+     const ownSession=await inPlanner(A);assert.equal(ownSession.state,'planned');assert.equal(ownSession.minutes,90);
+     assert.equal((await inPlanner(D)).state,'shared');assert.equal(await inPlanner(B),undefined);
+     assert.equal((await ws(B,'sessionRead',{sessionId:sessionOp})).status,404);
+     const asSub=await ws(D,'sessionRead',{sessionId:sessionOp});assert.equal(asSub.status,200,asSub.body);
+     assert.equal(asSub.data.session.access,'edit');assert.equal(asSub.data.session.preparation,'Safeword red. Check in halfway.');assert.equal(asSub.data.session.withWhom,'Sam (not in the app)');
+     assert.equal((await ws(D,'sessionNote',{sessionId:sessionOp,section:'aftercare',text:'Felt good; water and a blanket.'})).status,200);
+     const ownerRead=(await ws(A,'sessionRead',{sessionId:sessionOp})).data.session;
+     assert.equal(ownerRead.members[0].aftercare,'Felt good; water and a blanket.');assert.equal(ownerRead.access,'owner');
+     assert.equal((await ws(D,'sessionSave',{sessionId:sessionOp,version:ownerRead.version,fields:{...sessionFields,title:'Changed by sub'},members:[]})).status,404);
+     assert.equal((await ws(A,'sessionSave',{sessionId:null,version:null,fields:{...sessionFields,durationMinutes:3},members:[]})).status,400);
+     assert.equal((await ws(A,'sessionNote',{sessionId:sessionOp,section:'preparation',text:'x'.repeat(2001)})).status,400);
+     // View only: no own part; then unlinked: gone from the sub's calendar.
+     assert.equal((await ws(A,'sessionSave',{sessionId:sessionOp,version:ownerRead.version,fields:sessionFields,members:[{membershipId:D.member,canEdit:false}]})).status,200);
+     assert.equal((await ws(D,'sessionRead',{sessionId:sessionOp})).data.session.access,'view');
+     assert.equal((await ws(D,'sessionNote',{sessionId:sessionOp,section:'aftercare',text:'Again'})).status,404);
+     assert.equal((await ws(A,'sessionSave',{sessionId:sessionOp,version:String(Number(ownerRead.version)+1),fields:sessionFields,members:[]})).status,200);
+     assert.equal((await ws(D,'sessionRead',{sessionId:sessionOp})).status,404);assert.equal(await inPlanner(D),undefined);
+     // Moving keeps the time; only the writer moves it; sessions ignore the plan horizon.
+     assert.equal((await moveItem(A,{kind:'session',itemId:sessionOp,day:dayPlus(30),timeZone:'UTC'})).status,204);
+     assert.equal((await ws(A,'sessionRead',{sessionId:sessionOp})).data.session.startsAt,dayPlus(30)+'T19:00:00.000Z');
+     assert.equal((await moveItem(D,{kind:'session',itemId:sessionOp,day:dayPlus(3),timeZone:'UTC'})).status,404);
+     assert.equal((await api(base+'/calendar-mark','POST',{kind:'session',resourceId:sessionOp,hidden:true},A.session)).status,200);
+     assert.equal((await ws(A,'sessionRead',{sessionId:sessionOp})).data.session.hidden,true);
+     // Personal export: the writer's sessions with their links, never other people's parts.
+     const exported=(await db.owner.query("SELECT pactaris.account_export_page($1,$2,'playSessions',NULL,4) AS r",[place.instanceId,A.account.id])).rows[0].r;
+     const writerRow=exported.records.find((x:any)=>x.role==='writer'&&x.session.id===sessionOp);assert.ok(writerRow);assert.equal(writerRow.session.preparation,'Safeword red. Check in halfway.');
+     assert.ok(!JSON.stringify(exported).includes('water and a blanket'));
+     assert.equal((await db.owner.query("SELECT pactaris.account_export_page($1,$2,'tasks',NULL,4) AS r",[place.instanceId,A.account.id])).rows[0].r.section,'tasks');
+     assert.equal((await ws(D,'sessionDelete',{sessionId:sessionOp})).status,404);
+     assert.equal((await ws(A,'sessionDelete',{sessionId:sessionOp})).status,200);
+     assert.equal((await ws(A,'sessionRead',{sessionId:sessionOp})).status,404);
      // Calendar subscription: a private link per account and dynamic; hidden titles show as "Pactaris".
      const habitId=habit.data.resourceId;
      assert.equal((await api(base+'/calendar-mark','POST',{kind:'habit',resourceId:habitId,hidden:true},B.session)).status,404);

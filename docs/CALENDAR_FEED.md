@@ -53,3 +53,5 @@ The feed is the account's own planner ([PLANNER.md](PLANNER.md)) from 7 days ago
   - `POST /api/households/:id/calendar-mark {kind,resourceId,hidden}`
 - Workspace actions: `plannerRead` now returns `hidden` per item, and the new action `calendarMark`.
 - Code: `apps/gateway/calendar-feed.ts` (`CalendarFeeds`, `icsCalendar`).
+
+- **Play sessions** ([PLAY_SESSIONS.md](PLAY_SESSIONS.md)) appear with their real duration. Other timed items use 30 minutes.
