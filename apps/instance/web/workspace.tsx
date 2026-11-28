@@ -1,3 +1,4 @@
+import {PlanHorizonProvider,useHorizonDateTime} from './plan-horizon.js';
 import {useWorkspaceChanges} from './workspace-changes.js';
 import {PersonalSeriesPanel} from './personal-series.js';
 import {SharedCheckins} from './shared-checkins.js';
@@ -47,7 +48,11 @@ const priorities:Record<TaskFields['priority'],MessageKey>={low:'workspace.prior
 const filters:Record<string,MessageKey>={open:'workspace.open',done:'workspace.done',archived:'workspace.archived'};
 const errorKey=(key:unknown):MessageKey=>(['workspace.invalid','workspace.denied','workspace.conflict','workspace.capacity','workspace.horizon','workspace.paused','workspace.unavailable','errors.rateLimited','errors.request'] as unknown[]).includes(key)?key as MessageKey:'workspace.unavailable';
 const blank=():TaskFields=>({title:'',description:'',priority:'normal',dueAt:null,assignment:'unassigned'});
-export function HouseholdWorkspace({householdId,session,language,format,avatar,onLeave,children}:{householdId:string;session:{account:{id:string;displayName:string};csrfToken:string};language:string;format:string;avatar:React.ReactNode;onLeave:()=>void;children:React.ReactNode}){
+/** The dynamic's workspace, with its plan horizon available to every date field inside. */
+export function HouseholdWorkspace(props:Parameters<typeof HouseholdWorkspaceView>[0]){
+ return <PlanHorizonProvider householdId={props.householdId}><HouseholdWorkspaceView {...props}/></PlanHorizonProvider>;
+}
+function HouseholdWorkspaceView({householdId,session,language,format,avatar,onLeave,children}:{householdId:string;session:{account:{id:string;displayName:string};csrfToken:string};language:string;format:string;avatar:React.ReactNode;onLeave:()=>void;children:React.ReactNode}){
  const {search}=useLocation(),requested=new URLSearchParams(search).get('view') as View|null,view:View=requested&&views.includes(requested)?requested:'home';
  const [exchangeReload,setExchangeReload]=useState(0),[termsReload,setTermsReload]=useState(0);
  const [authorityReload,setAuthorityReload]=useState(0);
@@ -306,11 +311,12 @@ export function HouseholdWorkspace({householdId,session,language,format,avatar,o
 function TaskEditor({fields,language,disabled,onCancel,onSave,onArchive,isNew=false}:{fields:TaskFields;language:string;disabled:boolean;onCancel:()=>void;onSave:(fields:TaskFields,hide:boolean)=>void;onArchive?:()=>void;isNew?:boolean}){
  const t=createTranslator(language),[value,setValue]=useState(fields),[hide,setHide]=useState(false);
  const dateInput=(date:string|null)=>{if(!date)return '';const d=new Date(date),local=new Date(d.getTime()-d.getTimezoneOffset()*60000);return local.toISOString().slice(0,16);};
+ const maxDue=useHorizonDateTime(dateInput(fields.dueAt));
  return <form className="task-editor" onSubmit={e=>{e.preventDefault();onSave({...value,title:value.title.trim(),description:value.description.trim()},hide);}}><h3>{t('workspace.taskDetails')}</h3>
   <label>{t('workspace.taskTitle')}<input required maxLength={120} disabled={disabled} value={value.title} onChange={e=>setValue(v=>({...v,title:e.target.value}))}/></label>
   <label>{t('workspace.description')}<textarea maxLength={1000} disabled={disabled} value={value.description} onChange={e=>setValue(v=>({...v,description:e.target.value}))}/></label>
   <label>{t('workspace.priority')}<select disabled={disabled} value={value.priority} onChange={e=>setValue(v=>({...v,priority:e.target.value as TaskFields['priority']}))}>{Object.keys(priorities).map(p=><option key={p} value={p}>{t(priorities[p as TaskFields['priority']])}</option>)}</select></label>
-  <label>{t('workspace.dueAt')}<input type="datetime-local" disabled={disabled} value={dateInput(value.dueAt)} onChange={e=>{const date=e.target.value?new Date(e.target.value):null;if(!date||Number.isFinite(date.getTime()))setValue(v=>({...v,dueAt:date?.toISOString()??null}));}}/></label>
+  <label>{t('workspace.dueAt')}<input type="datetime-local" max={maxDue} disabled={disabled} value={dateInput(value.dueAt)} onChange={e=>{const date=e.target.value?new Date(e.target.value):null;if(!date||Number.isFinite(date.getTime()))setValue(v=>({...v,dueAt:date?.toISOString()??null}));}}/></label>
   <label>{t('workspace.assignment')}<select disabled={disabled} value={value.assignment} onChange={e=>setValue(v=>({...v,assignment:e.target.value as TaskFields['assignment']}))}><option value="unassigned">{t('workspace.unassigned')}</option><option value="self">{t('workspace.self')}</option></select></label>
   {isNew&&<CalendarPrivacyField language={language} checked={hide} disabled={disabled} onChange={setHide}/>}
   <button type="submit" disabled={disabled}>{t('workspace.saveTask')}</button><button type="button" disabled={disabled} onClick={onCancel}>{t('onboarding.cancel')}</button>{onArchive&&<button type="button" className="danger" disabled={disabled} onClick={onArchive}>{t('workspace.archive')}</button>}

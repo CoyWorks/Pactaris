@@ -93,6 +93,7 @@ The values live in `packages/auth/plans.ts`.
   - The check runs only when the date is set or moved. A date set earlier stays after a downgrade, and saving an item with its date unchanged is never refused.
   - Generated occurrences are not checked.
   - Each module answers with its own `*_horizon` error.
+  - Date fields in the app use the horizon as their `max` (`apps/instance/web/plan-horizon.tsx`), so a date beyond the plan cannot be picked. A date that was already further ahead stays a valid value.
 - **No history limit** (owner decision, 28 November 2026). `history.days` was dropped.
   - Hiding history saves no space, because nothing is deleted.
   - It would mean rewriting most read functions, and balances must keep counting everything.

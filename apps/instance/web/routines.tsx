@@ -1,3 +1,4 @@
+import {useHorizonDate} from './plan-horizon.js';
 import {CalendarPrivacyField,markCalendar} from './planner.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {Hint,Layer,useFleetingNotice} from './navigation.js';
@@ -17,6 +18,7 @@ export function RoutinesPanel({householdId,session,language,format,timeZone,sect
  useFleetingNotice(notice,()=>setNotice(undefined));
  const [trendRoutineId,setTrendRoutineId]=useState<string>();
  const showTrend=detail?.routineId!==undefined&&trendRoutineId===detail.routineId;
+ const maxOnce=useHorizonDate(editor?.routineId&&detail?.routineId===editor.routineId?detail.date:null);
  const writing=useRef(false),base='/api/households/'+householdId+'/routines';
  async function read(id:string,selectedDay:string|null=null,revision?:string,after?:string,signal?:AbortSignal){
   const r=await fetch(base+'/routineRead',{method:'POST',signal,cache:'no-store',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({operationId:crypto.randomUUID(),routineId:id,day:selectedDay,...(revision?{revision}:{}),...(after?{after}:{}),...(trendRoutineId===id&&kind==='habit'?{includeTrend:true}:{})})}),data=await r.json();if(!r.ok)throw data;return data.routine as RoutineDetail;
@@ -61,7 +63,7 @@ export function RoutinesPanel({householdId,session,language,format,timeZone,sect
    {kind==='habit'&&editor.fields.period==='daily'&&<fieldset disabled={blocked}><legend>{t('partner.weekdays')}</legend>
     {(['partner.monday','partner.tuesday','partner.wednesday','partner.thursday','partner.friday','partner.saturday','partner.sunday'] as const).map((key,index)=><label className="check" key={key}><input type="checkbox" checked={(editor.fields.weekdays??[1,2,3,4,5,6,7]).includes(index+1)} onChange={e=>{const days=editor.fields.weekdays??[1,2,3,4,5,6,7];setEditor({...editor,fields:{...editor.fields,weekdays:e.target.checked?[...days,index+1].sort((a,b)=>a-b):days.filter(d=>d!==index+1)}});}}/>{t(key)}</label>)}
    </fieldset>}
-   {editor.fields.period==='once'&&<label>{t('routines.onceDate')}<input required type="date" disabled={blocked} value={editor.fields.date??''} onChange={e=>setEditor({...editor,fields:{...editor.fields,date:e.target.value}})}/></label>}
+   {editor.fields.period==='once'&&<label>{t('routines.onceDate')}<input required type="date" max={maxOnce} disabled={blocked} value={editor.fields.date??''} onChange={e=>setEditor({...editor,fields:{...editor.fields,date:e.target.value}})}/></label>}
    {kind==='habit'?<><label>{t('routines.goalMode')}<select disabled={blocked} value={editor.fields.mode} onChange={e=>setEditor({...editor,fields:{...editor.fields,mode:e.target.value as RoutineFields['mode']}})}><option value="minimum">{t('routines.minimum')}</option><option value="maximum">{t('routines.maximum')}</option></select></label><label>{t('routines.target')}<input type="number" min={1} max={10000} required disabled={blocked} value={editor.fields.target} onChange={e=>setEditor({...editor,fields:{...editor.fields,target:Number(e.target.value)}})}/></label></>:kind==='checkin'&&<label>{t('routines.responseType')}<select disabled={blocked} value={editor.fields.responseType} onChange={e=>setEditor({...editor,fields:{...editor.fields,responseType:e.target.value as RoutineFields['responseType']}})}>{Object.keys(responseKeys).map(r=><option key={r} value={r}>{t(responseKeys[r]??'routines.text')}</option>)}</select></label>}
    {!editor.routineId&&<CalendarPrivacyField language={language} checked={hideTitle} disabled={blocked} onChange={setHideTitle}/>}
    <button type="submit" disabled={blocked||(kind==='habit'&&editor.fields.period==='daily'&&editor.fields.weekdays?.length===0)}>{t('library.saveDraft')}</button><button type="button" onClick={()=>setEditor(undefined)}>{t('onboarding.cancel')}</button>
