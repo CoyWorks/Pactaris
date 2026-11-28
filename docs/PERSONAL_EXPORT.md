@@ -38,3 +38,5 @@ The gateway records only the account, time and completeness of each export in `p
 - Content other participants wrote in shared records (their task submissions or decisions) appears only where it is part of a shared record the person participates in.
 
 The earlier version 1 preview (`personalExport` household command) remains in the Instance for compatibility but is no longer used by the gateway when the complete export is available.
+
+- Play sessions (0075): see [PLAY_SESSIONS.md](PLAY_SESSIONS.md#export-and-deletion).

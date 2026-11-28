@@ -59,7 +59,7 @@ export function icsCalendar(items:PlannerItem[],householdId:string,appOrigin:str
   const uid=`${item.kind}-${item.id}-${item.day}@pactaris.app`;
   if(seen.has(uid))continue;seen.add(uid);
   lines.push('BEGIN:VEVENT','UID:'+uid,'DTSTAMP:'+stamp(now));
-  if(item.at){const start=new Date(item.at);lines.push('DTSTART:'+stamp(start),'DTEND:'+stamp(new Date(start.getTime()+30*60_000)));}
+  if(item.at){const start=new Date(item.at);lines.push('DTSTART:'+stamp(start),'DTEND:'+stamp(new Date(start.getTime()+(item.minutes??30)*60_000)));}
   else lines.push('DTSTART;VALUE=DATE:'+ymd(item.day),'DTEND;VALUE=DATE:'+ymd(nextDay(item.day)));
   lines.push('SUMMARY:'+escapeText(item.hidden?hiddenTitle:item.title),'TRANSP:'+(item.at?'OPAQUE':'TRANSPARENT'),
    'URL:'+escapeText(`${appOrigin}/households/${householdId}?view=calendar`),'END:VEVENT');

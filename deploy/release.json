@@ -743,6 +743,13 @@
       "path": "migrations/instance/0074_planner_move.sql",
       "sha256": "9268fe2d88bc2eeea02b4e8510e458e4605c103e561b80f15b2dba2fcd74abcd",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0075_play_sessions",
+      "path": "migrations/instance/0075_play_sessions.sql",
+      "sha256": "e5317104f21203c30c3d1c31c1146d9b322f6a59f5d78433a2bc1dec38d6f406",
+      "backwardCompatible": true
     }
   ]
 }
