@@ -30,8 +30,8 @@ export class InstanceWorkspace{
     const row=result.rows[0];if(!row)throw new WorkspaceError('unavailable');await db.query('COMMIT');
     return {householdId,operationId:verified.operationId,actorMembershipId:input.membershipId,status:'listed',changeCursor:row.changes.cursor,changed:row.changes.changed};
    }
-   if(action==='plannerRead'||action==='calendarMark'||action==='planUsage'||action==='planFrozenList'||action==='planSwap'){
-    const fn={plannerRead:'planner_read',calendarMark:'calendar_mark',planUsage:'plan_usage',planFrozenList:'plan_frozen_list',planSwap:'plan_swap'}[action];
+   if(action==='plannerRead'||action==='calendarMark'||action==='planUsage'||action==='planFrozenList'||action==='planSwap'||action==='plannerMove'){
+    const fn={plannerRead:'planner_read',calendarMark:'calendar_mark',planUsage:'plan_usage',planFrozenList:'plan_frozen_list',planSwap:'plan_swap',plannerMove:'planner_move'}[action];
     const result=await db.query(`SELECT pactaris.${fn}($1,$2,$3,$4) AS result`,[householdId,this.config.instanceId,verified.accountId,input]);
     await db.query('COMMIT');return result.rows[0].result as WorkspaceResult;
    }

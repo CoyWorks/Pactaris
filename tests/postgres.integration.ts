@@ -2141,6 +2141,24 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      assert.equal((await planner(B,'&person='+D.member)).status,404);
      assert.equal((await api(base+'/planner?from='+plannerDay+'&days=60&timeZone=UTC','GET',undefined,D.session)).status,400);
      assert.equal((await api(base+'/planner?from=2026-02-30&days=7&timeZone=UTC','GET',undefined,D.session)).status,400);
+     // Moving to another day: the time of day stays; only one's own one-off tasks and the tasks one gave move.
+     const dayPlus=(n:number)=>new Date(Date.parse(plannerDay+'T00:00:00Z')+n*86400_000).toISOString().slice(0,10);
+     const moveItem=(p:Person,body:Record<string,unknown>)=>api(base+'/planner/move','POST',body,p.session);
+     const given=await direct({...fields,dueAt:dayPlus(1)+'T15:30:00.000Z'});assert.equal(given.status,200,JSON.stringify(given.data));
+     assert.equal((await moveItem(A,{kind:'partnerTask',itemId:given.data.taskId,day:dayPlus(3),timeZone:'UTC'})).status,204);
+     assert.equal((await read(D,given.data.taskId)).dueAt,dayPlus(3)+'T15:30:00.000Z');
+     assert.ok((await db.owner.query("SELECT 1 FROM pactaris.partner_events WHERE household_id=$1 AND task_id=$2 AND action='partnerMove'",[home.householdId,given.data.taskId])).rowCount);
+     assert.equal((await moveItem(D,{kind:'partnerTask',itemId:given.data.taskId,day:dayPlus(2),timeZone:'UTC'})).status,404);
+     assert.equal((await moveItem(A,{kind:'partnerTask',itemId:given.data.taskId,day:dayPlus(-1),timeZone:'UTC'})).status,400);
+     assert.equal((await moveItem(A,{kind:'partnerTask',itemId:given.data.taskId,day:dayPlus(40),timeZone:'UTC'})).data.code,'workspace_horizon');
+     assert.equal((await moveItem(A,{kind:'partnerTask',itemId:given.data.taskId,day:dayPlus(2),timeZone:'UTC',extra:1})).status,400);
+     const subState=await state(D),ownTask=randomUUID();
+     assert.equal((await api(base+'/workspace/taskCreate','POST',{operationId:ownTask,fields:{title:'Own dated task',description:'',priority:'normal',dueAt:dayPlus(1)+'T08:15:00.000Z',assignment:'self'},epoch:subState.epoch,memberEpoch:subState.memberEpoch},D.session)).status,200);
+     assert.equal((await moveItem(D,{kind:'task',itemId:ownTask,day:dayPlus(5),timeZone:'UTC'})).status,204);
+     assert.equal((await db.owner.query('SELECT due_at FROM pactaris.tasks WHERE household_id=$1 AND id=$2',[home.householdId,ownTask])).rows[0].due_at.toISOString(),dayPlus(5)+'T08:15:00.000Z');
+     assert.equal((await moveItem(A,{kind:'task',itemId:ownTask,day:dayPlus(2),timeZone:'UTC'})).status,404);
+     await db.owner.query("UPDATE pactaris.partner_tasks SET state='cancelled' WHERE household_id=$1 AND id=$2",[home.householdId,given.data.taskId]);
+     await db.owner.query("UPDATE pactaris.tasks SET state='archived' WHERE household_id=$1 AND id=$2",[home.householdId,ownTask]);
      // Calendar subscription: a private link per account and dynamic; hidden titles show as "Pactaris".
      const habitId=habit.data.resourceId;
      assert.equal((await api(base+'/calendar-mark','POST',{kind:'habit',resourceId:habitId,hidden:true},B.session)).status,404);

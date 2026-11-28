@@ -38,3 +38,22 @@ The person filter offers yourself plus everyone you hold task authority over (`a
 - At most 600 items per request.
 - Weekly routines and habits show once per week, on the first day of that week in the range.
 - The planner does not move or edit anything, except whether an item's title is hidden in calendar subscriptions ([CALENDAR_FEED.md](CALENDAR_FEED.md)). Dragging items to another day is not part of this version.
+
+## Moving items to another day
+
+Owner request, 28 November 2026. Instance migration `0074_planner_move`, workspace action `plannerMove`, `POST /api/households/:id/planner/move {kind,itemId,day,timeZone}`.
+
+- **What moves:** one-off items with a due date.
+  - In your own calendar: your own open tasks.
+  - In the calendar of someone you hold task authority over: the Dom/sub tasks you created that are not finished.
+  - Repeating items, habits and routines do not move.
+- **How:**
+  - Drag an item to another day: an agenda or week day, or a month cell.
+  - On phones, use the item's calendar button and pick a date.
+- **Rules:**
+  - The time of day stays in the viewer's time zone; only the date changes.
+  - Moving to a day in the past is refused.
+  - The plan horizon applies (`workspace_horizon`).
+  - A paused dynamic or a personal pause stops moving, as for any edit.
+- **For a Dom/sub task:** a `partnerMove` event is recorded, shown in the task history as "Moved to another day". A reminder that was already sent becomes due again for the new date.
+- Every move is audited (`workspace.plannerMove`).
