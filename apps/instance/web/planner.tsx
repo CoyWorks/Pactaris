@@ -57,24 +57,36 @@ function Badges({item,language}:{item:PlannerItem;language:string}){
  return badges.length?<span className="planner-badges">{badges.map(k=><span key={k} className={'planner-badge '+k.split('.')[1]}>{t(k)}</span>)}</span>:null;
 }
 
-function ItemRow({item,language,format,zone,onOpen,withDate=false,onToggleHidden}:{item:PlannerItem;language:string;format:string;zone:string;onOpen:(item:PlannerItem)=>void;withDate?:boolean;onToggleHidden?:(item:PlannerItem)=>void}){
- const t=createTranslator(language);
+/** Moving one-off items: drag to a day, or the move button with a date field (also on phones). */
+type Mover={can:(item:PlannerItem)=>boolean;today:string;dragging?:PlannerItem;drag:(item?:PlannerItem)=>void;to:(item:PlannerItem,day:string)=>void};
+function ItemRow({item,language,format,zone,onOpen,withDate=false,onToggleHidden,mover}:{item:PlannerItem;language:string;format:string;zone:string;onOpen:(item:PlannerItem)=>void;withDate?:boolean;onToggleHidden?:(item:PlannerItem)=>void;mover?:Mover}){
+ const t=createTranslator(language),[picking,setPicking]=useState(false),movable=!!mover?.can(item);
  const time=withDate?new Intl.DateTimeFormat(format,{day:'numeric',month:'short',timeZone:'UTC'}).format(asDate(item.day))
   :item.at?new Intl.DateTimeFormat(format,{hour:'2-digit',minute:'2-digit',timeZone:zone}).format(new Date(item.at)):t('planner.anyTime');
- return <li className="planner-row"><button type="button" className={'planner-item'+(item.onBreak?' muted-item':'')} onClick={()=>onOpen(item)}>
+ return <li className={'planner-row'+(movable?' movable':'')+(mover?.dragging===item?' dragging':'')} draggable={movable}
+  onDragStart={movable?e=>{e.dataTransfer.setData('text/plain',item.id);e.dataTransfer.effectAllowed='move';mover!.drag(item);}:undefined}
+  onDragEnd={movable?()=>mover!.drag(undefined):undefined}>
+  <button type="button" className={'planner-item'+(item.onBreak?' muted-item':'')} onClick={()=>onOpen(item)}>
   <span className="planner-time">{time}</span>
   <span className="grow"><strong>{item.title}</strong><span className="muted">{t(kindLabel[item.kind])}{item.hidden&&<span className="planner-hidden">{t('calendar.hidden')}</span>}</span></span>
   <Badges item={item} language={language}/>
- </button>{onToggleHidden&&<button type="button" className="icon-button planner-eye" aria-pressed={item.hidden} aria-label={t(item.hidden?'calendar.showAction':'calendar.hideAction')} title={t(item.hidden?'calendar.showAction':'calendar.hideAction')} onClick={()=>onToggleHidden(item)}><Icon name={item.hidden?'eyeOff':'eye'}/></button>}</li>;
+ </button>{movable&&<button type="button" className="icon-button planner-move" aria-expanded={picking} aria-label={t('planner.move')} title={t('planner.move')} onClick={()=>setPicking(v=>!v)}><Icon name="move"/></button>}
+ {onToggleHidden&&<button type="button" className="icon-button planner-eye" aria-pressed={item.hidden} aria-label={t(item.hidden?'calendar.showAction':'calendar.hideAction')} title={t(item.hidden?'calendar.showAction':'calendar.hideAction')} onClick={()=>onToggleHidden(item)}><Icon name={item.hidden?'eyeOff':'eye'}/></button>}
+ {picking&&mover&&<label className="planner-move-date">{t('planner.moveDate')}<input type="date" min={mover.today} defaultValue={item.day} autoFocus
+  onChange={e=>{if(e.target.value&&e.target.value!==item.day){setPicking(false);mover.to(item,e.target.value);}}}/></label>}</li>;
 }
 
-function DayList({day,items,today,language,format,zone,onOpen,showEmpty,onToggleHidden}:{day:string;items:PlannerItem[];today:string;language:string;format:string;zone:string;onOpen:(item:PlannerItem)=>void;showEmpty:boolean;onToggleHidden?:(item:PlannerItem)=>void}){
+/** Drop handlers for a day: only days from today on accept a dragged item. */
+const dropOn=(mover:Mover|undefined,day:string)=>mover?.dragging&&day>=mover.today?{
+ onDragOver:(e:React.DragEvent)=>{e.preventDefault();e.dataTransfer.dropEffect='move';},
+ onDrop:(e:React.DragEvent)=>{e.preventDefault();const item=mover.dragging!;mover.drag(undefined);mover.to(item,day);}}:{};
+function DayList({day,items,today,language,format,zone,onOpen,showEmpty,onToggleHidden,mover}:{day:string;items:PlannerItem[];today:string;language:string;format:string;zone:string;onOpen:(item:PlannerItem)=>void;showEmpty:boolean;onToggleHidden?:(item:PlannerItem)=>void;mover?:Mover}){
  const t=createTranslator(language);
- if(!items.length&&!showEmpty)return null;
+ if(!items.length&&!showEmpty&&!(mover?.dragging&&day>=today))return null;
  const label=new Intl.DateTimeFormat(format,{weekday:'long',day:'numeric',month:'long',timeZone:'UTC'}).format(asDate(day));
- return <section className="planner-day" aria-label={label}>
+ return <section className={'planner-day'+(mover?.dragging&&day>=today?' drop-target':'')} aria-label={label} {...dropOn(mover,day)}>
   <h3>{day===today?t('planner.todayLabel',{date:label}):label}</h3>
-  {items.length?<ul className="planner-list">{items.map(item=><ItemRow key={item.kind+item.id+item.day} item={item} language={language} format={format} zone={zone} onOpen={onOpen} onToggleHidden={onToggleHidden}/>)}</ul>
+  {items.length?<ul className="planner-list">{items.map(item=><ItemRow key={item.kind+item.id+item.day} item={item} language={language} format={format} zone={zone} onOpen={onOpen} onToggleHidden={onToggleHidden} mover={mover}/>)}</ul>
    :<p className="muted">{t('planner.nothing')}</p>}
  </section>;
 }
@@ -86,7 +98,8 @@ export function PlannerView({householdId,csrfToken,language,format,timeZone,relo
  const lookBack=mode==='agenda'?14:0;
  const range=useMemo(()=>mode==='agenda'?{from:addDays(anchor,-14),days:21}:mode==='week'?{from:weekStart(anchor),days:7}:{from:weekStart(monthStart(anchor)),days:42},[mode,anchor]);
  const [marks,setMarks]=useState<Record<string,boolean>>({}),[markError,setMarkError]=useState(false);
- const planner=usePlanner(householdId,range.from,range.days,person,timeZone,reload);
+ const [tick,setTick]=useState(0),[dragging,setDragging]=useState<PlannerItem>(),[moveMessage,setMoveMessage]=useState<MessageKey>();
+ const planner=usePlanner(householdId,range.from,range.days,person,timeZone,String(reload)+':'+tick);
  const {failed,loading}=planner;
  const data=useMemo(()=>planner.data&&{...planner.data,items:planner.data.items.map(i=>i.id in marks?{...i,hidden:marks[i.id]!}:i)},[planner.data,marks]);
  const byDay=useMemo(()=>{const map=new Map<string,PlannerItem[]>();for(const item of data?.items??[]){const list=map.get(item.day)??[];list.push(item);map.set(item.day,list);}return map;},[data]);
@@ -94,6 +107,16 @@ export function PlannerView({householdId,csrfToken,language,format,timeZone,relo
  const overdue=lookBack?(data?.items??[]).filter(i=>i.day<days[0]!&&i.overdue):[];
  const self=!person||data?.people.find(p=>p.id===person)?.self===true;
  const open=(item:PlannerItem)=>onOpen(plannerTarget(item,self));
+ // Own one-off tasks in your own calendar, and tasks you gave in the calendar of the person who has them.
+ const mover:Mover={today,dragging,drag:setDragging,
+  can:item=>!item.projected&&!!item.at&&!['done','declined','cancelled','archived'].includes(item.state)&&(item.kind==='task'?self:item.kind==='partnerTask'&&!self),
+  to:(item,day)=>{if(day===item.day)return;setMoveMessage(undefined);
+   void fetch('/api/households/'+householdId+'/planner/move',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({kind:item.kind,itemId:item.id,day,timeZone})})
+    .then(async r=>{if(r.ok){setMoveMessage('planner.moved');setTick(v=>v+1);return;}
+     const key=((await r.json().catch(()=>({}))) as {messageKey?:string}).messageKey;
+     setMoveMessage(key==='workspace.horizon'||key==='workspace.paused'?key:'planner.moveFailed');})
+    .catch(()=>setMoveMessage('planner.moveFailed'));}};
+ const anyMovable=(data?.items??[]).some(mover.can);
  const toggle=self?(item:PlannerItem)=>{const next=!item.hidden;setMarkError(false);setMarks(m=>({...m,[item.id]:next}));
   void markCalendar(householdId,csrfToken,calendarMarkKind(item.kind),item.id,next).then(ok=>{if(!ok){setMarks(m=>({...m,[item.id]:!next}));setMarkError(true);}});}:undefined;
  const step=mode==='month'?null:7;
@@ -121,23 +144,25 @@ export function PlannerView({householdId,csrfToken,language,format,timeZone,relo
   </div>
   {failed&&<p role="alert">{t('planner.failed')}</p>}
   {markError&&<p role="alert">{t('calendar.failed')}</p>}
+  {moveMessage&&<p role={moveMessage==='planner.moved'?'status':'alert'}>{t(moveMessage)}</p>}
+  {anyMovable&&<p className="muted planner-hint">{t('planner.moveHint')}</p>}
   {loading&&!data&&<p role="status">{t('portal.loading')}</p>}
   {data&&mode!=='month'&&<>
-   {overdue.length>0&&<section className="planner-day" aria-label={t('planner.overdueTitle')}><h3>{t('planner.overdueTitle')}</h3><ul className="planner-list">{overdue.map(item=><ItemRow key={item.kind+item.id+item.day} item={item} language={language} format={format} zone={timeZone} onOpen={open} onToggleHidden={toggle} withDate/>)}</ul></section>}
+   {overdue.length>0&&<section className="planner-day" aria-label={t('planner.overdueTitle')}><h3>{t('planner.overdueTitle')}</h3><ul className="planner-list">{overdue.map(item=><ItemRow key={item.kind+item.id+item.day} item={item} language={language} format={format} zone={timeZone} onOpen={open} onToggleHidden={toggle} mover={mover} withDate/>)}</ul></section>}
    {mode==='agenda'&&!days.some(d=>(byDay.get(d)??[]).length)&&<div className="empty-card"><p>{t('planner.emptyWeek')}</p></div>}
-   {days.map(day=><DayList key={day} day={day} items={byDay.get(day)??[]} today={today} language={language} format={format} zone={timeZone} onOpen={open} onToggleHidden={toggle} showEmpty={mode==='week'}/>)}
+   {days.map(day=><DayList key={day} day={day} items={byDay.get(day)??[]} today={today} language={language} format={format} zone={timeZone} onOpen={open} onToggleHidden={toggle} mover={mover} showEmpty={mode==='week'}/>)}
   </>}
   {data&&mode==='month'&&<>
    <div className="planner-month" role="grid" aria-label={title}>
     {days.slice(0,7).map(day=><span key={'h'+day} className="planner-weekday" role="columnheader">{new Intl.DateTimeFormat(format,{weekday:'short',timeZone:'UTC'}).format(asDate(day))}</span>)}
     {days.map(day=>{const items=byDay.get(day)??[],label=new Intl.DateTimeFormat(format,{weekday:'long',day:'numeric',month:'long',timeZone:'UTC'}).format(asDate(day));
      return <button type="button" role="gridcell" key={day} aria-label={label+(items.length?', '+t('planner.itemCount',{count:String(items.length)}):'')} aria-pressed={selected===day}
-      className={'planner-cell'+(inMonth(day)?'':' outside')+(day===today?' today':'')} onClick={()=>setSelected(day)}>
+      className={'planner-cell'+(inMonth(day)?'':' outside')+(day===today?' today':'')+(dragging&&day>=today?' drop-target':'')} onClick={()=>setSelected(day)} {...dropOn(mover,day)}>
       <span className="planner-date">{Number(day.slice(8))}</span>
       <span className="planner-dots" aria-hidden="true">{items.slice(0,3).map(i=><span key={i.kind+i.id} className={'dot'+(i.overdue?' overdue':'')}/>)}{items.length>3&&<span className="more">{t('planner.more',{count:String(items.length-3)})}</span>}</span>
      </button>;})}
    </div>
-   {selected&&<DayList day={selected} items={byDay.get(selected)??[]} today={today} language={language} format={format} zone={timeZone} onOpen={open} onToggleHidden={toggle} showEmpty/>}
+   {selected&&<DayList day={selected} items={byDay.get(selected)??[]} today={today} language={language} format={format} zone={timeZone} onOpen={open} onToggleHidden={toggle} mover={mover} showEmpty/>}
   </>}
  {self&&<CalendarSubscription householdId={householdId} csrfToken={csrfToken} language={language} format={format}/>}
  </section>;

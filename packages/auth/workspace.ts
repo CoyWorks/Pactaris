@@ -59,11 +59,13 @@ export function workspaceInput(action:WorkspaceAction,value:unknown):Record<stri
  if(action==='plannerRead')names.push('from','days','personId','timeZone');
  if(action==='calendarMark')names.push('kind','resourceId','hidden');
  if(action==='planSwap')names.push('kind','activateId','freezeId');
+ if(action==='plannerMove')names.push('kind','itemId','day','timeZone');
  if(['taskUpdate','taskComplete','taskArchive','taskReopen'].includes(action))names.push('taskId','version');
  if(action==='taskCreate'||action==='taskUpdate')names.push('fields','epoch','memberEpoch');
  if(action==='taskComplete')names.push('epoch','memberEpoch');
  if(Object.keys(value).sort().join(',')!==names.sort().join(',')||['taskId','after','seriesId'].some(k=>k in value&&!uuid(value[k]))||['version','epoch','memberEpoch'].some(k=>k in value&&!version(value[k])))throw new WorkspaceError('invalid');
  if(action==='workspaceChanges'&&value.cursor!==null&&!uuid(value.cursor))throw new WorkspaceError('invalid');
+ if(action==='plannerMove'&&(!['task','partnerTask'].includes(String(value.kind))||!uuid(value.itemId)||!calendarDay(value.day)||!validTimeZone(value.timeZone)))throw new WorkspaceError('invalid');
  if(action==='planSwap'&&(!(planFreezeKinds as readonly string[]).includes(String(value.kind))||!uuid(value.activateId)||!uuid(value.freezeId)||value.activateId===value.freezeId))throw new WorkspaceError('invalid');
  if(action==='calendarMark'&&(!(calendarMarkKinds as readonly string[]).includes(String(value.kind))||!uuid(value.resourceId)||typeof value.hidden!=='boolean'))throw new WorkspaceError('invalid');
  if(action==='plannerRead'&&(!calendarDay(value.from)||!Number.isInteger(value.days)||Number(value.days)<1||Number(value.days)>plannerMaxDays||(value.personId!==null&&!uuid(value.personId))||!validTimeZone(value.timeZone)))throw new WorkspaceError('invalid');

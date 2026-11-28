@@ -736,6 +736,13 @@
       "path": "migrations/instance/0073_plan_freeze.sql",
       "sha256": "89137e048e3d25e8bc53141113e887be759aea3dee8ff6683270f0bb6e97f216",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0074_planner_move",
+      "path": "migrations/instance/0074_planner_move.sql",
+      "sha256": "9268fe2d88bc2eeea02b4e8510e458e4605c103e561b80f15b2dba2fcd74abcd",
+      "backwardCompatible": true
     }
   ]
 }

@@ -864,6 +864,17 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       res.json((await workspace.execute(session.account.id,req.params.householdId,'planFrozenList',{operationId:randomUUID()})).frozen??[]);
     }catch(error){workspaceFailure(res,error);}
   });
+  // Planner: move a one-off item to another day (the time of day stays).
+  app.post('/api/households/:householdId/planner/move',express.json({limit:512,strict:true,inflate:false}),async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      if(!csrfAllowed(req,session)){res.status(403).json({code:'request_denied',messageKey:'errors.request'});return;}
+      const b=req.body as Record<string,unknown>|undefined;
+      if(!uuid(req.params.householdId)||!b||typeof b!=='object'||Object.keys(b).sort().join(',')!=='day,itemId,kind,timeZone')throw new WorkspaceError('invalid');
+      if(!workspace)throw new WorkspaceError('unavailable');
+      await workspace.execute(session.account.id,req.params.householdId,'plannerMove',{operationId:randomUUID(),kind:b.kind,itemId:b.itemId,day:b.day,timeZone:b.timeZone});
+      res.status(204).end();
+    }catch(error){workspaceFailure(res,error);}
+  });
   app.get('/api/households/:householdId/workspace/changes',async(req,res)=>{
     try{const session=await authenticate(req,res);if(!session)return;
       if(!uuid(req.params.householdId)||Object.keys(req.query).some(k=>k!=='cursor')||(req.query.cursor!==undefined&&!uuid(req.query.cursor)))throw new WorkspaceError('invalid');
