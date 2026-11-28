@@ -97,7 +97,18 @@ The values live in `packages/auth/plans.ts`.
   - Hiding history saves no space, because nothing is deleted.
   - It would mean rewriting most read functions, and balances must keep counting everything.
   - Instances that still hold the key ignore it, and an update from an older gateway is still accepted.
-- **Not enforced yet:** pausing the excess after a downgrade is the next step.
+- **Pausing the excess** (owner decision, 28 November 2026; Instance migration `0073_plan_freeze`). Only what runs by itself is paused: repeating tasks (Dom and personal series), Dom-set habits, routines and shop listings. One-off tasks and catalog items are never paused.
+  - **When.** A new plan from the gateway (`entitlements_apply`) runs `plan_rebalance`. Per person, or per dynamic for the shop, the newest active items above the limit are paused and the oldest stay.
+  - **Room.** When room appears, the oldest paused items come back by themselves. Room appears through an upgrade, or when a series ends, a habit or routine is archived, or a listing is removed.
+  - **Effects:**
+    - A paused Dom series has no runnable generation job.
+    - A paused personal series does not run.
+    - A paused habit or routine is set to paused, and its earlier state is kept.
+    - A paused shop listing waits in `shop_listings_frozen`, so the shop does not offer it and buying it fails.
+  - **Coming back.** Items resume from the current period: nothing is caught up and nothing is punished.
+  - **While paused,** an item cannot be edited or resumed. Ending, archiving, stopping, breaks and unlisting always work. New items still count the paused ones, so nothing new is added while anything is paused.
+  - **Choosing.** Settings → Plan → *Paused by the plan* lets the person responsible swap one paused item for an active one (`POST /plan/swap`). That is the Dom who set a series, habit or shop listing, or the person for their own personal series and routines. The household owner does not choose for others: personal items are private, and Dom-set items belong to that Dom.
+  - Pausing raises the existing capacity messages, which now mention that an item can be paused by the plan.
 - **Always free:** safety, consent, privacy, export, leaving and deletion.
 
 ## Delivery to the Instance

@@ -274,3 +274,5 @@ main.operator{max-width:64rem}
 .calendar-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin:.5rem 0}
 .plan-panel{margin:0 0 1.5rem}.plan-limits{grid-template-columns:2fr 1fr;font-size:.9rem}.plan-limits dd{text-align:right}.plan-limits dd.over{font-weight:600}
 .plan-extend{margin:1rem 0}
+.plan-swap{display:grid;gap:.5rem;margin:.5rem 0 0}
+.plan-frozen-list li{display:block}

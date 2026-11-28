@@ -30,8 +30,9 @@ export class InstanceWorkspace{
     const row=result.rows[0];if(!row)throw new WorkspaceError('unavailable');await db.query('COMMIT');
     return {householdId,operationId:verified.operationId,actorMembershipId:input.membershipId,status:'listed',changeCursor:row.changes.cursor,changed:row.changes.changed};
    }
-   if(action==='plannerRead'||action==='calendarMark'||action==='planUsage'){
-    const result=await db.query(`SELECT pactaris.${action==='plannerRead'?'planner_read':action==='planUsage'?'plan_usage':'calendar_mark'}($1,$2,$3,$4) AS result`,[householdId,this.config.instanceId,verified.accountId,input]);
+   if(action==='plannerRead'||action==='calendarMark'||action==='planUsage'||action==='planFrozenList'||action==='planSwap'){
+    const fn={plannerRead:'planner_read',calendarMark:'calendar_mark',planUsage:'plan_usage',planFrozenList:'plan_frozen_list',planSwap:'plan_swap'}[action];
+    const result=await db.query(`SELECT pactaris.${fn}($1,$2,$3,$4) AS result`,[householdId,this.config.instanceId,verified.accountId,input]);
     await db.query('COMMIT');return result.rows[0].result as WorkspaceResult;
    }
    if(action==='workspaceUnread'){
@@ -59,6 +60,7 @@ export class InstanceWorkspace{
    await db.query('ROLLBACK');
    if(error&&typeof error==='object'&&'code'in error&&error.code==='P0001'&&'message'in error&&typeof error.message==='string'){
     if(error.message==='plan.horizon')throw new WorkspaceError('horizon');
+    if(error.message==='plan.limit')throw new WorkspaceError('capacity');
     const kind=error.message.replace('workspace.','');if(['invalid','denied','conflict','capacity','paused'].includes(kind))throw new WorkspaceError(kind as 'invalid'|'denied'|'conflict'|'capacity'|'paused');
    }throw error;
   }finally{db.release();}

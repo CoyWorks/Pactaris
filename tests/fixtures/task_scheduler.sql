@@ -121,6 +121,20 @@ UPDATE pactaris.household_entitlements SET capabilities=capabilities||'{"tasks.a
 SELECT scheduler_test.check(pactaris.run_task_scheduler('10000000-0000-4000-8000-000000000002')='processed','occurrences do not count towards one-off tasks');
 SELECT scheduler_test.check((SELECT count(*)=7 FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000002'),'generation replaces exactly one occurrence at a full one-off limit');
 UPDATE pactaris.household_entitlements SET capabilities=capabilities||'{"oneoff.open.max":100}'::jsonb;
+-- Plan freeze (0073): a series above the series limit is paused and generates nothing; when room returns
+-- it continues from today without catching up.
+CREATE TEMP TABLE freeze_count AS SELECT count(*) AS n FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000002';
+UPDATE pactaris.household_entitlements SET capabilities=capabilities||'{"series.active.max":0}'::jsonb;
+SELECT pactaris.plan_rebalance((SELECT household_id FROM pactaris.task_series WHERE id='70000000-0000-4000-8000-000000000002'));
+SELECT scheduler_test.check((SELECT plan_frozen FROM pactaris.task_series WHERE id='70000000-0000-4000-8000-000000000002'),'series above the limit is frozen');
+SELECT scheduler_test.check(NOT EXISTS(SELECT 1 FROM pactaris.task_generation_jobs WHERE series_id='70000000-0000-4000-8000-000000000002' AND state='pending' AND run_after<>'infinity'),'frozen series has no runnable job');
+SELECT pactaris.run_task_scheduler('10000000-0000-4000-8000-000000000002');
+SELECT scheduler_test.check((SELECT count(*) FROM pactaris.partner_tasks WHERE series_id='70000000-0000-4000-8000-000000000002')=(SELECT n FROM freeze_count),'frozen series generates nothing');
+UPDATE pactaris.household_entitlements SET capabilities=capabilities||'{"series.active.max":100}'::jsonb;
+SELECT pactaris.plan_rebalance((SELECT household_id FROM pactaris.task_series WHERE id='70000000-0000-4000-8000-000000000002'));
+SELECT scheduler_test.check((SELECT NOT plan_frozen FROM pactaris.task_series WHERE id='70000000-0000-4000-8000-000000000002'),'room brings the series back');
+SELECT scheduler_test.check(NOT EXISTS(SELECT 1 FROM pactaris.task_generation_jobs WHERE series_id='70000000-0000-4000-8000-000000000002' AND state='pending' AND run_after='infinity'),'its job can run again');
+DROP TABLE freeze_count;
 -- A decision renewal changes the persisted safety fingerprint (ABA fence).
 UPDATE pactaris.agreement_decisions SET decided_at=now()+interval '1 second';
 UPDATE pactaris.task_generation_jobs SET run_after=now() WHERE series_id='70000000-0000-4000-8000-000000000002';

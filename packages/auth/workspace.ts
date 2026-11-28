@@ -27,7 +27,11 @@ export function validTimeZone(v:unknown):v is string{
 export {calendarDay as validCalendarDay};
 /** The Plan panel: the caller's own use (per-person limits) or the dynamic's use, with the limit. */
 export type PlanUsage=Record<string,{used:number;limit:number}>;
-export type WorkspaceResult={planner?:Planner;usage?:PlanUsage;householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';taskId?:string;task?:TaskDetail;
+/** Items paused by the plan that the caller may choose for, grouped by kind and person. */
+export const planFreezeKinds=['series','habit','routine','shop'] as const;
+export type PlanFreezeKind=typeof planFreezeKinds[number];
+export type PlanFrozenGroup={kind:PlanFreezeKind;personId:string|null;personName:string|null;limit:number;items:{id:string;title:string;frozen:boolean}[]};
+export type WorkspaceResult={planner?:Planner;usage?:PlanUsage;frozen?:PlanFrozenGroup[];householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';taskId?:string;task?:TaskDetail;
  household?:{name:string;timeZone:string;version:string;canEdit:boolean;status:'active'|'paused';epoch:string;memberEpoch:string;selfPaused:boolean;memberCount:number};
  series?:PersonalSeries[];pointsSettings?:PointsSettings;hasUnreadTaskInbox?:boolean;changeCursor?:string;changed?:('workspace'|'tasks'|'notices'|'routines'|'library'|'dynamic'|'catalog')[];counts?:{open:number;done:number;overdue:number;unassigned:number};tasks?:TaskSummary[];nextCursor?:string|null};
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -54,11 +58,13 @@ export function workspaceInput(action:WorkspaceAction,value:unknown):Record<stri
  if(action==='taskRead')names.push('taskId');
  if(action==='plannerRead')names.push('from','days','personId','timeZone');
  if(action==='calendarMark')names.push('kind','resourceId','hidden');
+ if(action==='planSwap')names.push('kind','activateId','freezeId');
  if(['taskUpdate','taskComplete','taskArchive','taskReopen'].includes(action))names.push('taskId','version');
  if(action==='taskCreate'||action==='taskUpdate')names.push('fields','epoch','memberEpoch');
  if(action==='taskComplete')names.push('epoch','memberEpoch');
  if(Object.keys(value).sort().join(',')!==names.sort().join(',')||['taskId','after','seriesId'].some(k=>k in value&&!uuid(value[k]))||['version','epoch','memberEpoch'].some(k=>k in value&&!version(value[k])))throw new WorkspaceError('invalid');
  if(action==='workspaceChanges'&&value.cursor!==null&&!uuid(value.cursor))throw new WorkspaceError('invalid');
+ if(action==='planSwap'&&(!(planFreezeKinds as readonly string[]).includes(String(value.kind))||!uuid(value.activateId)||!uuid(value.freezeId)||value.activateId===value.freezeId))throw new WorkspaceError('invalid');
  if(action==='calendarMark'&&(!(calendarMarkKinds as readonly string[]).includes(String(value.kind))||!uuid(value.resourceId)||typeof value.hidden!=='boolean'))throw new WorkspaceError('invalid');
  if(action==='plannerRead'&&(!calendarDay(value.from)||!Number.isInteger(value.days)||Number(value.days)<1||Number(value.days)>plannerMaxDays||(value.personId!==null&&!uuid(value.personId))||!validTimeZone(value.timeZone)))throw new WorkspaceError('invalid');
  if(action==='workspaceRead'&&!['open','done','archived'].includes(String(value.filter)))throw new WorkspaceError('invalid');

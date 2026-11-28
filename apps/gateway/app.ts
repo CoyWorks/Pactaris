@@ -822,6 +822,15 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
         await plans.changeLevel(accountId,householdId,b!.tier as PaidTier,b!.version as string);
         res.json(await plans.view(accountId,householdId,true));return;
       }
+      if(req.params.action==='swap'){
+        // Choose which item stays active: one paused item comes back, one active item of the same group pauses.
+        if(keys!=='activateId,freezeId,kind'){res.status(400).json({code:'invalid_request',messageKey:'errors.request'});return;}
+        if(!workspace){res.status(503).json({code:'unavailable',messageKey:'errors.unavailable'});return;}
+        try{await workspace.execute(accountId,householdId,'planSwap',{operationId:randomUUID(),kind:b!.kind,activateId:b!.activateId,freezeId:b!.freezeId});
+          res.json((await workspace.execute(accountId,householdId,'planFrozenList',{operationId:randomUUID()})).frozen??[]);}
+        catch(error){workspaceFailure(res,error);}
+        return;
+      }
       if(req.params.action==='cancel'){
         if(keys!==''){res.status(400).json({code:'invalid_request',messageKey:'errors.request'});return;}
         try{await plans.cancelOwn(accountId,householdId);}catch(error){if(error instanceof PlanError){res.status(404).json({code:'not_found',messageKey:'plan.notHolder'});return;}throw error;}
@@ -845,6 +854,14 @@ export function createGatewayApp(config:GatewayConfig,store:GatewayStore,oidc:Oi
       if(!uuid(req.params.householdId)||Object.keys(req.query).length)throw new WorkspaceError('invalid');
       if(!workspace)throw new WorkspaceError('unavailable');
       res.json((await workspace.execute(session.account.id,req.params.householdId,'planUsage',{operationId:randomUUID()})).usage??{});
+    }catch(error){workspaceFailure(res,error);}
+  });
+  // Items paused by the plan that the caller may choose for.
+  app.get('/api/households/:householdId/plan/frozen',async(req,res)=>{
+    try{const session=await authenticate(req,res);if(!session)return;
+      if(!uuid(req.params.householdId)||Object.keys(req.query).length)throw new WorkspaceError('invalid');
+      if(!workspace)throw new WorkspaceError('unavailable');
+      res.json((await workspace.execute(session.account.id,req.params.householdId,'planFrozenList',{operationId:randomUUID()})).frozen??[]);
     }catch(error){workspaceFailure(res,error);}
   });
   app.get('/api/households/:householdId/workspace/changes',async(req,res)=>{
