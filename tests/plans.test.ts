@@ -39,3 +39,9 @@ test('the paid limits stay for a quiet 7-day grace period; a plan that does not 
  assert.equal(endingSoon('level1',new Date(now.getTime()-day),false,now),false);
  assert.equal(endingSoon('free',null,false,now),false);
 });
+test('the Instance falls back to the same Free limits as the gateway',async()=>{
+ const {readFileSync}=await import('node:fs');const {tierLimits}=await import('../packages/auth/plans.js');
+ const sql=readFileSync('migrations/instance/0071_plan_limits.sql','utf8'),block=sql.slice(sql.indexOf('RETURN CASE key'),sql.indexOf('ELSE 0 END;'));
+ const defaults=Object.fromEntries([...block.matchAll(/WHEN '([a-z.]+)' THEN ([0-9]+)/g)].map(m=>[m[1],Number(m[2])]));
+ assert.deepEqual(defaults,tierLimits.free);
+});

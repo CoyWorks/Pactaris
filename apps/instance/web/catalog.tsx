@@ -5,7 +5,7 @@ import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js'
 import type {CatalogKind,CatalogFields,CatalogDetail,CatalogResult} from '../../../packages/auth/catalog.js';
 const typeLabels={reward:'catalog.kindReward',grant:'catalog.kindGrant',consequence:'catalog.kindConsequence'} as const;
 const blank=():CatalogFields=>({title:'',description:'',category:'',points:null,position:0});
-const failure=(e:unknown):MessageKey=>['catalog.invalid','catalog.denied','catalog.conflict','catalog.habitGoalPending','catalog.unavailable','errors.request','errors.rateLimited'].includes((e as {messageKey:string})?.messageKey)?(e as {messageKey:MessageKey}).messageKey:'catalog.unavailable';
+const failure=(e:unknown):MessageKey=>['catalog.invalid','catalog.denied','catalog.conflict','catalog.habitGoalPending','catalog.capacity','catalog.unavailable','errors.request','errors.rateLimited'].includes((e as {messageKey:string})?.messageKey)?(e as {messageKey:MessageKey}).messageKey:'catalog.unavailable';
 type Request={action:string;body:Record<string,unknown>};
 export function CatalogPanel({householdId,session,language,format}:{householdId:string;session:{csrfToken:string};language:string;format:string}){
  const t=createTranslator(language),[filter,setFilter]=useState('current'),[cursor,setCursor]=useState<string>(),[listing,setListing]=useState<CatalogResult>(),[detail,setDetail]=useState<CatalogDetail>(),[editor,setEditor]=useState<{fields:CatalogFields;itemId?:string;version?:string}>(),[busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[notice,setNotice]=useState<MessageKey>(),[draft,setDraft]=useState<Request>(),[refresh,setRefresh]=useState(0);

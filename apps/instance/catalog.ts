@@ -27,6 +27,7 @@ export class InstanceCatalog{
   }catch(error){
    await db.query('ROLLBACK');
    if(error&&typeof error==='object'&&'code'in error&&error.code==='P0001'&&'message'in error&&typeof error.message==='string'){
+    if(error.message==='plan.limit')throw new CatalogError('capacity');
     const kind=error.message.replace('catalog.','');if(['invalid','denied','conflict','habitGoalPending'].includes(kind))throw new CatalogError(kind as CatalogError['kind']);
    }throw error;
   }finally{db.release();}

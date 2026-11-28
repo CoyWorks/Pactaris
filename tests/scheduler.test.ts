@@ -18,7 +18,7 @@ test('series edits are versioned and cancellation needs no new consent or capaci
  const cancel={operationId:randomUUID(),seriesId:id,version:'1'};assert.deepEqual(partnerInput('partnerSeriesCancel',cancel),cancel);
  assert.throws(()=>partnerInput('partnerSeriesCancel',{...cancel,epoch:'1'}),{kind:'invalid'});
 });
-test('schedule editor explains timezone, catch-up and combined capacity using catalog messages',()=>{
+test('schedule editor explains timezone, catch-up and the plan limit using catalog messages',()=>{
  const html=renderToStaticMarkup(React.createElement(ScheduleEditor,{schedule,onChange:()=>{},timeZone:'UTC',disabled:false,language:'en'}));
- assert.match(html,/IANA timezone/);assert.match(html,/Missed availability times/);assert.match(html,/Each series and each open occurrence/);assert.match(html,/Monday/);assert.doesNotMatch(html,/partner\.schedule/);
+ assert.match(html,/IANA timezone/);assert.match(html,/Missed availability times/);assert.match(html,/Each series counts towards the plan/);assert.match(html,/Monday/);assert.doesNotMatch(html,/partner\.schedule/);
 });

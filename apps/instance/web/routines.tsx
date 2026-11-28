@@ -8,7 +8,7 @@ const stateKeys:Record<string,MessageKey>={draft:'library.draft',active:'routine
 const periodKeys:Record<string,MessageKey>={daily:'routines.daily',weekly:'routines.weekly',once:'routines.once'};
 const resultKeys:Record<string,MessageKey>={pending:'routines.pending',reached:'routines.reached',within:'routines.within',over:'routines.over'};
 const responseKeys:Record<string,MessageKey>={text:'routines.text',rating:'routines.rating',boolean:'routines.boolean'};
-const errorKey=(v:unknown):MessageKey=>(['routines.invalid','routines.denied','routines.conflict','routines.paused','routines.unavailable','errors.request','errors.rateLimited'] as unknown[]).includes(v)?v as MessageKey:'routines.unavailable';
+const errorKey=(v:unknown):MessageKey=>(['routines.invalid','routines.denied','routines.conflict','routines.paused','routines.capacity','routines.unavailable','errors.request','errors.rateLimited'] as unknown[]).includes(v)?v as MessageKey:'routines.unavailable';
 const blank=(kind:RoutineKind,timeZone:string):RoutineFields=>({weekdays:[1,2,3,4,5,6,7],title:'',description:'',category:'',timeZone,period:'daily',date:null,mode:'minimum',target:1,responseType:kind==='ritual'?'boolean':'text'});
 type Draft={action:string;body:Record<string,unknown>};
 export function RoutinesPanel({householdId,session,language,format,timeZone,section}:{householdId:string;session:{csrfToken:string};language:string;format:string;timeZone:string;section:'habits'|'checkins'}){

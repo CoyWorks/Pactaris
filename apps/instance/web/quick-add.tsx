@@ -5,7 +5,7 @@ import type {RoutineDetail} from '../../../packages/auth/routines.js';
 import {Icon} from './navigation.js';
 export type QuickKind='task'|'habit'|'note';
 type Outcome={ok:true;data:Record<string,unknown>}|{ok:false;key:MessageKey;unknown:boolean};
-const known:MessageKey[]=['workspace.invalid','workspace.denied','workspace.conflict','workspace.capacity','workspace.paused','routines.invalid','routines.denied','routines.conflict','routines.paused','library.invalid','library.denied','library.conflict','errors.rateLimited','errors.request'];
+const known:MessageKey[]=['workspace.invalid','workspace.denied','workspace.conflict','workspace.capacity','workspace.paused','routines.invalid','routines.denied','routines.capacity','routines.conflict','routines.paused','library.invalid','library.denied','library.conflict','errors.rateLimited','errors.request'];
 /** POSTs one module command; a 5xx or lost response is reported as unknown so the same operation ID can be retried. */
 export async function post(householdId:string,csrfToken:string,module:'workspace'|'routines'|'library',action:string,body:Record<string,unknown>):Promise<Outcome>{
  const controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),15000);

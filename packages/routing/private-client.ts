@@ -274,7 +274,7 @@ export class PrivateWorkspaceClient{
    if(response.status===403||response.status===404)throw new WorkspaceError('denied');if(response.status===400)throw new WorkspaceError('invalid');
    if(response.status===409){const code=(response.data as {code?:string})?.code;throw new WorkspaceError(code==='workspace_capacity'?'capacity':code==='workspace_paused'?'paused':'conflict');}
    const r=response.data as import('../auth/workspace.js').WorkspaceResult;
-   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['workspaceRead','workspaceUnread','workspaceChanges','personalSeriesList','taskRead','plannerRead'].includes(action)?'listed':'applied'))throw Error('routing.response');
+   if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['workspaceRead','workspaceUnread','workspaceChanges','personalSeriesList','taskRead','plannerRead','planUsage'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/workspace.js').WorkspaceResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
    const ver=(v:unknown)=>typeof v==='string'&&/^[1-9][0-9]{0,14}$/.test(v);
    const task=(v:import('../auth/workspace.js').TaskSummary)=>{
@@ -295,6 +295,16 @@ export class PrivateWorkspaceClient{
    if(action==='workspaceChanges'){
     if(!uuid(r.changeCursor)||!Array.isArray(r.changed)||r.changed.length>7||new Set(r.changed).size!==r.changed.length||!r.changed.every(v=>['workspace','tasks','notices','routines','library','dynamic','catalog'].includes(v)))throw Error('routing.response');
     return {...out,changeCursor:r.changeCursor,changed:r.changed};
+   }
+   if(action==='planUsage'){
+    const {capabilityKeys}=await import('../auth/plans.js');
+    const u=r.usage;if(!u||typeof u!=='object'||Array.isArray(u))throw Error('routing.response');
+    const usage:import('../auth/workspace.js').PlanUsage={};
+    for(const [key,value] of Object.entries(u)){
+     if(!(capabilityKeys as readonly string[]).includes(key)||!value||!Number.isSafeInteger(value.used)||value.used<0||!Number.isSafeInteger(value.limit)||value.limit<0||value.limit>100000)throw Error('routing.response');
+     usage[key]={used:value.used,limit:value.limit};
+    }
+    return {...out,usage};
    }
    if(action==='plannerRead'){
     const {plannerKinds,validCalendarDay,validTimeZone,plannerMaxDays}=await import('../auth/workspace.js');
@@ -370,7 +380,7 @@ export class PrivateRoutineClient{
   try{
    if(!uuid(input.operationId))throw new RoutineError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new RoutineError('invalid');
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,action==='checkinList'?65536:16384);
-   if(response.status===403||response.status===404)throw new RoutineError('denied');if(response.status===400)throw new RoutineError('invalid');if(response.status===409)throw new RoutineError((response.data as {code?:string})?.code==='routines_paused'?'paused':'conflict');
+   if(response.status===403||response.status===404)throw new RoutineError('denied');if(response.status===400)throw new RoutineError('invalid');if(response.status===409){const code=(response.data as {code?:string})?.code;throw new RoutineError(code==='routines_paused'?'paused':code==='routines_capacity'?'capacity':'conflict');}
    const r=response.data as import('../auth/routines.js').RoutineResult;
    if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['routineRead','routineList','checkinList'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/routines.js').RoutineResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};
@@ -412,7 +422,7 @@ export class PrivateCatalogClient{
    if(!uuid(input.operationId))throw new CatalogError('invalid');const body=JSON.stringify(input);if(Buffer.byteLength(body)>4096)throw new CatalogError('invalid');
    const token=await this.signer.signCommand(accountId,placement.householdId,placement.instanceId,action,input.operationId,body),response=await privateResponse(placement,commandPath(placement.householdId,action),token,body,65536);
    if(response.status===409&&action==='redemptionHabitClaim'&&(response.data as {code?:unknown}|null)?.code==='catalog_habitGoalPending')throw new CatalogError('habitGoalPending');
-   if(response.status===403||response.status===404)throw new CatalogError('denied');if(response.status===400)throw new CatalogError('invalid');if(response.status===409)throw new CatalogError('conflict');
+   if(response.status===403||response.status===404)throw new CatalogError('denied');if(response.status===400)throw new CatalogError('invalid');if(response.status===409)throw new CatalogError((response.data as {code?:string}|null)?.code==='catalog_capacity'?'capacity':'conflict');
    const r=response.data as import('../auth/catalog.js').CatalogResult;
    if(!r||r.householdId!==placement.householdId||r.operationId!==input.operationId||r.actorMembershipId!==input.membershipId||r.status!==(['catalogRead','catalogList','redemptionList','redemptionOptions'].includes(action)?'listed':'applied'))throw Error('routing.response');
    const out:import('../auth/catalog.js').CatalogResult={householdId:r.householdId,operationId:r.operationId,actorMembershipId:r.actorMembershipId,status:r.status};

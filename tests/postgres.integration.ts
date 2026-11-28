@@ -122,6 +122,9 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
  }
  try{
   const gatewayDb=await component('gateway','gateway'),a=await component('instance_a','instance'),b=await component('instance_b','instance');
+  // Functional fixtures that create many items get roomy plan limits; plan limits have their own checks.
+  const roomyPlan=(db:typeof a,householdId:string)=>db.owner.query(`UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||jsonb_build_object(
+    'oneoff.open.max',1000,'series.active.max',1000,'habits.assigned.max',1000,'routines.active.max',1000,'catalog.rewards.max',1000,'catalog.punishments.max',1000,'shop.items.max',1000) WHERE household_id=$1`,[householdId]);
   const store=new PgGatewayStore(gatewayDb.pool,()=>requireSchema(gatewayDb.pool,'gateway'));
   // Fixture accounts count as adults; the 18+ guard itself is tested with the registration account below.
   await gatewayDb.owner.query(`CREATE FUNCTION pactaris.fixture_adult() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN NEW.adult_confirmed_at=coalesce(NEW.adult_confirmed_at,now());RETURN NEW;END$$;
@@ -1398,6 +1401,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   const afterRace=(await api('/api/households/'+wsHome.householdId+'/safety','GET',undefined,wsSession)).data.state;
   assert.equal(afterRace.selfPaused,true);assert.equal((await api(stopHome+'selfResume','POST',{operationId:randomUUID(),epoch:afterRace.epoch,memberEpoch:afterRace.memberEpoch},wsSession)).status,200);
   // Bounded list summaries/details and actual private tenant/role boundaries.
+  await wsDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"oneoff.open.max\":100}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
   for(let i=0;i<11;i++)assert.equal((await wsPost('taskCreate',{fields:{...wsFields,title:'Paged task '+i},...await wsEpoch()})).status,200);
   ws=await wsRead();assert.equal(ws.data.tasks.length,10);assert.ok(ws.data.nextCursor);
   assert.ok((await wsRead(wsSession,'open',ws.data.nextCursor)).data.tasks.length>0);
@@ -1414,19 +1418,21 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal((await api(wsBase+'/taskCreate','POST',{operationId:randomUUID(),fields:wsFields,...await wsEpoch()},wsSession,{origin:'https://wrong.fixture.invalid'})).status,403);
   assert.equal((await api('/api/households/'+households[2]+'/workspace','GET',undefined,wsSession)).status,404);
   await assert.rejects(new PrivateWorkspaceClient(signer).execute(wsOwner.id,{...wsPlacement,instanceId:wsPlacement.instanceId===ids[0]?ids[1]!:ids[0]!},'workspaceRead',{operationId:randomUUID(),membershipId:wsMember,filter:'open'}));
-  // Capacity is atomic across creators; downgrade does not block existing reads/archive/own completion.
+  // Plan limits are per person and atomic; a downgrade does not block existing reads/archive/own completion.
   const openRows=(await wsDb.owner.query("SELECT id,version::text FROM pactaris.tasks WHERE household_id=$1 AND state='open'",[wsHome.householdId])).rows;
   for(const row of openRows)assert.equal((await wsPost('taskArchive',{taskId:row.id,version:row.version})).status,200);
-  await wsDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"tasks.active.max\":1}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
-  const racers=[wsSession,wsAdmin.session,wsParticipant.session],raceReplies=await Promise.all(racers.map(async session=>wsPost('taskCreate',{fields:wsFields,...await wsEpoch(session)},session)));
+  await wsDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"oneoff.open.max\":1}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
+  const racers=[wsSession,wsSession,wsSession],raceReplies=await Promise.all(racers.map(async session=>wsPost('taskCreate',{fields:wsFields,...await wsEpoch(session)},session)));
   assert.equal(raceReplies.filter(r=>r.status===200).length,1);assert.equal(raceReplies.filter(r=>r.data.code==='workspace_capacity').length,2);
   const winner=raceReplies.findIndex(r=>r.status===200),won=raceReplies[winner]!.data.taskId,wonSession=racers[winner]!;
-  await wsDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"tasks.active.max\":0}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
+  // The limit is per person: another member still has room.
+  assert.equal((await wsPost('taskCreate',{fields:wsFields,...await wsEpoch(wsAdmin.session)},wsAdmin.session)).status,200);
+  await wsDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"oneoff.open.max\":0}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
   assert.equal((await wsPost('taskUpdate',{taskId:won,version:'1',fields:{...wsFields,assignment:'self'},...await wsEpoch(wonSession)},wonSession)).status,200);
   assert.equal((await wsPost('taskComplete',{taskId:won,version:'2',...await wsEpoch(wonSession)},wonSession)).status,200);
   assert.equal((await wsPost('taskReopen',{taskId:won,version:'3'},wonSession)).data.code,'workspace_capacity');
   // Failed final write rolls back content, receipts, replay, audit and capacity use.
-  await wsDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"tasks.active.max\":25}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
+  await wsDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"oneoff.open.max\":100}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
   const atomicId=randomUUID(),atomicBody=Buffer.from(JSON.stringify({operationId:atomicId,membershipId:wsMember,fields:wsFields,...await wsEpoch()}));
   const wsHandler=services[wsPlacement.instanceId===ids[0]?0:1]!,packet=await signer.signCommand(wsOwner.id,wsHome.householdId,wsPlacement.instanceId,'taskCreate',atomicId,atomicBody.toString());
   await wsDb.owner.query("CREATE FUNCTION pactaris.fixture_workspace_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture final workspace write'; END $$; CREATE TRIGGER fixture_workspace_failure BEFORE INSERT ON pactaris.workspace_outbox FOR EACH ROW EXECUTE FUNCTION pactaris.fixture_workspace_failure()");
@@ -1624,7 +1630,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await (async function verifyPersonalRoutines(){
    const person=await store.account('https://idp.fixture.invalid/','routine-owner','Routine owner'),session=randomBytes(32).toString('base64url');
    await store.createSession(session,person,'registration-csrf',600,1200);
-   const home=await onboarding.create(person.id,randomUUID(),'Solo routines'),place=(await store.placement(person.id,home.householdId))!,db=place.instanceId===ids[0]?a:b;
+   const home=await onboarding.create(person.id,randomUUID(),'Solo routines'),place=(await store.placement(person.id,home.householdId))!,db=place.instanceId===ids[0]?a:b;await roomyPlan(db,home.householdId);
    const membership=(await client.summary(person.id,place))!.membershipId!,base='/api/households/'+home.householdId;
    const post=(action:string,input:Record<string,unknown>={},actor=session)=>api(base+'/routines/'+action,'POST',{operationId:randomUUID(),...input},actor);
    const detail=async(routineId:string,extra:Record<string,unknown>={})=>{const r=await post('routineRead',{routineId,day:null,...extra});assert.equal(r.status,200,JSON.stringify(r.data));return r.data.routine;};
@@ -1633,6 +1639,13 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    const fields={title:'My own practice',description:'Private reflection\nSecond line',category:'Preparation',timeZone:'Europe/Amsterdam',period:'daily',date:null,mode:'minimum',target:2,responseType:'text'};
    const entry={count:1,text:'Personal progress',rating:null,confirmed:null};
    const make=async(kind='habit',patch:Record<string,unknown>={})=>{const id=randomUUID();assert.equal((await post('routineCreate',{operationId:id,kind,fields:{...fields,...patch}})).status,200);return id;};
+   // Plan limit: routines count per creator; a full plan refuses a new routine with its own code.
+   await db.owner.query(`UPDATE pactaris.household_entitlements SET capabilities=capabilities||'{"routines.active.max":1}'::jsonb WHERE household_id=$1`,[home.householdId]);
+   const limitedRoutine=await make();const overRoutine=await post('routineCreate',{operationId:randomUUID(),kind:'habit',fields});
+   assert.equal(overRoutine.status,409);assert.equal(overRoutine.data.code,'routines_capacity');
+   assert.equal((await db.owner.query('SELECT count(*)::int n FROM pactaris.routines WHERE household_id=$1',[home.householdId])).rows[0].n,1);
+   await db.owner.query("UPDATE pactaris.routines SET state='archived' WHERE household_id=$1 AND id=$2",[home.householdId,limitedRoutine]);
+   await roomyPlan(db,home.householdId);
    const activate=async(id:string)=>{const d=await detail(id);assert.equal((await post('routineActivate',{routineId:id,version:d.version,epoch:d.epoch,memberEpoch:d.memberEpoch})).status,200);return detail(id);};
    const record=(d:any,input:Record<string,unknown>={})=>post('progressRecord',{routineId:d.routineId,version:d.version,revision:d.revision,epoch:d.epoch,memberEpoch:d.memberEpoch,occurredAt:null,entry,...input});
    const nowDay=Number((await db.owner.query("SELECT extract(isodow from now() AT TIME ZONE 'Europe/Amsterdam')::integer AS day")).rows[0].day);
@@ -1740,7 +1753,7 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   await (async function verifyPrivateRewardCatalog(){
    const account=await store.account('https://idp.fixture.invalid/','catalog-owner','Catalog owner'),session=randomBytes(32).toString('base64url');
    await store.createSession(session,account,'registration-csrf',600,1200);
-   const home=await onboarding.create(account.id,randomUUID(),'Owner-only catalog'),place=(await store.placement(account.id,home.householdId))!,db=place.instanceId===ids[0]?a:b;
+   const home=await onboarding.create(account.id,randomUUID(),'Owner-only catalog'),place=(await store.placement(account.id,home.householdId))!,db=place.instanceId===ids[0]?a:b;await roomyPlan(db,home.householdId);
    const member=(await client.summary(account.id,place))!.membershipId!,base='/api/households/'+home.householdId;
    const post=(action:string,input:Record<string,unknown>={},actor=session)=>api(base+'/catalog/'+action,'POST',{operationId:randomUUID(),...input},actor);
    const read=async(itemId:string,version?:string)=>{const r=await post('catalogRead',{itemId,...(version?{version}:{})});assert.equal(r.status,200,JSON.stringify(r.data));return r.data.item;};
@@ -1748,6 +1761,13 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    const created=await post('catalogCreate',{operationId:id,fields});assert.equal(created.status,200);assert.equal(created.data.itemId,id);assert.ok(!created.body.includes('instance'));assert.ok(!created.body.includes(fields.title));
    assert.equal((await post('catalogCreate',{operationId:id,fields})).status,200);assert.equal((await post('catalogCreate',{operationId:id,fields:{...fields,points:0}})).status,409);
    let d=await read(id);assert.equal(d.state,'draft');assert.equal(d.points,null);assert.equal(d.historical,false);
+   // Plan limit: rewards and punishments count per dynamic, each against its own limit.
+   await db.owner.query(`UPDATE pactaris.household_entitlements SET capabilities=capabilities||'{"catalog.rewards.max":1,"catalog.punishments.max":1}'::jsonb WHERE household_id=$1`,[home.householdId]);
+   const overReward=await post('catalogCreate',{fields:{...fields,title:'One more reward'}});assert.equal(overReward.status,409);assert.equal(overReward.data.code,'catalog_capacity');
+   const punishment=await post('catalogCreate',{fields:{...fields,title:'A consequence',points:0,kind:'consequence'}});assert.equal(punishment.status,200,JSON.stringify(punishment.data));
+   assert.equal((await post('catalogCreate',{fields:{...fields,title:'Another consequence',points:0,kind:'consequence'}})).data.code,'catalog_capacity');
+   for(const table of ['catalog_versions','catalog_items'])await db.owner.query(`DELETE FROM pactaris.${table} WHERE household_id=$1 AND ${table==='catalog_items'?'id':'item_id'}=$2`,[home.householdId,punishment.data.itemId]);
+   await roomyPlan(db,home.householdId);
    assert.equal((await post('catalogUpdate',{itemId:id,version:d.version,fields:{...fields,points:0}})).status,200);d=await read(id);assert.equal(d.points,0);assert.equal(d.version,'2');
    assert.equal((await read(id,'1')).points,null);assert.equal((await read(id,'1')).historical,true);
    assert.equal((await post('catalogUpdate',{itemId:id,version:'1',fields})).status,409);
@@ -2006,6 +2026,11 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      // Habits the Dom sets, with automatic outcomes; a pause means the period is skipped.
      const habitFields={title:'Morning check-in',description:'',period:'daily',mode:'minimum',target:1,timeZone:'UTC',rewardPoints:3,penaltyPoints:2,punishment:'Corner time',milestoneEvery:null,milestonePoints:null};
      const habit=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:habitFields});assert.equal(habit.status,200,JSON.stringify(habit.data));
+     // Plan limit: Dom-set habits count per sub; pausing keeps the place, so resuming is never refused.
+     const habitLimit=async(n:number)=>db.owner.query(`UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{habits.assigned.max}',$2::jsonb) WHERE household_id=$1`,[home.householdId,String(n)]);
+     await habitLimit(1);
+     const overHabit=await au(A,'habitSave',{habitId:null,subjectId:D.member,version:null,fields:habitFields});assert.equal(overHabit.data.code,'authority_capacity');
+     await habitLimit(100);
      // An automatic habit notice is still readable but cannot be pushed while its holder is paused.
      const pushPauseTx=await db.owner.connect();
      try{await pushPauseTx.query('BEGIN');
@@ -2206,6 +2231,15 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
      const listedReward=await au(A,'shopSave',{itemId:null,version:null,fields:{kind:'reward',title:'Film night',description:'',points:1},listed:true,autoGrant:false,weeklyLimit:1});
      assert.equal(listedReward.status,200,JSON.stringify(listedReward.data));
      const instantReward=await au(A,'shopSave',{itemId:null,version:null,fields:{kind:'reward',title:'Treat',description:'',points:1},listed:true,autoGrant:true,weeklyLimit:null});assert.equal(instantReward.status,200);
+     // Plan limit: shop items count per dynamic; saving an item that is already listed is not a new one.
+     await db.owner.query(`UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{shop.items.max}','2') WHERE household_id=$1`,[home.householdId]);
+     assert.equal((await au(A,'shopSave',{itemId:null,version:null,fields:{kind:'reward',title:'Third listing',description:'',points:1},listed:true,autoGrant:false,weeklyLimit:null})).data.code,'authority_capacity');
+     const relisted=await au(A,'shopSave',{itemId:instantReward.data.resourceId,version:'1',fields:{kind:'reward',title:'Treat',description:'',points:1},listed:true,autoGrant:true,weeklyLimit:null});assert.equal(relisted.status,200,JSON.stringify(relisted.data));
+     const usage=await api(base+'/plan/usage','GET',undefined,A.session);assert.equal(usage.status,200,usage.body);
+     assert.deepEqual(usage.data['shop.items.max'],{used:2,limit:2});assert.ok(Number.isInteger(usage.data['habits.assigned.max'].limit));
+     const subUsage=(await api(base+'/plan/usage','GET',undefined,D.session)).data;assert.ok(subUsage['habits.assigned.max'].used>=1);
+     assert.equal((await api(base+'/plan/usage?x=1','GET',undefined,D.session)).status,400);
+     await db.owner.query(`UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{shop.items.max}','100') WHERE household_id=$1`,[home.householdId]);
      assert.equal((await au(A,'shopSave',{itemId:null,version:null,fields:{kind:'consequence',title:'Lines',description:'',points:0},listed:true,autoGrant:false,weeklyLimit:null})).status,400);
      assert.equal((await au(A,'shopSave',{itemId:null,version:null,fields:{kind:'consequence',title:'Lines',description:'Fifty',points:0},listed:false,autoGrant:false,weeklyLimit:null})).status,200);
      assert.ok((await shop(A)).items.some((i:any)=>i.kind==='consequence'&&i.title==='Lines'));
@@ -2389,10 +2423,10 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
     assert.deepEqual(d.sharedReward,{title:'Reward fixture',description:'Chosen reward terms'});assert.equal(d.rewardSelection,undefined);
     const todo=await post(B,'partnerList',{filter:'todo'});assert.equal(todo.status,200);assert.ok(todo.data.tasks.some((t:any)=>t.taskId===task));assert.ok(!(await post(A,'partnerList',{filter:'todo'})).data.tasks.some((t:any)=>t.taskId===task));assert.equal((await post(C,'partnerList',{filter:'todo'})).data.tasks.length,0);
     assert.ok((await post(B,'partnerList',{filter:'active'})).data.tasks.some((t:any)=>t.taskId===task&&t.state==='assigned'));
-    await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','0') WHERE household_id=$1",[home.householdId]);
+    await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{oneoff.open.max}','0') WHERE household_id=$1",[home.householdId]);
     assert.equal((await post(A,'partnerAssign',{...body,operationId:randomUUID()})).data.code,'partner_capacity');
     assert.equal((await read(B,task)).state,'assigned');
-    await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','25') WHERE household_id=$1",[home.householdId]);
+    await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{oneoff.open.max}','100') WHERE household_id=$1",[home.householdId]);
     assert.equal((await move(B,'partnerAccept',task)).status,409);assert.equal((await post(C,'partnerRead',{taskId:task})).status,404);
     assert.equal((await post(B,'partnerAssign',{...await offerBody(B,A),policyId:active.policyId,policyVersion:active.version})).status,404);
     assert.equal((await move(B,'partnerStart',task)).status,200);assert.equal((await move(B,'partnerSubmit',task,{note:'Direct work'})).status,200);assert.equal((await move(A,'partnerApprove',task)).status,200);
@@ -2530,16 +2564,23 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
    const expiring=await agreement([A,B]),expiredTask=await offer(A,B,expiring.agreementId);await db.owner.query("UPDATE pactaris.agreement_versions SET expires_at=now()-interval '1 second' WHERE household_id=$1 AND agreement_id=$2",[home.householdId,expiring.agreementId]);assert.equal((await read(B,expiredTask)).eligible,false);assert.equal((await move(B,'partnerAccept',expiredTask)).data.code,'partner_paused');assert.equal((await move(A,'partnerCancel',expiredTask)).status,200);
    const unicodeTasks:string[]=[];for(let i=0;i<7;i++){const b=await offerBody(A,B),r=await post(A,'partnerOffer',{...b,fields:{...fields,description:'😀'.repeat(500)}});assert.equal(r.status,200);unicodeTasks.push(r.data.taskId);}
    const unicodeList=await post(A,'partnerList',{filter:'active'});assert.equal(unicodeList.status,200);assert.ok(Buffer.byteLength(unicodeList.body)>16384);for(const taskId of unicodeTasks)assert.equal((await move(A,'partnerCancel',taskId)).status,200);
-   // Combined private/shared capacity and downgrade cannot evict or block refusal.
-   await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','1') WHERE household_id=$1",[home.householdId]);
-   const ownState=await state(A),privateId=randomUUID(),privateFields={title:'Private capacity',description:'',priority:'normal',dueAt:null,assignment:'unassigned'};
-   assert.equal((await api(base+'/workspace/taskCreate','POST',{operationId:privateId,fields:privateFields,epoch:ownState.epoch,memberEpoch:ownState.memberEpoch},A.session)).status,200);
-   assert.equal((await post(A,'partnerOffer',await offerBody(A,B))).data.code,'partner_capacity');assert.equal((await api(base+'/workspace/taskArchive','POST',{operationId:randomUUID(),taskId:privateId,version:'1'},A.session)).status,200);
-   const capacityTask=await offer();assert.equal((await api(base+'/workspace/taskCreate','POST',{operationId:randomUUID(),fields:privateFields,epoch:ownState.epoch,memberEpoch:ownState.memberEpoch},A.session)).data.code,'workspace_capacity');
-   await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','0') WHERE household_id=$1",[home.householdId]);assert.equal((await read(B,capacityTask)).state,'offered');assert.equal((await move(B,'partnerDecline',capacityTask)).status,200);assert.equal((await post(A,'partnerOffer',await offerBody(A,B))).data.code,'partner_capacity');
-   await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','1') WHERE household_id=$1",[home.householdId]);
+   // The one-off limit is per person and combines the person's own tasks with tasks given to them; a
+   // downgrade cannot evict anything or block refusal.
+   for(const row of (await db.owner.query("SELECT id FROM pactaris.partner_tasks WHERE household_id=$1 AND assignee_id=$2 AND series_id IS NULL AND state NOT IN ('done','declined','cancelled')",[home.householdId,B.member])).rows)
+    await db.owner.query("UPDATE pactaris.partner_tasks SET state='cancelled' WHERE household_id=$1 AND id=$2",[home.householdId,row.id]);
+   await db.owner.query("UPDATE pactaris.tasks SET state='archived' WHERE household_id=$1 AND state='open'",[home.householdId]);
+   const setOneOff=(n:number)=>db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{oneoff.open.max}',$2::jsonb) WHERE household_id=$1",[home.householdId,String(n)]);
+   await setOneOff(1);
+   const subState=await state(B),privateId=randomUUID(),privateFields={title:'Private capacity',description:'',priority:'normal',dueAt:null,assignment:'unassigned'};
+   assert.equal((await api(base+'/workspace/taskCreate','POST',{operationId:privateId,fields:privateFields,epoch:subState.epoch,memberEpoch:subState.memberEpoch},B.session)).status,200);
+   const ownState=await state(A);
+   assert.equal((await api(base+'/workspace/taskCreate','POST',{operationId:randomUUID(),fields:privateFields,epoch:ownState.epoch,memberEpoch:ownState.memberEpoch},A.session)).status,200);
+   assert.equal((await post(A,'partnerOffer',await offerBody(A,B))).data.code,'partner_capacity');assert.equal((await api(base+'/workspace/taskArchive','POST',{operationId:randomUUID(),taskId:privateId,version:'1'},B.session)).status,200);
+   const capacityTask=await offer();assert.equal((await api(base+'/workspace/taskCreate','POST',{operationId:randomUUID(),fields:privateFields,epoch:subState.epoch,memberEpoch:subState.memberEpoch},B.session)).data.code,'workspace_capacity');
+   await setOneOff(0);assert.equal((await read(B,capacityTask)).state,'offered');assert.equal((await move(B,'partnerDecline',capacityTask)).status,200);assert.equal((await post(A,'partnerOffer',await offerBody(A,B))).data.code,'partner_capacity');
+   await setOneOff(1);
    const concurrentOffers=await Promise.all([post(A,'partnerOffer',await offerBody(A,B)),post(A,'partnerOffer',await offerBody(A,B))]);assert.deepEqual(concurrentOffers.map(r=>r.status).sort(),[200,409]);const atomicTask=concurrentOffers.find(r=>r.status===200)!.data.taskId;
-   await db.owner.query("UPDATE pactaris.household_entitlements SET capabilities=jsonb_set(capabilities,'{tasks.active.max}','25') WHERE household_id=$1",[home.householdId]);
+   await setOneOff(100);
    assert.equal((await move(B,'partnerAccept',atomicTask)).status,200);assert.equal((await move(B,'partnerStart',atomicTask)).status,200);
    const current=await read(B,atomicTask),op=randomUUID(),payload=Buffer.from(JSON.stringify({...transitionBody(current,'partnerSubmit',{note:'Atomic submission'}),operationId:op,membershipId:B.member})),handler=services[place.instanceId===ids[0]?0:1]!;
    const packet=await signer.signCommand(B.account.id,home.householdId,place.instanceId,'partnerSubmit',op,payload.toString());

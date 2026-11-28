@@ -71,7 +71,25 @@ The values live in `packages/auth/plans.ts`.
 
 - **Members:** `members.active.max` is the level's number plus the operator's *extra member places*. It is already enforced: invitations cannot overfill a dynamic.
 - **"Need more members?"** When an invitation fails on the member limit, the link opens a report with the category *More members needed* and the dynamic's ID. Operators see that ID with every report, and then set extra places in the console.
-- **The other keys** are sent to the Instance already. Enforcing them is the next step: new items above a limit are refused, while existing items keep running and nothing is deleted.
+- **Counting (owner decision, 28 November 2026; Instance migration `0071_plan_limits`).** Some limits count **per person**:
+
+  | Key | Counts | Whose |
+  |---|---|---|
+  | `oneoff.open.max` | open own tasks, plus Dom/sub tasks that are not done, declined or cancelled; generated occurrences of a series do not count | the assignee, or the creator for own and unassigned tasks |
+  | `series.active.max` | active or blocked series, and personal series | the assignee; for a personal series, its owner |
+  | `habits.assigned.max` | active or paused Dom-set habits | the sub |
+  | `routines.active.max` | draft, active or paused routines | the creator |
+
+  The others count **per dynamic**: rewards (`catalog.rewards.max`, every kind except consequences), punishments (`catalog.punishments.max`, consequences) and shop listings (`shop.items.max`).
+- **Enforcement.**
+  - Database triggers refuse a new item, or one that comes back into use (reopened, restored from the archive), when the limit is reached. They work under the dynamic's lock, so concurrent requests cannot overbook.
+  - Completing, archiving, cancelling, declining, pausing and editing are never refused.
+  - Pausing does not free a place, so resuming is never refused.
+  - Each module answers with its own capacity error: `workspace_capacity`, `partner_capacity`, `authority_capacity`, `routines_capacity` or `catalog_capacity`. The message points to Settings → Plan.
+  - Without a delivered plan, the Instance uses the Free values. A unit test keeps them equal to `packages/auth/plans.ts`.
+- **Retired pilot limit.** The shared pilot limit `tasks.active.max` (25 per dynamic) is set to 999999, so it no longer applies.
+- **Usage.** The Plan panel shows "used of limit" (`GET /api/households/:id/plan/usage`, Instance `plan_usage`). Per-person rows show the viewer's own use.
+- **Not enforced yet:** `plan.horizon.days` and `history.days` come in the next step, and so does pausing the excess after a downgrade.
 - **Always free:** safety, consent, privacy, export, leaving and deletion.
 
 ## Delivery to the Instance

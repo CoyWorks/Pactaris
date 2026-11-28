@@ -715,6 +715,13 @@
       "path": "migrations/instance/0070_plan_entitlements.sql",
       "sha256": "ea56f2b79117f6fbe57fa06716dfea70f31a7f8568389c21970f424e461a159d",
       "backwardCompatible": true
+    },
+    {
+      "component": "instance",
+      "id": "0071_plan_limits",
+      "path": "migrations/instance/0071_plan_limits.sql",
+      "sha256": "4fa3569892838b99f7d550b2bfd8b1fc27307164870a40ba9e3d5851ff1e41c8",
+      "backwardCompatible": true
     }
   ]
 }
