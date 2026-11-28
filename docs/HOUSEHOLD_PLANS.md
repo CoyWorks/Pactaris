@@ -87,6 +87,7 @@ The values live in `packages/auth/plans.ts`.
   - Pausing does not free a place, so resuming is never refused.
   - Each module answers with its own capacity error: `workspace_capacity`, `partner_capacity`, `authority_capacity`, `routines_capacity` or `catalog_capacity`. The message points to Settings → Plan.
   - Without a delivered plan, the Instance uses the Free values. A unit test keeps them equal to `packages/auth/plans.ts`.
+  - **Generated occurrences.** A series inserts each occurrence as a task and links it to the series just after. `generate_task_series` and `run_personal_scheduler` are wrapped to mark their own inserts with a transaction-local setting, so a full one-off limit never stops a series.
 - **Retired pilot limit.** The shared pilot limit `tasks.active.max` (25 per dynamic) is set to 999999, so it no longer applies.
 - **Usage.** The Plan panel shows "used of limit" (`GET /api/households/:id/plan/usage`, Instance `plan_usage`). Per-person rows show the viewer's own use.
 - **Not enforced yet:** `plan.horizon.days` and `history.days` come in the next step, and so does pausing the excess after a downgrade.

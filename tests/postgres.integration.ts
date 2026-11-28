@@ -1402,6 +1402,22 @@ test('real PostgreSQL migrations, RLS, sessions, private TLS and two-Instance ho
   assert.equal(afterRace.selfPaused,true);assert.equal((await api(stopHome+'selfResume','POST',{operationId:randomUUID(),epoch:afterRace.epoch,memberEpoch:afterRace.memberEpoch},wsSession)).status,200);
   // Bounded list summaries/details and actual private tenant/role boundaries.
   await wsDb.owner.query("UPDATE pactaris.household_entitlements SET version=version+1,capabilities=capabilities||'{\"oneoff.open.max\":100}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
+  // Personal series count once per owner; their generated occurrences never count as one-off tasks.
+  {
+   const day=(await wsDb.owner.query("SELECT to_char((now() AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS d")).rows[0].d;
+   const schedule={period:'daily',startDate:day,endDate:null,timeZone:'UTC',availableTime:'00:00',dueMinutes:1440,weekdays:[]};
+   const seriesFields={...wsFields,title:'Personal repeating task',assignment:'self',dueAt:null};
+   await wsDb.owner.query("UPDATE pactaris.household_entitlements SET capabilities=capabilities||'{\"oneoff.open.max\":0,\"series.active.max\":1}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
+   const series=await wsPost('personalSeriesSave',{fields:seriesFields,schedule,...await wsEpoch()});assert.equal(series.status,200,JSON.stringify(series.data));
+   assert.equal((await wsPost('personalSeriesSave',{fields:{...seriesFields,title:'Second series'},schedule,...await wsEpoch()})).data.code,'workspace_capacity');
+   await wsDb.owner.query("UPDATE pactaris.personal_task_series SET run_after=now() WHERE household_id=$1",[wsHome.householdId]);
+   for(let n=0;n<4;n++)await wsDb.owner.query('SELECT pactaris.run_personal_scheduler($1)',[wsPlacement.instanceId]);
+   const generated=(await wsDb.owner.query("SELECT count(*)::int n FROM pactaris.tasks WHERE household_id=$1 AND personal_series_id IS NOT NULL",[wsHome.householdId])).rows[0].n;
+   assert.ok(generated>=1,'personal occurrences are generated while the one-off limit is full');
+   assert.equal((await wsDb.owner.query("SELECT state FROM pactaris.personal_task_series WHERE household_id=$1 AND state<>'superseded'",[wsHome.householdId])).rows[0].state,'active');
+   await wsDb.owner.query("UPDATE pactaris.personal_task_series SET state='stopped' WHERE household_id=$1",[wsHome.householdId]);
+   await wsDb.owner.query("UPDATE pactaris.household_entitlements SET capabilities=capabilities||'{\"oneoff.open.max\":100,\"series.active.max\":100}'::jsonb WHERE household_id=$1",[wsHome.householdId]);
+  }
   for(let i=0;i<11;i++)assert.equal((await wsPost('taskCreate',{fields:{...wsFields,title:'Paged task '+i},...await wsEpoch()})).status,200);
   ws=await wsRead();assert.equal(ws.data.tasks.length,10);assert.ok(ws.data.nextCursor);
   assert.ok((await wsRead(wsSession,'open',ws.data.nextCursor)).data.tasks.length>0);

@@ -720,7 +720,7 @@
       "component": "instance",
       "id": "0071_plan_limits",
       "path": "migrations/instance/0071_plan_limits.sql",
-      "sha256": "4fa3569892838b99f7d550b2bfd8b1fc27307164870a40ba9e3d5851ff1e41c8",
+      "sha256": "131a057b14258f6ead5394efae886f9acc600f869a6756776c3160bcc0e1ca46",
       "backwardCompatible": true
     }
   ]

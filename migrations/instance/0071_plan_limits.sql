@@ -58,7 +58,7 @@ CREATE OR REPLACE FUNCTION pactaris.combined_task_capacity() RETURNS trigger LAN
 DECLARE limit_key text;person uuid;message text;
 BEGIN
  IF TG_TABLE_NAME='tasks' THEN
-  IF NEW.state<>'open' OR NEW.personal_series_id IS NOT NULL THEN RETURN NEW;END IF;
+  IF NEW.state<>'open' OR NEW.personal_series_id IS NOT NULL OR current_setting('pactaris.series_generation',true)='on' THEN RETURN NEW;END IF;
   IF TG_OP='UPDATE' THEN IF OLD.state='open' THEN RETURN NEW;END IF;END IF;
   limit_key='oneoff.open.max';person=coalesce(NEW.assignee_membership_id,NEW.creator_membership_id);message='workspace.capacity';
  ELSIF TG_TABLE_NAME='task_series' THEN
@@ -71,7 +71,9 @@ BEGIN
   -- A revision first marks its predecessor superseded, which no longer counts, so revising never adds one.
   limit_key='series.active.max';person=NEW.creator_id;message='workspace.capacity';
  ELSE
-  IF NEW.state IN ('done','declined','cancelled') OR NEW.series_id IS NOT NULL THEN RETURN NEW;END IF;
+  -- Series generation inserts an occurrence and links it to its series right after; see the wrapper below.
+  IF NEW.state IN ('done','declined','cancelled') OR NEW.series_id IS NOT NULL
+   OR current_setting('pactaris.series_generation',true)='on' THEN RETURN NEW;END IF;
   IF TG_OP='UPDATE' THEN IF OLD.state NOT IN ('done','declined','cancelled') THEN RETURN NEW;END IF;END IF;
   limit_key='oneoff.open.max';person=NEW.assignee_id;message='partner.capacity';
  END IF;
@@ -81,6 +83,33 @@ BEGIN
  END IF;
  RETURN NEW;
 END $$;
+
+-- Occurrences are generated through partnerAssign and linked to their series by a following update, so the
+-- trigger cannot see the series yet. The generator marks its own inserts (transaction-local; a failed
+-- generation's savepoint reverts it). Requests cannot set this: the API runs no raw SQL.
+ALTER FUNCTION pactaris.generate_task_series(uuid,uuid,bigint,uuid) RENAME TO generate_task_series_before_plan_limits;
+REVOKE ALL ON FUNCTION pactaris.generate_task_series_before_plan_limits(uuid,uuid,bigint,uuid) FROM PUBLIC;
+CREATE FUNCTION pactaris.generate_task_series(target uuid,series uuid,revision bigint,instance uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pactaris,pg_temp AS $$
+BEGIN
+ PERFORM set_config('pactaris.series_generation','on',true);
+ PERFORM pactaris.generate_task_series_before_plan_limits(target,series,revision,instance);
+ PERFORM set_config('pactaris.series_generation','off',true);
+END $$;
+REVOKE ALL ON FUNCTION pactaris.generate_task_series(uuid,uuid,bigint,uuid) FROM PUBLIC;
+-- The personal scheduler does the same for personal series (taskCreate, then the link).
+ALTER FUNCTION pactaris.run_personal_scheduler(uuid) RENAME TO run_personal_scheduler_before_plan_limits;
+REVOKE ALL ON FUNCTION pactaris.run_personal_scheduler_before_plan_limits(uuid) FROM PUBLIC;
+CREATE FUNCTION pactaris.run_personal_scheduler(instance uuid) RETURNS text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pactaris,pg_temp AS $$
+DECLARE result text;
+BEGIN
+ PERFORM set_config('pactaris.series_generation','on',true);
+ result=pactaris.run_personal_scheduler_before_plan_limits(instance);
+ PERFORM set_config('pactaris.series_generation','off',true);
+ RETURN result;
+END $$;
+REVOKE ALL ON FUNCTION pactaris.run_personal_scheduler(uuid) FROM PUBLIC;
 
 -- Dom-set habits (per sub) and routines (per creator): a new item, or one restored from the archive.
 -- Pausing does not free a place, so resuming a paused item is never refused.
