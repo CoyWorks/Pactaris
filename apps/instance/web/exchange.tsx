@@ -12,7 +12,7 @@ import {PersonHabits} from './assigned-habits.js';
 import type {AssignedHabit} from '../../../packages/auth/authority.js';
 const kindKeys:Record<ExchangeKind,MessageKey>={permission:'exchange.kind.permission',proposal:'exchange.kind.proposal',journal:'exchange.kind.journal',breach:'exchange.kind.breach'};
 const stateKeys:Record<ExchangeItem['state'],MessageKey>={open:'exchange.state.open',recorded:'exchange.state.recorded',expired:'exchange.state.expired',approved:'exchange.state.approved',declined:'exchange.state.declined',acknowledged:'exchange.state.acknowledged'};
-const errors:MessageKey[]=['exchange.invalid','exchange.denied','exchange.conflict','exchange.paused','exchange.capacity','exchange.unavailable','errors.rateLimited','errors.request'];
+const errors:MessageKey[]=['exchange.invalid','exchange.denied','exchange.conflict','exchange.paused','exchange.capacity','exchange.horizon','exchange.unavailable','errors.rateLimited','errors.request'];
 const errorKey=(value:unknown):MessageKey=>errors.includes(value as MessageKey)?value as MessageKey:'exchange.unavailable';
 type Session={csrfToken:string};
 type Outcome={ok:true;data:ExchangeResult}|{ok:false;key:MessageKey;unknown:boolean};

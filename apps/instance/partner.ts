@@ -44,6 +44,7 @@ export class InstancePartner{
   }catch(error){
    await db.query('ROLLBACK');
    if(error&&typeof error==='object'&&'code'in error&&error.code==='P0001'&&'message'in error&&typeof error.message==='string'){
+    if(error.message==='plan.horizon')throw new PartnerError('horizon');
     const kind=error.message.replace('partner.','');if(['invalid','denied','conflict','paused','capacity','proofRequired'].includes(kind))throw new PartnerError(kind as 'invalid'|'denied'|'conflict'|'paused'|'capacity'|'proofRequired');
    }throw error;
   }finally{db.release();}

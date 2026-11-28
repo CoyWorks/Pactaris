@@ -90,7 +90,11 @@ The values live in `packages/auth/plans.ts`.
   - **Generated occurrences.** A series inserts each occurrence as a task and links it to the series just after. `generate_task_series` and `run_personal_scheduler` are wrapped to mark their own inserts with a transaction-local setting, so a full one-off limit never stops a series.
 - **Retired pilot limit.** The shared pilot limit `tasks.active.max` (25 per dynamic) is set to 999999, so it no longer applies.
 - **Usage.** The Plan panel shows "used of limit" (`GET /api/households/:id/plan/usage`, Instance `plan_usage`). Per-person rows show the viewer's own use.
-- **Not enforced yet:** `plan.horizon.days` and `history.days` come in the next step, and so does pausing the excess after a downgrade.
+- **Plan horizon** (`plan.horizon.days`, Instance migration `0072_plan_horizon`). A date may be set at most this many days ahead. This covers a task's due date (own and Dom/sub tasks), a series' start date (Dom series and personal series) and a one-time routine's date.
+  - The check runs only when the date is set or moved. A date set earlier stays after a downgrade, and saving an item with its date unchanged is never refused.
+  - Generated occurrences are not checked.
+  - Each module answers with its own `*_horizon` error.
+- **Not enforced yet:** `history.days` comes in the next step, and so does pausing the excess after a downgrade.
 - **Always free:** safety, consent, privacy, export, leaving and deletion.
 
 ## Delivery to the Instance

@@ -3,7 +3,7 @@ import {validTaskSchedule,type TaskSchedule} from './partner.js';
 import {uuid} from './delegation.js';
 import type {WorkspaceAction} from './workspace-actions.js';
 export {workspaceActions,isWorkspaceAction,type WorkspaceAction} from './workspace-actions.js';
-export class WorkspaceError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'capacity'|'paused'|'unavailable'){super('workspace.'+kind);}}
+export class WorkspaceError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'capacity'|'paused'|'horizon'|'unavailable'){super('workspace.'+kind);}}
 export type TaskFields={title:string;description:string;priority:'low'|'normal'|'high';dueAt:string|null;assignment:'unassigned'|'self'};
 export type TaskSummary=Omit<TaskFields,'description'>&{taskId:string;version:string;state:'open'|'done'|'archived'};
 export type TaskDetail=TaskSummary&{description:string};

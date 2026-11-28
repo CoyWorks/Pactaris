@@ -24,7 +24,7 @@ export type ApprovalDetail={taskId:string;version:string;state:PartnerState;titl
 export type DeliveryPreferences={push:boolean;reminders:boolean;quietStart:string|null;quietEnd:string|null;timeZone:string};
 export type InboxPreferences={assigned:boolean;submitted:boolean;reviewed:boolean};
 export type PartnerResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';scheduling?:boolean;seriesId?:string;series?:TaskSeries[];taskId?:string;policyId?:string;balance?:string;deliveryPreferences?:DeliveryPreferences;pushSequence?:string|null;inboxPreferences?:InboxPreferences;inbox?:{id:string;taskId:string;kind:'assigned'|'submitted'|'reviewed'|'reminder';read:boolean;at:string;title?:string}[];policies?:AssignmentPolicy[];choices?:PartnerChoice[];tasks?:PartnerSummary[];task?:PartnerDetail;nextCursor?:string|null;approvals?:ApprovalItem[];approval?:ApprovalDetail};
-export class PartnerError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'proofRequired'|'unavailable'){super('partner.'+kind);}}
+export class PartnerError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'horizon'|'proofRequired'|'unavailable'){super('partner.'+kind);}}
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 export const validPushSequence=(value:unknown):value is string=>typeof value==='string'&&
  /^(0|[1-9][0-9]{0,18})$/.test(value)&&BigInt(value)<=9223372036854775807n;

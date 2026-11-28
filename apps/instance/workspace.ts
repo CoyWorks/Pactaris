@@ -58,6 +58,7 @@ export class InstanceWorkspace{
   }catch(error){
    await db.query('ROLLBACK');
    if(error&&typeof error==='object'&&'code'in error&&error.code==='P0001'&&'message'in error&&typeof error.message==='string'){
+    if(error.message==='plan.horizon')throw new WorkspaceError('horizon');
     const kind=error.message.replace('workspace.','');if(['invalid','denied','conflict','capacity','paused'].includes(kind))throw new WorkspaceError(kind as 'invalid'|'denied'|'conflict'|'capacity'|'paused');
    }throw error;
   }finally{db.release();}

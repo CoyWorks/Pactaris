@@ -26,7 +26,7 @@ export type AuthorityResult={householdId:string;operationId:string;actorMembersh
  links?:AuthorityLink[];delegations?:AuthorityDelegation[];members?:AuthorityMember[];powers?:AuthorityPower[];adjustments?:PointAdjustment[];transfers?:AuthorityTransfer[];
  subsVisible?:boolean;settingsVersion?:string;canSetVisibility?:boolean;myPoints?:string;myRank?:number|null;habits?:AssignedHabit[];today?:string;people?:ProgressPerson[];
  balance?:string;canSpend?:boolean;pointsEnabled?:boolean;offers?:ShopOffer[];items?:ShopItem[];requests?:ShopRequest[];purchases?:ShopPurchase[]};
-export class AuthorityError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'unavailable'){super('authority.'+kind);}}
+export class AuthorityError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'horizon'|'unavailable'){super('authority.'+kind);}}
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const instant=(v:unknown):v is string=>typeof v==='string'&&v.length<=40&&Number.isFinite(Date.parse(v));
 const count=(v:unknown):v is string=>typeof v==='string'&&/^(0|[1-9][0-9]{0,14})$/.test(v);

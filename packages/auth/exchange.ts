@@ -19,7 +19,7 @@ export const noticeKinds=['permission','proposal','journal','breach','answered',
 export type Notice={id:string;kind:typeof noticeKinds[number];resourceId:string;actorName:string|null;read:boolean;createdAt:string};
 export type ExchangeResult={householdId:string;operationId:string;actorMembershipId:string;status:'listed'|'applied';exchangeId?:string|null;
  exchanges?:ExchangeItem[];people?:ExchangePerson[];nextCursor?:string|null;reviews?:AgreementReview[];terms?:Terms;termsVersion?:string;canEdit?:boolean;notices?:Notice[];unread?:number;muted?:Notice['kind'][];mutedPeople?:string[];noticePeople?:{id:string;name:string}[]};
-export class ExchangeError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'unavailable'){super('exchange.'+kind);}}
+export class ExchangeError extends Error{constructor(public kind:'invalid'|'denied'|'conflict'|'paused'|'capacity'|'horizon'|'unavailable'){super('exchange.'+kind);}}
 export const exchangePage=8;
 export const exchangeCursor=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z\|[a-f0-9-]{36}$/;
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
