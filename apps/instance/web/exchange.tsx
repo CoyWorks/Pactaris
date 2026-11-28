@@ -1,3 +1,4 @@
+import {useHorizonDateTime} from './plan-horizon.js';
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {PunishmentPicker} from './shop.js';
 import {PersonProgress,type Progress} from './progress.js';
@@ -90,6 +91,7 @@ const directions:Record<ExchangeKind,(p:ExchangePerson)=>boolean>={permission:p=
 /** Create page; the recipient list follows who may receive this kind. */
 export function ExchangeForm({people,householdId,session,language,initial,onClose,onSaved}:{people:ExchangePerson[];householdId:string;session:Session;language:string;initial?:{kind?:ExchangeKind;recipientId?:string};onClose:()=>void;onSaved:(notice:MessageKey)=>void}){
  const t=createTranslator(language);
+ const maxDue=useHorizonDateTime();
  const kinds=(Object.keys(kindKeys) as ExchangeKind[]).filter(k=>people.some(directions[k]));
  const [kind,setKind]=useState<ExchangeKind>(initial?.kind&&kinds.includes(initial.kind)?initial.kind:kinds[0]??'proposal');
  const recipients=people.filter(directions[kind]);
@@ -118,7 +120,7 @@ export function ExchangeForm({people,householdId,session,language,initial,onClos
    <label>{t('exchange.to')}<select required disabled={busy} value={recipient} onChange={e=>edit(setRecipient)(e.target.value)}>{recipients.map(p=><option key={p.membershipId} value={p.membershipId}>{p.name||t('partner.unnamed')}</option>)}</select></label>
    <label>{t('library.title')}<input required maxLength={120} autoComplete="off" disabled={busy} value={title} onChange={e=>edit(setTitle)(e.target.value)}/></label>
    <label>{t('library.body')}<textarea maxLength={600} disabled={busy} value={body} onChange={e=>edit(setBody)(e.target.value)}/></label>
-   {kind==='permission'&&<label>{t('exchange.dueAtOptional')}<input type="datetime-local" disabled={busy} value={due} onChange={e=>edit(setDue)(e.target.value)}/></label>}
+   {kind==='permission'&&<label>{t('exchange.dueAtOptional')}<input type="datetime-local" max={maxDue} disabled={busy} value={due} onChange={e=>edit(setDue)(e.target.value)}/></label>}
    {kind==='breach'&&<><label>{t('authority.punishmentOptional')}<input maxLength={120} autoComplete="off" disabled={busy} value={punishment} onChange={e=>edit(setPunishment)(e.target.value)}/></label><PunishmentPicker householdId={householdId} language={language} onPick={item=>edit(setPunishment)(item.title)}/><p className="muted">{t('exchange.breachNotice')}</p></>}
    {error&&<p role="alert">{t(error)}</p>}
    <button type="submit" disabled={busy||!title.trim()||!recipient}>{t(busy?'onboarding.saving':retry?'onboarding.retry':'exchange.send')}</button>

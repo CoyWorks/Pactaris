@@ -1,3 +1,4 @@
+import {useHorizonDateTime} from './plan-horizon.js';
 import {CalendarPrivacyField,markCalendar} from './planner.js';
 import React,{useRef,useState} from 'react';
 import {createTranslator,type MessageKey} from '../../../packages/i18n/index.js';
@@ -21,6 +22,7 @@ export async function post(householdId:string,csrfToken:string,module:'workspace
 /** Short create forms for the add sheet. Shared tasks, rules and rewards keep their full forms. */
 export function QuickAdd({kind,householdId,csrfToken,language,timeZone,safety,onDone,onMore}:{kind:QuickKind;householdId:string;csrfToken:string;language:string;timeZone:string;safety:{epoch?:string;memberEpoch?:string};onDone:(notice:MessageKey)=>void;onMore:()=>void}){
  const t=createTranslator(language),[title,setTitle]=useState(''),[due,setDue]=useState(''),[self,setSelf]=useState(true),[target,setTarget]=useState(1),[start,setStart]=useState(true),[body,setBody]=useState(''),[hide,setHide]=useState(false);
+ const maxDue=useHorizonDateTime();
  const [busy,setBusy]=useState(false),[error,setError]=useState<MessageKey>(),[retry,setRetry]=useState(false),operation=useRef<string|undefined>(undefined);
  const edit=<T,>(set:(value:T)=>void)=>(value:T)=>{set(value);operation.current=undefined;setRetry(false);};
  async function submit(event:React.FormEvent){
@@ -55,7 +57,7 @@ export function QuickAdd({kind,householdId,csrfToken,language,timeZone,safety,on
  return <form className="quick-form" onSubmit={event=>{void submit(event);}}>
   <label>{t(kind==='habit'?'quick.habitTitle':'library.title')}<input required autoFocus maxLength={120} autoComplete="off" disabled={busy} value={title} onChange={e=>edit(setTitle)(e.target.value)}/></label>
   {kind==='task'&&<>
-   <label>{t('workspace.dueAt')}<input type="datetime-local" disabled={busy} value={due} onChange={e=>edit(setDue)(e.target.value)}/></label>
+   <label>{t('workspace.dueAt')}<input type="datetime-local" max={maxDue} disabled={busy} value={due} onChange={e=>edit(setDue)(e.target.value)}/></label>
    <label className="check"><input type="checkbox" disabled={busy} checked={self} onChange={e=>edit(setSelf)(e.target.checked)}/>{t('quick.assignSelf')}</label>
   </>}
   {kind==='habit'&&<>
