@@ -43,5 +43,11 @@ test('the Instance falls back to the same Free limits as the gateway',async()=>{
  const {readFileSync}=await import('node:fs');const {tierLimits}=await import('../packages/auth/plans.js');
  const sql=readFileSync('migrations/instance/0071_plan_limits.sql','utf8'),block=sql.slice(sql.indexOf('RETURN CASE key'),sql.indexOf('ELSE 0 END;'));
  const defaults=Object.fromEntries([...block.matchAll(/WHEN '([a-z.]+)' THEN ([0-9]+)/g)].map(m=>[m[1],Number(m[2])]));
+ delete defaults['history.days'];// dropped 28 November 2026; 0071 still knows it
  assert.deepEqual(defaults,tierLimits.free);
+});
+test('an entitlement update from an older gateway with history.days is still accepted',()=>{
+ const capabilities={...capabilitiesFor('free',null,0),'history.days':30};
+ const input={operationId:'11111111-1111-4111-8111-111111111111',householdId:'22222222-2222-4222-8222-222222222222',planVersion:3,capabilities};
+ assert.deepEqual(entitlementsInput(input),input);
 });

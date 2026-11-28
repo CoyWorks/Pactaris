@@ -10,15 +10,16 @@ export const paidTiers:readonly PaidTier[]=['level1','level2'];
 /** Cost per day relative to level 1. */
 export const tierRate:Record<PaidTier,number>={level1:1,level2:2};
 
-/** Capability keys sent to an Instance. Numbers are maxima; `history.days` 0 means no limit. */
+/** Capability keys sent to an Instance. Numbers are maxima. Owner decision, 28 November 2026: no history
+ *  limit (`history.days` was dropped; Instances that still hold it ignore it). */
 export const capabilityKeys=['members.active.max','oneoff.open.max','series.active.max','habits.assigned.max','routines.active.max',
- 'plan.horizon.days','catalog.rewards.max','catalog.punishments.max','shop.items.max','history.days'] as const;
+ 'plan.horizon.days','catalog.rewards.max','catalog.punishments.max','shop.items.max'] as const;
 export type CapabilityKey=typeof capabilityKeys[number];
 /** Placeholder limits (owner decision, 26 November 2026). Existing items are never stopped or deleted above a limit. */
 export const tierLimits:Record<PlanTier,Record<CapabilityKey,number>>={
- free:{'members.active.max':4,'oneoff.open.max':10,'series.active.max':3,'habits.assigned.max':3,'routines.active.max':3,'plan.horizon.days':14,'catalog.rewards.max':5,'catalog.punishments.max':5,'shop.items.max':5,'history.days':30},
- level1:{'members.active.max':8,'oneoff.open.max':40,'series.active.max':15,'habits.assigned.max':15,'routines.active.max':15,'plan.horizon.days':92,'catalog.rewards.max':30,'catalog.punishments.max':30,'shop.items.max':30,'history.days':366},
- level2:{'members.active.max':16,'oneoff.open.max':150,'series.active.max':50,'habits.assigned.max':50,'routines.active.max':50,'plan.horizon.days':366,'catalog.rewards.max':100,'catalog.punishments.max':100,'shop.items.max':100,'history.days':0},
+ free:{'members.active.max':4,'oneoff.open.max':10,'series.active.max':3,'habits.assigned.max':3,'routines.active.max':3,'plan.horizon.days':14,'catalog.rewards.max':5,'catalog.punishments.max':5,'shop.items.max':5},
+ level1:{'members.active.max':8,'oneoff.open.max':40,'series.active.max':15,'habits.assigned.max':15,'routines.active.max':15,'plan.horizon.days':92,'catalog.rewards.max':30,'catalog.punishments.max':30,'shop.items.max':30},
+ level2:{'members.active.max':16,'oneoff.open.max':150,'series.active.max':50,'habits.assigned.max':50,'routines.active.max':50,'plan.horizon.days':366,'catalog.rewards.max':100,'catalog.punishments.max':100,'shop.items.max':100},
 };
 export const maxExtraMembers=984;
 /** Owner decision, 27 November 2026: after paid time ends, the paid limits still apply for this many days
@@ -53,8 +54,8 @@ export function entitlementsInput(value:unknown):EntitlementsInput{
  const v=value as Record<string,unknown>,c=v?.capabilities as Record<string,unknown>;
  if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).sort().join(',')!=='capabilities,householdId,operationId,planVersion'||!uuid(v.operationId)||!uuid(v.householdId)
   ||!Number.isSafeInteger(v.planVersion)||(v.planVersion as number)<1||!c||typeof c!=='object'||Array.isArray(c)
-  ||Object.keys(c).sort().join(',')!==[...capabilityKeys,'plan.key','plan.until'].sort().join(',')
-  ||!capabilityKeys.every(k=>Number.isInteger(c[k])&&(c[k] as number)>=0&&(c[k] as number)<=10000)||(c['members.active.max'] as number)<1||(c['members.active.max'] as number)>1000
+  ||Object.keys(c).filter(k=>k!=='history.days').sort().join(',')!==[...capabilityKeys,'plan.key','plan.until'].sort().join(',')
+  ||![...capabilityKeys,...('history.days' in c?['history.days']:[])].every(k=>Number.isInteger(c[k])&&(c[k] as number)>=0&&(c[k] as number)<=10000)||(c['members.active.max'] as number)<1||(c['members.active.max'] as number)>1000
   ||!(planTiers as readonly unknown[]).includes(c['plan.key'])||(c['plan.until']!==null&&(typeof c['plan.until']!=='string'||!Number.isFinite(Date.parse(c['plan.until'] as string)))))
   throw new PlanError('invalid');
  return v as unknown as EntitlementsInput;
